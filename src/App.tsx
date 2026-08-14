@@ -152,7 +152,7 @@ function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell app-shell--${view}`}>
       <header className="topbar">
         <button className="brand" onClick={() => setView('home')} aria-label="Ir para início">
           <span className="brand__mark"><BiptagMark /></span>
@@ -482,6 +482,25 @@ function AuditView({
     window.setTimeout(() => inputRef.current?.focus(), 80);
   }, [scan, decision, outcome]);
 
+  const auditRecords = useLiveQuery(
+    () => audit ? db.auditRecords.where('auditId').equals(audit.id).toArray() : Promise.resolve<AuditRecord[]>([]),
+    [audit?.id],
+    [] as AuditRecord[]
+  );
+
+  const fieldMetrics = useMemo(() => {
+    const current = auditRecords.filter((record) => record.isCurrent !== false);
+    const auditedUnique = new Set(current.map((record) => record.tagNumber)).size;
+    const issues = current.filter((record) => record.status !== 'correct').length;
+    const total = audit?.totalTags ?? 0;
+    return {
+      auditedUnique,
+      issues,
+      pending: Math.max(total - auditedUnique, 0),
+      percent: total ? Math.min(Math.round((auditedUnique / total) * 100), 100) : 0
+    };
+  }, [auditRecords, audit]);
+
   if (!audit) {
     return (
       <section className="page page--centered">
@@ -667,6 +686,14 @@ function AuditView({
         <div><span className="eyebrow">MODO CAMPO</span><strong>{activeAudit.farmName}</strong></div>
         <button className="compact-action" onClick={pauseAudit}><PauseIcon /> Pausar</button>
       </div>
+
+      <div className="field-progress-strip" aria-label="Progresso da auditoria">
+        <div><span>Conferidas</span><strong>{fieldMetrics.auditedUnique}</strong></div>
+        <div><span>Pendentes</span><strong>{fieldMetrics.pending}</strong></div>
+        <div><span>Ocorrencias</span><strong>{fieldMetrics.issues}</strong></div>
+        <div><span>Total</span><strong>{activeAudit.totalTags}</strong></div>
+      </div>
+      <div className="field-progress-bar"><span style={{ width: `${fieldMetrics.percent}%` }} /></div>
 
       {!scan && !outcome && (
         <div className={`nfc-panel nfc-panel--field ${readerActive ? 'is-active' : ''}`}>
