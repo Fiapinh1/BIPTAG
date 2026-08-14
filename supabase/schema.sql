@@ -1,0 +1,105 @@
+-- BIPTAG Web V0.2
+-- Estrutura cloud para backup/sincronização futura.
+-- O modo campo funciona offline no IndexedDB mesmo sem Supabase.
+
+create extension if not exists pgcrypto;
+
+create table if not exists public.farms (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.audits (
+  id text primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  farm_id uuid references public.farms(id) on delete set null,
+  farm_name text not null,
+  source_file_name text not null,
+  status text not null default 'active' check (status in ('draft','active','paused','finished')),
+  total_tags integer not null default 0,
+  linked_tags integer not null default 0,
+  issue_count integer not null default 0,
+  started_at timestamptz not null,
+  created_at timestamptz not null,
+  updated_at timestamptz not null,
+  last_activity_at timestamptz not null,
+  paused_at timestamptz,
+  finished_at timestamptz,
+  synced_at timestamptz
+);
+
+create table if not exists public.tag_assignments (
+  id text primary key,
+  audit_id text not null references public.audits(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  tag_number text not null,
+  function_name text,
+  type_name text,
+  expected_animal text,
+  connected_since text,
+  last_detected_at text,
+  last_detected_farm text,
+  unique (audit_id, tag_number)
+);
+
+create table if not exists public.audit_records (
+  id text primary key,
+  audit_id text not null references public.audits(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  tag_number text not null,
+  expected_animal text,
+  observed_animal text,
+  status text not null,
+  field_decision text not null,
+  review_status text not null default 'open',
+  note text,
+  scanned_at timestamptz not null,
+  source text not null default 'nfc',
+  is_current boolean not null default true,
+  supersedes_record_id text references public.audit_records(id) on delete set null,
+  pair_id text,
+  related_record_id text,
+  synced_at timestamptz
+);
+
+create table if not exists public.import_issues (
+  id text primary key,
+  audit_id text not null references public.audits(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  type text not null,
+  tag_number text,
+  animal text,
+  detail text not null
+);
+
+create index if not exists audits_user_id_idx on public.audits(user_id);
+create index if not exists audits_status_idx on public.audits(status);
+create index if not exists tag_assignments_audit_tag_idx on public.tag_assignments(audit_id, tag_number);
+create index if not exists tag_assignments_audit_animal_idx on public.tag_assignments(audit_id, expected_animal);
+create index if not exists audit_records_audit_id_idx on public.audit_records(audit_id);
+create index if not exists audit_records_tag_number_idx on public.audit_records(tag_number);
+create index if not exists audit_records_pair_id_idx on public.audit_records(pair_id);
+create index if not exists import_issues_audit_id_idx on public.import_issues(audit_id);
+
+alter table public.farms enable row level security;
+alter table public.audits enable row level security;
+alter table public.tag_assignments enable row level security;
+alter table public.audit_records enable row level security;
+alter table public.import_issues enable row level security;
+
+create policy "users_manage_own_farms" on public.farms for all
+using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create policy "users_manage_own_audits" on public.audits for all
+using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create policy "users_manage_own_assignments" on public.tag_assignments for all
+using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create policy "users_manage_own_records" on public.audit_records for all
+using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create policy "users_manage_own_import_issues" on public.import_issues for all
+using (auth.uid() = user_id) with check (auth.uid() = user_id);
