@@ -1369,6 +1369,34 @@ p {
   margin-bottom: 18px;
 }
 
+.app-shell--audit .manual-test__row {
+  grid-template-columns: auto 1fr auto;
+  align-items: stretch;
+}
+
+.manual-prefix {
+  min-height: 46px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #12201b;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.manual-preview {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+  word-break: break-all;
+}
+
 @media (max-width: 430px) {
   .app-shell--audit .page {
     padding-left: 10px;

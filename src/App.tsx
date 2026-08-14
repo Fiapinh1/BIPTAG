@@ -583,11 +583,6 @@ function AuditView({
 
   useEffect(() => () => stopReader.current?.(), []);
 
-  useEffect(() => {
-    if (!scan || decision || outcome) return;
-    focusObservedInput();
-  }, [scan, decision, outcome]);
-
   const auditRecords = useLiveQuery(
     () => audit ? db.auditRecords.where('auditId').equals(audit.id).toArray() : Promise.resolve<AuditRecord[]>([]),
     [audit?.id],
@@ -652,14 +647,18 @@ function AuditView({
     if (lastRead.current?.tag === normalized && now - lastRead.current.at < 1800) return;
     lastRead.current = { tag: normalized, at: now };
 
-    const assignment = await db.tagAssignments.where('[auditId+tagNumber]').equals([activeAudit.id, normalized]).first();
-    const existingRecord = await getCurrentRecord(activeAudit.id, normalized);
-    const related = await getRelatedContext(activeAudit.id, assignment ?? null);
+    const [assignment, existingRecord] = await Promise.all([
+      db.tagAssignments.where('[auditId+tagNumber]').equals([activeAudit.id, normalized]).first(),
+      getCurrentRecord(activeAudit.id, normalized)
+    ]);
     const patternCheck = activeAudit.tagPattern ? validateSmartTag(normalized, activeAudit.tagPattern) : null;
     const patternWarning = patternCheck && patternCheck.status !== 'valid_tag'
       ? { status: patternCheck.status, reason: patternCheck.reason }
       : null;
-    const possibleTypo = !assignment ? await findPossibleTypo(normalized) : null;
+    const [related, possibleTypo] = await Promise.all([
+      getRelatedContext(activeAudit.id, assignment ?? null),
+      !assignment ? findPossibleTypo(normalized) : Promise.resolve(null)
+    ]);
 
     setObservedAnimal('');
     setDecision(null);
@@ -802,6 +801,10 @@ function AuditView({
     focusObservedInput();
   }
 
+  function cancelCurrentRead() {
+    resetForNext(readerActive ? 'Leitor ativo. Aproxime a proxima SmartTag.' : 'Leitura cancelada. Voce pode simular outra tag.');
+  }
+
   function focusObservedInput() {
     window.setTimeout(() => {
       inputRef.current?.focus();
@@ -819,9 +822,14 @@ function AuditView({
 
   async function manualRead() {
     primeFeedbackAudio();
-    const tag = manualTag.replace(/[^0-9]/g, '').trim();
+    const typed = manualTag.replace(/[^0-9]/g, '').trim();
+    const prefix = activeAudit.tagPattern?.prefix ?? '';
+    const expectedLength = activeAudit.tagPattern?.length ?? 0;
+    const tag = prefix && expectedLength && typed.length < expectedLength && !typed.startsWith(prefix)
+      ? `${prefix}${typed}`.slice(0, expectedLength)
+      : typed;
     if (!tag) return;
-    await processRead(tag, manualTag, 'manual');
+    await processRead(tag, tag, 'manual');
     setManualTag('');
   }
 
@@ -839,6 +847,12 @@ function AuditView({
     decision ? 'field-page--decision' : '',
     outcome ? `field-page--outcome-active field-page--outcome-${outcome.kind}` : ''
   ].filter(Boolean).join(' ');
+  const manualPrefix = activeAudit.tagPattern?.prefix ?? '';
+  const manualRestLength = Math.max((activeAudit.tagPattern?.length ?? 0) - manualPrefix.length, 0);
+  const manualDigits = manualTag.replace(/[^0-9]/g, '');
+  const manualPreviewTag = manualPrefix && manualDigits && !manualDigits.startsWith(manualPrefix)
+    ? `${manualPrefix}${manualDigits}`.slice(0, activeAudit.tagPattern?.length ?? undefined)
+    : manualDigits;
 
   return (
     <section className={fieldPageClass}>
@@ -936,9 +950,10 @@ function AuditView({
               />
               <button className="button button--primary button--full button--field" onClick={() => void evaluateObserved()}>Conferir brinco</button>
               <button className="button button--ghost button--full" onClick={() => void couldNotConfirm()}>Não consegui confirmar o brinco</button>
+              <button className="button button--ghost button--full" onClick={cancelCurrentRead}>Ler outra tag</button>
             </div>
           ) : (
-            <GuidedDecision scan={scan} decision={decision} onConfirm={() => void confirmPhysicalFact()} onCorrect={correctObservedNumber} onUnconfirmed={() => void couldNotConfirm()} />
+            <GuidedDecision scan={scan} decision={decision} onConfirm={() => void confirmPhysicalFact()} onCorrect={correctObservedNumber} onUnconfirmed={() => void couldNotConfirm()} onCancel={cancelCurrentRead} />
           )}
         </div>
         )
@@ -988,11 +1003,13 @@ function AuditView({
       {!scan && !outcome && (
         <details className="manual-test">
           <summary>Teste manual sem NFC</summary>
-          <p>Digite qualquer número de tag da planilha para simular o fluxo completo.</p>
+          <p>Use o padrao definido. Voce pode digitar so o final da tag.</p>
           <div className="manual-test__row">
-            <input className="text-input" inputMode="numeric" placeholder="9840000..." value={manualTag} onChange={(event) => setManualTag(event.target.value)} />
+            {manualPrefix && <span className="manual-prefix">{manualPrefix}</span>}
+            <input className="text-input" inputMode="numeric" placeholder={manualRestLength ? `${manualRestLength} digitos finais` : '9840000...'} value={manualTag} onChange={(event) => setManualTag(event.target.value.replace(/[^0-9]/g, ''))} />
             <button className="button button--secondary" onClick={() => void manualRead()}>Simular</button>
           </div>
+          {manualPreviewTag && <small className="manual-preview">Tag simulada: {manualPreviewTag}</small>}
         </details>
       )}
     </section>
@@ -1004,13 +1021,15 @@ function GuidedDecision({
   decision,
   onConfirm,
   onCorrect,
-  onUnconfirmed
+  onUnconfirmed,
+  onCancel
 }: {
   scan: ScanState;
   decision: DecisionState;
   onConfirm: () => void;
   onCorrect: () => void;
   onUnconfirmed: () => void;
+  onCancel: () => void;
 }) {
   const expected = scan.assignment?.expectedAnimal ?? null;
   const observed = decision.observedAnimal ?? '—';
@@ -1033,6 +1052,7 @@ function GuidedDecision({
       <button className="button button--primary button--full button--field" onClick={onConfirm}>{content.confirmLabel}</button>
       <button className="button button--secondary button--full" onClick={onCorrect}>Digitei o brinco errado</button>
       <button className="button button--ghost button--full" onClick={onUnconfirmed}>Não consegui confirmar</button>
+      <button className="button button--ghost button--full" onClick={onCancel}>Ler outra tag</button>
       <small className="decision-hint">O BIPTAG decide a classificação e cruza possíveis trocas depois. Você só confirma o fato físico.</small>
     </div>
   );
