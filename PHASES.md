@@ -1,6 +1,6 @@
 # BIPTAG — Fases do projeto
 
-## V0.2 — Field Workflow (esta versão)
+## V0.3 — Field Workflow (esta versão)
 
 - [x] Importação do Tags.xlsx original
 - [x] Pré-validação

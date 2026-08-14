@@ -1,4 +1,4 @@
--- BIPTAG Web V0.2
+-- BIPTAG Web V0.3
 -- Estrutura cloud para backup/sincronização futura.
 -- O modo campo funciona offline no IndexedDB mesmo sem Supabase.
 
@@ -17,7 +17,7 @@ create table if not exists public.audits (
   farm_id uuid references public.farms(id) on delete set null,
   farm_name text not null,
   source_file_name text not null,
-  status text not null default 'active' check (status in ('draft','active','paused','finished')),
+  status text not null default 'in_progress' check (status in ('draft','active','in_progress','paused','finished')),
   total_tags integer not null default 0,
   linked_tags integer not null default 0,
   issue_count integer not null default 0,
@@ -34,6 +34,7 @@ create table if not exists public.tag_assignments (
   id text primary key,
   audit_id text not null references public.audits(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
+  sequence integer not null default 0,
   tag_number text not null,
   function_name text,
   type_name text,
@@ -51,17 +52,20 @@ create table if not exists public.audit_records (
   tag_number text not null,
   expected_animal text,
   observed_animal text,
-  status text not null,
+  status text not null check (status in ('correct','divergence','possible_swap','tag_not_registered','tag_not_found','tag_without_animal','animal_not_in_base','unconfirmed')),
   field_decision text not null,
   review_status text not null default 'open',
   note text,
   scanned_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
   source text not null default 'nfc',
   is_current boolean not null default true,
   supersedes_record_id text references public.audit_records(id) on delete set null,
   pair_id text,
   related_record_id text,
-  synced_at timestamptz
+  synced_at timestamptz,
+  sync_status text not null default 'pending' check (sync_status in ('pending','synced','error'))
 );
 
 create table if not exists public.import_issues (
@@ -79,6 +83,7 @@ create index if not exists audits_status_idx on public.audits(status);
 create index if not exists tag_assignments_audit_tag_idx on public.tag_assignments(audit_id, tag_number);
 create index if not exists tag_assignments_audit_animal_idx on public.tag_assignments(audit_id, expected_animal);
 create index if not exists audit_records_audit_id_idx on public.audit_records(audit_id);
+create index if not exists audit_records_audit_sequence_idx on public.audit_records(audit_id, sequence);
 create index if not exists audit_records_tag_number_idx on public.audit_records(tag_number);
 create index if not exists audit_records_pair_id_idx on public.audit_records(pair_id);
 create index if not exists import_issues_audit_id_idx on public.import_issues(audit_id);

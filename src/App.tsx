@@ -150,7 +150,7 @@ function App() {
     setSelectedAuditId(audit.id);
     if (audit.status === 'paused') {
       const now = new Date().toISOString();
-      await db.audits.update(audit.id, { status: 'active', pausedAt: undefined, updatedAt: now, lastActivityAt: now });
+      await db.audits.update(audit.id, { status: 'in_progress', pausedAt: undefined, updatedAt: now, lastActivityAt: now });
     }
   }
 
@@ -393,7 +393,7 @@ function ImportView({ onCreated }: { onCreated: (auditId: string) => void }) {
         updatedAt: now,
         lastActivityAt: now,
         startedAt: now,
-        status: 'active',
+        status: 'in_progress',
         totalTags: preview.stats.totalTags,
         linkedTags: preview.stats.linkedTags,
         issueCount: preview.issues.length
@@ -552,7 +552,7 @@ function AuditView({
       );
       setReaderActive(true);
       const now = new Date().toISOString();
-      await db.audits.update(activeAudit.id, { status: 'active', pausedAt: undefined, updatedAt: now, lastActivityAt: now });
+      await db.audits.update(activeAudit.id, { status: 'in_progress', pausedAt: undefined, updatedAt: now, lastActivityAt: now });
       setReaderMessage('Leitor ativo. Aproxime uma SmartTag.');
     } catch (err) {
       setReaderActive(false);
@@ -870,7 +870,7 @@ function decisionCopy(status: Exclude<RecordStatus, 'correct'>, expected: string
       confirmLabel: `Sim, está no animal ${observed}`
     };
   }
-  if (status === 'tag_not_found') {
+  if (status === 'tag_not_found' || status === 'tag_not_registered') {
     return {
       title: `Esta tag está no animal ${observed}?`,
       subtitle: 'A SmartTag não existe na base Nedap importada.',
@@ -885,6 +885,7 @@ function decisionCopy(status: Exclude<RecordStatus, 'correct'>, expected: string
 }
 
 function issueSavedTitle(status: RecordStatus) {
+  if (status === 'tag_not_registered') return 'Tag nao cadastrada confirmada';
   if (status === 'divergence') return 'Tag encontrada em outro animal';
   if (status === 'animal_not_in_base') return 'Animal fora da base';
   if (status === 'tag_without_animal') return 'Tag sem vínculo confirmada';
@@ -893,6 +894,7 @@ function issueSavedTitle(status: RecordStatus) {
 }
 
 function issueSavedMessage(status: RecordStatus, observed: string | null) {
+  if (status === 'tag_not_registered') return `A tag foi encontrada fisicamente no animal ${observed ?? ''}, mas nao existe na base importada.`;
   if (status === 'divergence') return 'O BIPTAG guardou a posição física desta tag e vai cruzar as próximas leituras.';
   if (status === 'animal_not_in_base') return `O brinco ${observed ?? ''} foi confirmado em campo e ficará separado para revisão.`;
   if (status === 'tag_without_animal') return `O vínculo físico com o animal ${observed ?? ''} foi registrado como sugestão de revisão.`;
@@ -921,7 +923,7 @@ function IssuesView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
   const otherIssues = nonCorrect.filter((record) => record.status !== 'possible_swap');
 
   async function exportReport() {
-    exportAuditWorkbook(activeAudit.farmName, current, issues);
+    exportAuditWorkbook(activeAudit, records, issues);
   }
 
   return (
@@ -1004,7 +1006,7 @@ function IssueRow({ issue }: { issue: ImportIssue }) {
 function SettingsView() {
   return (
     <section className="page">
-      <div className="section-heading"><div><span className="eyebrow">CONFIGURAÇÃO</span><h1>BIPTAG Web V0.2</h1><p>Offline-first, mobile-first e preparado para Supabase, GitHub e Vercel.</p></div></div>
+      <div className="section-heading"><div><span className="eyebrow">CONFIGURAÇÃO</span><h1>BIPTAG Web V0.3</h1><p>Offline-first, mobile-first e preparado para Supabase, GitHub e Vercel.</p></div></div>
       <div className="settings-card">
         <div className="settings-row"><span className="settings-row__icon"><CloudIcon /></span><div><strong>Supabase</strong><small>{isSupabaseConfigured ? 'Variáveis configuradas' : 'Preparado para backup e sincronização na próxima etapa'}</small></div><span className={`status-dot ${isSupabaseConfigured ? 'is-ok' : ''}`} /></div>
         <div className="settings-row"><span className="settings-row__icon"><ScanIcon /></span><div><strong>Web NFC</strong><small>{isWebNfcSupported() ? 'Disponível neste navegador' : 'Use Chrome Android em HTTPS para leitura real'}</small></div><span className={`status-dot ${isWebNfcSupported() ? 'is-ok' : ''}`} /></div>
@@ -1092,7 +1094,7 @@ function CloudSettingsView({ activeAudit, setToast }: { activeAudit: Audit | nul
 
   return (
     <section className="page">
-      <div className="section-heading"><div><span className="eyebrow">CONFIGURACAO</span><h1>BIPTAG Web V0.2</h1><p>Offline-first, mobile-first e conectado ao Supabase para backup manual.</p></div></div>
+      <div className="section-heading"><div><span className="eyebrow">CONFIGURACAO</span><h1>BIPTAG Web V0.3</h1><p>Offline-first, mobile-first e conectado ao Supabase para backup manual.</p></div></div>
       <div className="settings-card">
         <div className="settings-row"><span className="settings-row__icon"><CloudIcon /></span><div><strong>Supabase</strong><small>{isSupabaseConfigured ? 'Variaveis configuradas' : 'Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY'}</small></div><span className={`status-dot ${isSupabaseConfigured ? 'is-ok' : ''}`} /></div>
         <div className="settings-row"><span className="settings-row__icon"><CheckIcon /></span><div><strong>Conta</strong><small>{session?.user.email ?? (session ? 'Sessao ativa' : 'Entre para liberar backup na nuvem')}</small></div><span className={`status-dot ${session ? 'is-ok' : ''}`} /></div>

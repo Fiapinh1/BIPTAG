@@ -1,4 +1,4 @@
-# BIPTAG Web — V0.2 Field Workflow
+# BIPTAG Web — V0.3 Field Workflow
 
 BIPTAG é uma PWA para auditoria de SmartTags Nedap em campo usando Web NFC, a planilha `Tags.xlsx` exportada do Nedap Now e confirmação visual do brinco.
 
@@ -35,7 +35,7 @@ Se depois ocorrer a leitura inversa (tag do 3468 encontrada no 3630), o sistema 
 
 A base importada, as auditorias e as leituras ficam no IndexedDB do navegador. É possível fechar o navegador, reiniciar o aparelho e retomar a auditoria depois.
 
-A V0.2 possui:
+A V0.3 possui:
 
 - Pausar auditoria
 - Retomar auditoria
@@ -47,13 +47,13 @@ A V0.2 possui:
 
 ## Atualizando da V0.1
 
-A V0.2 usa o mesmo banco `biptag-db` e possui migração Dexie da versão 1 para a versão 2.
+A V0.3 usa o mesmo banco `biptag-db` e possui migrações Dexie compatíveis até a versão 3.
 
 Para atualizar um projeto existente:
 
 1. Pare `npm run dev`.
 2. Faça uma cópia da pasta atual.
-3. Substitua os arquivos do projeto pelos arquivos da V0.2.
+3. Substitua os arquivos do projeto pelos arquivos da V0.3.
 4. No terminal execute:
 
 ```powershell
@@ -79,7 +79,7 @@ O teste real deve ser feito no Chrome Android através de uma URL HTTPS, como a 
 
 ## Supabase
 
-O arquivo `supabase/schema.sql` contém o modelo V0.2 preparado para:
+O arquivo `supabase/schema.sql` contém o modelo V0.3 preparado para:
 
 - fazendas;
 - auditorias;

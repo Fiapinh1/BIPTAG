@@ -1,9 +1,10 @@
-export type AuditStatus = 'draft' | 'active' | 'paused' | 'finished';
+export type AuditStatus = 'draft' | 'active' | 'in_progress' | 'paused' | 'finished';
 
 export type RecordStatus =
   | 'correct'
   | 'divergence'
   | 'possible_swap'
+  | 'tag_not_registered'
   | 'tag_not_found'
   | 'tag_without_animal'
   | 'animal_not_in_base'
@@ -16,6 +17,7 @@ export type FieldDecision =
   | 'review_later';
 
 export type ReviewStatus = 'open' | 'resolved' | 'not_required';
+export type SyncStatus = 'pending' | 'synced' | 'error';
 
 export type ImportIssueType =
   | 'duplicate_tag'
@@ -53,6 +55,7 @@ export interface TagAssignment {
 export interface AuditRecord {
   id: string;
   auditId: string;
+  sequence: number;
   tagNumber: string;
   expectedAnimal: string | null;
   observedAnimal: string | null;
@@ -61,6 +64,10 @@ export interface AuditRecord {
   reviewStatus: ReviewStatus;
   note: string | null;
   scannedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  syncedAt: string | null;
+  syncStatus: SyncStatus;
   source: 'nfc' | 'manual';
   isCurrent: boolean;
   supersedesRecordId: string | null;

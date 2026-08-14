@@ -45,6 +45,50 @@ class BiptagDB extends Dexie {
         record.relatedRecordId = record.relatedRecordId ?? null;
       });
     });
+
+    this.version(3).stores({
+      audits: 'id, status, createdAt, updatedAt, lastActivityAt, farmName',
+      tagAssignments:
+        'id, auditId, tagNumber, expectedAnimal, [auditId+tagNumber], [auditId+expectedAnimal]',
+      auditRecords:
+        'id, auditId, sequence, tagNumber, status, isCurrent, reviewStatus, scannedAt, createdAt, updatedAt, syncStatus, expectedAnimal, observedAnimal, pairId, [auditId+tagNumber], [auditId+sequence]',
+      importIssues: 'id, auditId, type, tagNumber, animal'
+    }).upgrade(async (tx) => {
+      const audits = tx.table('audits');
+      await audits.toCollection().modify((audit: Partial<Audit>) => {
+        if (audit.status === 'active') audit.status = 'in_progress';
+      });
+
+      const records = tx.table('auditRecords');
+      const allRecords = (await records.toArray()) as Partial<AuditRecord>[];
+      const byAudit = new Map<string, Partial<AuditRecord>[]>();
+
+      for (const record of allRecords) {
+        if (!record.auditId) continue;
+        const list = byAudit.get(record.auditId) ?? [];
+        list.push(record);
+        byAudit.set(record.auditId, list);
+      }
+
+      for (const list of byAudit.values()) {
+        list.sort((a, b) => {
+          const aTime = a.scannedAt ?? a.createdAt ?? '';
+          const bTime = b.scannedAt ?? b.createdAt ?? '';
+          return aTime.localeCompare(bTime);
+        });
+
+        for (const [index, record] of list.entries()) {
+          const fallback = record.scannedAt ?? record.updatedAt ?? record.createdAt ?? new Date().toISOString();
+          await records.update(record.id, {
+            sequence: record.sequence ?? index + 1,
+            createdAt: record.createdAt ?? fallback,
+            updatedAt: record.updatedAt ?? fallback,
+            syncedAt: record.syncedAt ?? null,
+            syncStatus: record.syncStatus ?? 'pending'
+          });
+        }
+      }
+    });
   }
 }
 

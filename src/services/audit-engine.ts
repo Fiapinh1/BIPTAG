@@ -6,11 +6,15 @@ export type RelatedContext = {
   message: string | null;
 };
 
+function recordOrder(record: AuditRecord) {
+  return record.sequence ?? Number.MAX_SAFE_INTEGER;
+}
+
 export async function getCurrentRecord(auditId: string, tagNumber: string) {
   const records = await db.auditRecords.where('[auditId+tagNumber]').equals([auditId, tagNumber]).toArray();
   return records
     .filter((record) => record.isCurrent)
-    .sort((a, b) => b.scannedAt.localeCompare(a.scannedAt))[0] ?? null;
+    .sort((a, b) => recordOrder(b) - recordOrder(a) || b.scannedAt.localeCompare(a.scannedAt))[0] ?? null;
 }
 
 export async function getRelatedContext(auditId: string, assignment: TagAssignment | null): Promise<RelatedContext> {
@@ -28,9 +32,12 @@ export async function getRelatedContext(auditId: string, assignment: TagAssignme
 
   if (!related.length) return { records: [], message: null };
 
+  const latest = [...related].sort((a, b) => recordOrder(b) - recordOrder(a) || b.scannedAt.localeCompare(a.scannedAt))[0];
   return {
     records: related,
-    message: `O animal ${assignment.expectedAnimal} já aparece em ${related.length} ocorrência${related.length > 1 ? 's' : ''} desta auditoria.`
+    message: latest
+      ? `Este animal ja possui uma ocorrencia relacionada nesta auditoria. Tag ${latest.tagNumber}; ${latest.expectedAnimal ?? 'sem cadastro'} -> ${latest.observedAnimal ?? 'nao confirmado'}; ${latest.status}.`
+      : `Este animal ja possui ${related.length} ocorrencia relacionada nesta auditoria.`
   };
 }
 
@@ -46,11 +53,16 @@ export async function classifyReading(
   assignment: TagAssignment | null,
   observedAnimal: string | null
 ): Promise<RecordStatus> {
-  if (!assignment) return 'tag_not_found';
+  if (!assignment) return 'tag_not_registered';
   if (!assignment.expectedAnimal) return 'tag_without_animal';
   if (assignment.expectedAnimal === observedAnimal) return 'correct';
   if (!observedAnimal) return 'unconfirmed';
   return (await observedAnimalExists(auditId, observedAnimal)) ? 'divergence' : 'animal_not_in_base';
+}
+
+async function getNextSequence(auditId: string) {
+  const records = await db.auditRecords.where('auditId').equals(auditId).toArray();
+  return records.reduce((max, record) => Math.max(max, record.sequence ?? 0), 0) + 1;
 }
 
 export async function saveReading(input: {
@@ -66,15 +78,17 @@ export async function saveReading(input: {
 }) {
   const now = new Date().toISOString();
   const id = newId('record');
+  const sequence = await getNextSequence(input.auditId);
 
   await db.transaction('rw', db.auditRecords, db.audits, async () => {
     if (input.existingRecord?.isCurrent) {
-      await db.auditRecords.update(input.existingRecord.id, { isCurrent: false });
+      await db.auditRecords.update(input.existingRecord.id, { isCurrent: false, updatedAt: now, syncStatus: 'pending' });
     }
 
     await db.auditRecords.add({
       id,
       auditId: input.auditId,
+      sequence,
       tagNumber: input.tagNumber,
       expectedAnimal: input.expectedAnimal,
       observedAnimal: input.observedAnimal,
@@ -83,6 +97,10 @@ export async function saveReading(input: {
       reviewStatus: input.status === 'correct' ? 'not_required' : 'open',
       note: input.note ?? null,
       scannedAt: now,
+      createdAt: now,
+      updatedAt: now,
+      syncedAt: null,
+      syncStatus: 'pending',
       source: input.source,
       isCurrent: true,
       supersedesRecordId: input.existingRecord?.id ?? null,
@@ -93,7 +111,7 @@ export async function saveReading(input: {
     await db.audits.update(input.auditId, {
       updatedAt: now,
       lastActivityAt: now,
-      status: 'active',
+      status: 'in_progress',
       pausedAt: undefined
     });
   });
@@ -121,22 +139,27 @@ export async function detectReciprocalSwap(record: AuditRecord) {
       candidate.fieldDecision === 'confirmed_physical_animal'
   );
 
-  const pair = candidates.sort((a, b) => b.scannedAt.localeCompare(a.scannedAt))[0];
+  const pair = candidates.sort((a, b) => recordOrder(b) - recordOrder(a) || b.scannedAt.localeCompare(a.scannedAt))[0];
   if (!pair) return null;
 
   const pairId = pair.pairId ?? newId('swap');
+  const now = new Date().toISOString();
   await db.transaction('rw', db.auditRecords, async () => {
     await db.auditRecords.update(record.id, {
       status: 'possible_swap',
       pairId,
       relatedRecordId: pair.id,
-      reviewStatus: 'open'
+      reviewStatus: 'open',
+      updatedAt: now,
+      syncStatus: 'pending'
     });
     await db.auditRecords.update(pair.id, {
       status: 'possible_swap',
       pairId,
       relatedRecordId: record.id,
-      reviewStatus: 'open'
+      reviewStatus: 'open',
+      updatedAt: now,
+      syncStatus: 'pending'
     });
   });
 

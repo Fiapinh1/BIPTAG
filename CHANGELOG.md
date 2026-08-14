@@ -1,4 +1,14 @@
-# BIPTAG Web V0.2 — Field Workflow
+# BIPTAG Web V0.3 — Field Workflow
+
+## V0.3
+
+- Exportacao Excel com aba `Resumo`, coluna `Sequencia` e historico cronologico.
+- Campos vazios exportados como celulas vazias, sem fallback numerico.
+- Pre-validacao separa tags duplicadas de animais com multiplas tags unicas.
+- Registros de auditoria passam a ter `sequence`, `createdAt`, `updatedAt`, `syncedAt` e `syncStatus`.
+- Schema Supabase atualizado para historico e sincronizacao V0.3.
+
+## V0.2
 
 ## Principais mudanças
 
