@@ -17,7 +17,7 @@ import {
   SwapIcon
 } from './icons/Icons';
 import { parseNedapWorkbook, exportAuditWorkbook, statusLabel } from './services/excel';
-import { feedbackCorrect, feedbackWarning } from './services/feedback';
+import { feedbackCorrect, feedbackWarning, primeFeedbackAudio } from './services/feedback';
 import { isWebNfcSupported, startNfcReader } from './services/nfc';
 import { isSupabaseConfigured, supabase } from './services/supabase';
 import { syncAuditToSupabase } from './services/cloud-sync';
@@ -543,6 +543,7 @@ function AuditView({
 
   async function activateReader() {
     try {
+      primeFeedbackAudio();
       setReaderMessage('Solicitando acesso ao NFC…');
       stopReader.current?.();
       stopReader.current = await startNfcReader(
@@ -669,6 +670,7 @@ function AuditView({
   }
 
   async function manualRead() {
+    primeFeedbackAudio();
     const tag = manualTag.replace(/[^0-9]/g, '').trim();
     if (!tag) return;
     await processRead(tag, manualTag, 'manual');
