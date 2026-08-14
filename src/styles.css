@@ -1143,3 +1143,194 @@ p {
     border-radius: 8px 8px 0 0;
   }
 }
+
+/* Ajustes V0.3.1: modo campo mais limpo em celulares */
+.app-shell--audit {
+  padding-bottom: env(safe-area-inset-bottom);
+  background: #eef3ee;
+}
+
+.app-shell--audit .bottom-nav {
+  display: none;
+}
+
+.app-shell--audit .toast {
+  bottom: calc(18px + env(safe-area-inset-bottom));
+}
+
+.app-shell--audit .topbar {
+  min-height: 48px;
+  padding: 7px 12px;
+}
+
+.app-shell--audit .brand__mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+}
+
+.app-shell--audit .brand strong {
+  font-size: 13px;
+}
+
+.app-shell--audit .connection-pill {
+  min-width: 76px;
+  padding: 6px 8px;
+  font-size: 10px;
+}
+
+.field-page {
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+
+.field-page--scanned {
+  padding-top: 6px;
+}
+
+.field-page--scanned .field-session-bar {
+  position: static;
+  margin-bottom: 8px;
+}
+
+.field-page--scanned .field-progress-strip,
+.field-page--scanned .field-progress-bar,
+.field-page--outcome-active .field-progress-strip,
+.field-page--outcome-active .field-progress-bar {
+  display: none;
+}
+
+.field-page--scanned .field-conference,
+.field-page--scanned .field-identifiers {
+  gap: 8px;
+}
+
+.field-page--scanned .field-id-block {
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.field-page--scanned .field-id-block span {
+  font-size: 9px;
+}
+
+.field-page--scanned .field-id-block--tag strong {
+  font-size: clamp(24px, 8vw, 32px);
+  line-height: 1.05;
+}
+
+.field-page--scanned .field-id-block--animal strong {
+  font-size: clamp(40px, 13vw, 56px);
+}
+
+.field-question {
+  scroll-margin-bottom: 55vh;
+}
+
+.field-question,
+.guided-decision,
+.field-outcome {
+  border-radius: 8px;
+}
+
+.field-question .button--field,
+.guided-decision .button--field,
+.field-outcome .button--field {
+  min-height: 66px;
+  border-radius: 8px;
+  font-size: 18px;
+}
+
+.field-question .button--ghost {
+  min-height: 54px;
+  margin-top: 8px;
+  border-radius: 8px;
+}
+
+.field-page--decision .field-identifiers,
+.field-page--decision .context-alert {
+  display: none;
+}
+
+.field-page--decision .guided-decision {
+  min-height: calc(100svh - 86px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 18px 14px;
+}
+
+.field-page--decision .guided-decision h2 {
+  margin: 8px 0 10px;
+  font-size: clamp(27px, 8vw, 36px);
+}
+
+.field-page--decision .guided-decision p {
+  margin-bottom: 14px;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.field-page--decision .decision-number,
+.field-page--decision .decision-hint {
+  display: none;
+}
+
+.field-page--decision .guided-decision .button {
+  min-height: 62px;
+  border-radius: 8px;
+  font-size: 17px;
+}
+
+.field-page--decision .guided-decision .button + .button {
+  margin-top: 10px;
+}
+
+.field-page--outcome-active .field-session-bar {
+  position: static;
+  margin-bottom: 8px;
+}
+
+.field-page--outcome-active .field-outcome {
+  min-height: auto;
+  padding: 20px 14px;
+}
+
+.field-page--outcome-correct .field-session-bar {
+  display: none;
+}
+
+.field-page--outcome-correct .field-outcome {
+  min-height: calc(100svh - 72px);
+}
+
+.field-page--outcome-correct .field-outcome p {
+  margin-bottom: 18px;
+}
+
+@media (max-width: 430px) {
+  .app-shell--audit .page {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .field-page--decision .guided-decision h2 {
+    font-size: 28px;
+  }
+
+  .field-page--decision .guided-decision p {
+    font-size: 14px;
+  }
+
+  .field-page--decision .guided-decision .button {
+    min-height: 60px;
+    font-size: 16px;
+  }
+
+  .field-page--outcome-active .field-outcome h1 {
+    font-size: 34px;
+  }
+
+  .field-page--outcome-active .outcome-animal {
+    font-size: 66px;
+  }
+}

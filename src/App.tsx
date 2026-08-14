@@ -141,6 +141,16 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const unlockAudio = () => primeFeedbackAudio();
+    window.addEventListener('pointerdown', unlockAudio, { passive: true });
+    window.addEventListener('keydown', unlockAudio);
+    return () => {
+      window.removeEventListener('pointerdown', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(null), 2800);
     return () => window.clearTimeout(timer);
@@ -482,7 +492,7 @@ function AuditView({
 
   useEffect(() => {
     if (!scan || decision || outcome) return;
-    window.setTimeout(() => inputRef.current?.focus(), 80);
+    focusObservedInput();
   }, [scan, decision, outcome]);
 
   const auditRecords = useLiveQuery(
@@ -590,7 +600,7 @@ function AuditView({
       });
       feedbackCorrect();
       setOutcome({ kind: 'correct', title: 'Conferência correta', tagNumber: saved.tagNumber, animal: observed });
-      window.setTimeout(() => resetForNext('Leitura salva. Aproxime a próxima SmartTag.'), 1050);
+      window.setTimeout(() => resetForNext('Leitura salva. Aproxime a próxima SmartTag.'), 3000);
       return;
     }
 
@@ -658,7 +668,14 @@ function AuditView({
 
   function correctObservedNumber() {
     setDecision(null);
-    window.setTimeout(() => inputRef.current?.focus(), 80);
+    focusObservedInput();
+  }
+
+  function focusObservedInput() {
+    window.setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }, 120);
   }
 
   function resetForNext(message = 'Pronto para a próxima leitura.') {
@@ -685,8 +702,15 @@ function AuditView({
     onPaused();
   }
 
+  const fieldPageClass = [
+    'page field-page',
+    scan ? 'field-page--scanned' : '',
+    decision ? 'field-page--decision' : '',
+    outcome ? `field-page--outcome-active field-page--outcome-${outcome.kind}` : ''
+  ].filter(Boolean).join(' ');
+
   return (
-    <section className="page field-page">
+    <section className={fieldPageClass}>
       <div className="field-session-bar">
         <div><span className="eyebrow">MODO CAMPO</span><strong>{activeAudit.farmName}</strong></div>
         <button className="compact-action" onClick={pauseAudit}><PauseIcon /> Pausar</button>
@@ -747,6 +771,7 @@ function AuditView({
                 id="observed"
                 className="animal-input animal-input--field"
                 inputMode="numeric"
+                enterKeyHint="done"
                 pattern="[0-9]*"
                 autoComplete="off"
                 placeholder="0000"
@@ -770,6 +795,7 @@ function AuditView({
           <h1>{outcome.title}</h1>
           <strong className="outcome-animal">{outcome.animal}</strong>
           <p>Tag {outcome.tagNumber}</p>
+          <button className="button button--primary button--full button--field" onClick={() => resetForNext()}>Próxima tag agora</button>
         </div>
       )}
 
