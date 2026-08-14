@@ -1,9 +1,10 @@
 import { db } from '../db/db';
 import { supabase } from './supabase';
-import type { Audit, AuditRecord, ImportIssue, TagAssignment } from '../types/domain';
+import type { Audit, AuditRecord, EffectiveTagAssignment, ImportIssue, TagAssignment } from '../types/domain';
 
 type SyncResult = {
   assignments: number;
+  effectiveAssignments: number;
   records: number;
   issues: number;
 };
@@ -36,6 +37,11 @@ function auditRow(audit: Audit, userId: string) {
     source_file_name: audit.sourceFileName,
     status: audit.status,
     total_tags: audit.totalTags,
+    total_rows: audit.totalRows ?? audit.totalTags,
+    valid_tags: audit.validTags ?? audit.totalTags,
+    suspicious_tags: audit.suspiciousTags ?? 0,
+    invalid_tags: audit.invalidTags ?? 0,
+    tag_pattern: audit.tagPattern ?? null,
     linked_tags: audit.linkedTags,
     issue_count: audit.issueCount,
     started_at: audit.startedAt,
@@ -59,7 +65,27 @@ function assignmentRow(assignment: TagAssignment, userId: string) {
     expected_animal: assignment.expectedAnimal,
     connected_since: assignment.connectedSince,
     last_detected_at: assignment.lastDetectedAt,
-    last_detected_farm: assignment.lastDetectedFarm
+    last_detected_farm: assignment.lastDetectedFarm,
+    validation_status: assignment.validationStatus ?? 'valid_tag',
+    validation_reason: assignment.validationReason ?? null
+  };
+}
+
+function effectiveRow(assignment: EffectiveTagAssignment, userId: string) {
+  return {
+    id: assignment.id,
+    audit_id: assignment.auditId,
+    user_id: userId,
+    tag_number: assignment.tagNumber,
+    original_animal: assignment.originalAnimal,
+    effective_animal: assignment.effectiveAnimal,
+    status: assignment.status,
+    source_assignment_id: assignment.sourceAssignmentId,
+    current_record_id: assignment.currentRecordId,
+    related_record_id: assignment.relatedRecordId,
+    updated_at: assignment.updatedAt,
+    synced_at: syncedAt(),
+    sync_status: assignment.syncStatus
   };
 }
 
@@ -72,6 +98,7 @@ function recordRow(record: AuditRecord, userId: string) {
     tag_number: record.tagNumber,
     expected_animal: record.expectedAnimal,
     observed_animal: record.observedAnimal,
+    effective_animal: record.effectiveAnimal ?? null,
     status: record.status,
     field_decision: record.fieldDecision,
     review_status: record.reviewStatus,
@@ -122,11 +149,21 @@ export async function syncAuditToSupabase(auditId: string): Promise<SyncResult> 
     db.auditRecords.where('auditId').equals(auditId).toArray(),
     db.importIssues.where('auditId').equals(auditId).toArray()
   ]);
+  const effectiveAssignments = await db.effectiveTagAssignments.where('auditId').equals(auditId).toArray();
 
   const { error: auditError } = await client.from('audits').upsert(auditRow(audit, userId), { onConflict: 'id' });
   if (auditError) throw auditError;
 
   await upsertInChunks('tag_assignments', assignments.map((assignment) => assignmentRow(assignment, userId)));
+  let effectiveSynced = false;
+  try {
+    await upsertInChunks('effective_tag_assignments', effectiveAssignments.map((assignment) => effectiveRow(assignment, userId)));
+    effectiveSynced = true;
+  } catch (err) {
+    const message = typeof err === 'object' && err && 'message' in err ? String((err as { message?: unknown }).message) : String(err);
+    if (!message.includes('effective_tag_assignments')) throw err;
+    console.warn('Tabela effective_tag_assignments ainda nao existe no Supabase remoto. Sincronizacao local preservada.');
+  }
   await upsertInChunks('audit_records', records.map((record) => recordRow(record, userId)));
   await upsertInChunks('import_issues', issues.map((issue) => issueRow(issue, userId)));
 
@@ -135,9 +172,16 @@ export async function syncAuditToSupabase(auditId: string): Promise<SyncResult> 
     syncedAt: synced,
     syncStatus: 'synced'
   });
+  if (effectiveSynced) {
+    await db.effectiveTagAssignments.where('auditId').equals(auditId).modify({
+      syncedAt: synced,
+      syncStatus: 'synced'
+    });
+  }
 
   return {
     assignments: assignments.length,
+    effectiveAssignments: effectiveSynced ? effectiveAssignments.length : 0,
     records: records.length,
     issues: issues.length
   };

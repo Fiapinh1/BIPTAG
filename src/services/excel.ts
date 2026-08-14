@@ -1,7 +1,19 @@
 import * as XLSX from 'xlsx';
-import type { Audit, AuditRecord, ImportIssue, ImportPreview, RecordStatus, TagAssignment } from '../types/domain';
+import type {
+  Audit,
+  AuditRecord,
+  EffectiveTagAssignment,
+  ImportIssue,
+  ImportPreview,
+  RecordStatus,
+  SmartTagPattern,
+  TagAssignment,
+  TagValidationStatus
+} from '../types/domain';
 
 const REQUIRED_HEADERS = ['Numero de tag', 'Animal'];
+const DEFAULT_PATTERN: SmartTagPattern = { prefix: '9840000', length: 15, numericOnly: true };
+const PREFIX_LENGTH = 7;
 
 function text(value: unknown): string | null {
   if (value === null || value === undefined) return null;
@@ -39,7 +51,35 @@ function formatDateTime(value: string) {
   return new Date(value).toLocaleString('pt-BR');
 }
 
-export async function parseNedapWorkbook(file: File): Promise<ImportPreview> {
+function mode(values: string[]) {
+  const counts = new Map<string, number>();
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? null;
+}
+
+function inferPattern(tags: string[]): SmartTagPattern {
+  const numericTags = tags.filter((tag) => /^\d+$/.test(tag));
+  const length = Number(mode(numericTags.map((tag) => String(tag.length)))) || DEFAULT_PATTERN.length;
+  const sameLength = numericTags.filter((tag) => tag.length === length);
+  const prefix = mode(sameLength.map((tag) => tag.slice(0, PREFIX_LENGTH))) ?? DEFAULT_PATTERN.prefix;
+  return { prefix, length, numericOnly: true };
+}
+
+export function validateSmartTag(tagNumber: string | null, pattern: SmartTagPattern): { status: TagValidationStatus; reason: string } {
+  if (!tagNumber) return { status: 'invalid_tag', reason: 'Tag vazia ou ausente.' };
+  if (pattern.numericOnly && !/^\d+$/.test(tagNumber)) {
+    return { status: 'invalid_tag', reason: 'Tag contem caracteres nao numericos.' };
+  }
+  if (tagNumber.length !== pattern.length) {
+    return { status: 'invalid_tag', reason: `Tag possui ${tagNumber.length} digitos; esperado ${pattern.length}.` };
+  }
+  if (pattern.prefix && !tagNumber.startsWith(pattern.prefix)) {
+    return { status: 'suspicious_tag', reason: `Prefixo diferente do padrao ${pattern.prefix}.` };
+  }
+  return { status: 'valid_tag', reason: 'Tag dentro do padrao confirmado.' };
+}
+
+export async function parseNedapWorkbook(file: File, patternOverride?: SmartTagPattern): Promise<ImportPreview> {
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: 'array', raw: false, cellDates: false });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -64,29 +104,67 @@ export async function parseNedapWorkbook(file: File): Promise<ImportPreview> {
     }
   }
 
-  const assignments: Omit<TagAssignment, 'id' | 'auditId'>[] = [];
+  const issues: ImportPreview['issues'] = [];
+  const rawItems: Omit<TagAssignment, 'id' | 'auditId'>[] = [];
 
   for (const row of rows) {
     const tagNumber = normalizeTag(getValue(row, 'Numero de tag'));
-    if (!tagNumber) continue;
+    if (!tagNumber) {
+      issues.push({
+        type: 'invalid_tag',
+        tagNumber: null,
+        animal: text(getValue(row, 'Animal')),
+        detail: 'Linha sem numero de SmartTag.'
+      });
+      continue;
+    }
 
-    assignments.push({
+    rawItems.push({
       tagNumber,
       functionName: text(getValue(row, 'Funcao')),
       typeName: text(getValue(row, 'Tipo')),
       expectedAnimal: text(getValue(row, 'Animal')),
       connectedSince: text(getValue(row, 'Conectado desde')),
       lastDetectedAt: text(getValue(row, 'Ultimo detetado')),
-      lastDetectedFarm: text(getValue(row, 'Detectado pela ultima vez na fazenda'))
+      lastDetectedFarm: text(getValue(row, 'Detectado pela ultima vez na fazenda')),
+      validationStatus: 'valid_tag',
+      validationReason: null
     });
   }
 
-  const issues: ImportPreview['issues'] = [];
+  const pattern = patternOverride ?? inferPattern(rawItems.map((item) => item.tagNumber));
+  const assignments = rawItems.map((item) => {
+    const validation = validateSmartTag(item.tagNumber, pattern);
+    return {
+      ...item,
+      validationStatus: validation.status,
+      validationReason: validation.reason
+    };
+  });
+
   const tagMap = new Map<string, number>();
   const animalMap = new Map<string, Set<string>>();
 
   for (const item of assignments) {
     tagMap.set(item.tagNumber, (tagMap.get(item.tagNumber) ?? 0) + 1);
+
+    if (item.validationStatus === 'suspicious_tag') {
+      issues.push({
+        type: 'suspicious_tag',
+        tagNumber: item.tagNumber,
+        animal: item.expectedAnimal,
+        detail: `${item.validationReason} Animal Nedap: ${item.expectedAnimal ?? 'sem vinculo'}.`
+      });
+    }
+
+    if (item.validationStatus === 'invalid_tag') {
+      issues.push({
+        type: 'invalid_tag',
+        tagNumber: item.tagNumber,
+        animal: item.expectedAnimal,
+        detail: `${item.validationReason} Animal Nedap: ${item.expectedAnimal ?? 'sem vinculo'}.`
+      });
+    }
 
     if (!item.expectedAnimal) {
       issues.push({
@@ -125,16 +203,35 @@ export async function parseNedapWorkbook(file: File): Promise<ImportPreview> {
     }
   }
 
+  const validTags = assignments.filter((item) => item.validationStatus === 'valid_tag');
+  const validSuffixes = new Set(validTags.map((item) => item.tagNumber.slice(PREFIX_LENGTH)));
+
+  for (const item of assignments.filter((assignment) => assignment.validationStatus === 'suspicious_tag')) {
+    if (item.tagNumber.length === pattern.length && validSuffixes.has(item.tagNumber.slice(PREFIX_LENGTH))) {
+      issues.push({
+        type: 'possible_typo',
+        tagNumber: item.tagNumber,
+        animal: item.expectedAnimal,
+        detail: `Possivel erro de prefixo no cadastro. A tag tem o mesmo final de uma SmartTag valida, mas usa prefixo diferente de ${pattern.prefix}.`
+      });
+    }
+  }
+
   return {
     assignments,
     issues,
     stats: {
-      totalTags: assignments.length,
-      linkedTags: assignments.filter((item) => Boolean(item.expectedAnimal)).length,
+      totalRows: rows.length,
+      totalTags: validTags.length,
+      validTags: validTags.length,
+      suspiciousTags: assignments.filter((item) => item.validationStatus === 'suspicious_tag').length,
+      invalidTags: assignments.filter((item) => item.validationStatus === 'invalid_tag').length,
+      linkedTags: validTags.filter((item) => Boolean(item.expectedAnimal)).length,
       tagsWithoutAnimal: issues.filter((item) => item.type === 'tag_without_animal').length,
       duplicateTags: issues.filter((item) => item.type === 'duplicate_tag').length,
       animalsWithMultipleTags: issues.filter((item) => item.type === 'multiple_tags_same_animal').length
-    }
+    },
+    pattern
   };
 }
 
@@ -158,48 +255,129 @@ function appendSheet(workbook: XLSX.WorkBook, rows: (string | number)[][], name:
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(rows), name);
 }
 
-export function exportAuditWorkbook(audit: Audit, records: AuditRecord[], issues: ImportIssue[]) {
+function effectiveStatusLabel(status: EffectiveTagAssignment['status']) {
+  const labels: Record<EffectiveTagAssignment['status'], string> = {
+    pending: 'Pendente',
+    confirmed: 'Confirmada',
+    reassigned: 'Reatribuida',
+    linked: 'Vinculada em campo',
+    new_tag: 'Nova tag',
+    displaced: 'Deslocada',
+    not_found: 'Nao localizada',
+    suspicious: 'Suspeita na base',
+    invalid: 'Invalida na base',
+    unresolved: 'Nao resolvida'
+  };
+  return labels[status];
+}
+
+function actionForEffectiveStatus(status: EffectiveTagAssignment['status']) {
+  const actions: Record<EffectiveTagAssignment['status'], string> = {
+    pending: 'Localizar SmartTag ou marcar como nao localizada',
+    confirmed: 'Nenhuma',
+    reassigned: 'Alterar vinculo no Nedap',
+    linked: 'Criar vinculo no Nedap',
+    new_tag: 'Cadastrar nova SmartTag no Nedap',
+    displaced: 'Localizar tag deslocada ou remover vinculo antigo',
+    not_found: 'Investigar colar perdido, animal fora do lote ou cadastro antigo',
+    suspicious: 'Corrigir cadastro da base',
+    invalid: 'Corrigir formato da tag na base',
+    unresolved: 'Revisar em campo'
+  };
+  return actions[status];
+}
+
+export function exportAuditWorkbook(
+  audit: Audit,
+  records: AuditRecord[],
+  issues: ImportIssue[],
+  effectiveAssignments: EffectiveTagAssignment[] = []
+) {
   const ordered = chronological(records);
   const current = records.filter((record) => record.isCurrent !== false);
-  const auditedUnique = new Set(current.map((record) => record.tagNumber)).size;
-  const pending = Math.max(audit.totalTags - auditedUnique, 0);
+  const validEffective = effectiveAssignments.filter((item) => !['suspicious', 'invalid'].includes(item.status));
+  const processedEffective = validEffective.filter((item) => item.status !== 'pending');
+  const processedCount = validEffective.length ? processedEffective.length : new Set(current.map((record) => record.tagNumber)).size;
+  const totalValid = audit.validTags ?? audit.totalTags;
+  const pending = Math.max(totalValid - processedCount, 0);
 
   const summaryRows: (string | number)[][] = [
     ['Campo', 'Valor'],
     ['Fazenda', blank(audit.farmName)],
     ['Data de inicio', formatDateTime(audit.startedAt)],
     ['Data de conclusao', audit.finishedAt ? formatDateTime(audit.finishedAt) : ''],
-    ['Total de tags da base', audit.totalTags],
-    ['Conferidas', auditedUnique],
-    ['Corretas', countStatus(current, 'correct')],
-    ['Divergencias confirmadas', countStatus(current, 'divergence')],
-    ['Tags nao cadastradas', countStatus(current, 'tag_not_registered') + countStatus(current, 'tag_not_found')],
-    ['Tags sem vinculo', countStatus(current, 'tag_without_animal')],
+    ['Total de linhas importadas', audit.totalRows ?? audit.totalTags],
+    ['Tags validas', totalValid],
+    ['Registros suspeitos', audit.suspiciousTags ?? 0],
+    ['Registros invalidos', audit.invalidTags ?? 0],
+    ['Tags processadas', processedCount],
+    ['Tags confirmadas', countStatus(current, 'correct')],
+    ['Tags reatribuidas', countStatus(current, 'reassignment') + countStatus(current, 'divergence') + countStatus(current, 'possible_swap')],
+    ['Tags novas', countStatus(current, 'new_tag')],
+    ['Tags sem vinculo resolvidas', countStatus(current, 'linked') + countStatus(current, 'tag_without_animal')],
+    ['Tags nao localizadas', effectiveAssignments.filter((item) => item.status === 'not_found').length + countStatus(current, 'tag_not_found')],
     ['Animais fora da base', countStatus(current, 'animal_not_in_base')],
     ['Nao confirmadas', countStatus(current, 'unconfirmed')],
     ['Possiveis trocas', countStatus(current, 'possible_swap')],
-    ['Pendentes', pending],
-    ['Percentual concluido', percent(auditedUnique, audit.totalTags)]
+    ['Cadeias', countStatus(current, 'replacement_chain')],
+    ['Pendencias', pending + current.filter((record) => record.reviewStatus === 'open').length],
+    ['Percentual processado', percent(processedCount, totalValid)]
   ];
 
-  const auditRows: (string | number)[][] = [
-    ['Sequencia', 'Animal Esperado', 'Animal Observado', 'Tag', 'Status', 'Decisao em Campo', 'Revisao', 'Possivel Troca', 'Observacao', 'Data/Hora', 'Origem'],
-    ...ordered.map((record) => [
-      record.sequence ?? '',
-      blank(record.expectedAnimal),
-      blank(record.observedAnimal),
-      blank(record.tagNumber),
-      statusLabel(record.status),
-      fieldDecisionLabel(record.fieldDecision),
-      reviewLabel(record.reviewStatus),
-      record.pairId ? 'Sim' : 'Nao',
-      blank(record.note),
-      formatDateTime(record.scannedAt),
-      record.source === 'nfc' ? 'NFC' : 'Manual'
+  const finalRows: (string | number)[][] = [
+    ['Tag', 'Animal Original', 'Animal Final', 'Situacao', 'Acao Necessaria'],
+    ...effectiveAssignments.map((item) => [
+      blank(item.tagNumber),
+      blank(item.originalAnimal),
+      blank(item.effectiveAnimal),
+      effectiveStatusLabel(item.status),
+      actionForEffectiveStatus(item.status)
     ])
   ];
 
-  const issueRows: (string | number)[][] = [
+  const auditRows: (string | number)[][] = [
+    ['Sequencia', 'Tag', 'Animal Original', 'Animal Observado', 'Animal Efetivo', 'Resultado', 'Decisao', 'Data/Hora', 'Origem NFC/Manual', 'Ocorrencia Relacionada'],
+    ...ordered.map((record) => [
+      record.sequence ?? '',
+      blank(record.tagNumber),
+      blank(record.expectedAnimal),
+      blank(record.observedAnimal),
+      blank(record.effectiveAnimal),
+      statusLabel(record.status),
+      fieldDecisionLabel(record.fieldDecision),
+      formatDateTime(record.scannedAt),
+      record.source === 'nfc' ? 'NFC' : 'Manual',
+      blank(record.relatedRecordId ?? record.pairId)
+    ])
+  ];
+
+  const pendingRows: (string | number)[][] = [
+    ['Tipo', 'Tag', 'Animal original', 'Animal encontrado', 'Tag anterior', 'Tag nova', 'Motivo', 'Acao sugerida', 'Status'],
+    ...current.filter((record) => record.status !== 'correct').map((record) => [
+      record.status,
+      blank(record.tagNumber),
+      blank(record.expectedAnimal),
+      blank(record.observedAnimal),
+      '',
+      blank(record.tagNumber),
+      statusLabel(record.status),
+      record.status === 'unconfirmed' ? 'Revisar em campo' : 'Corrigir cadastro no Nedap quando aplicavel',
+      reviewLabel(record.reviewStatus)
+    ]),
+    ...effectiveAssignments.filter((item) => ['pending', 'not_found', 'displaced'].includes(item.status)).map((item) => [
+      item.status,
+      blank(item.tagNumber),
+      blank(item.originalAnimal),
+      blank(item.effectiveAnimal),
+      item.status === 'displaced' ? blank(item.tagNumber) : '',
+      '',
+      effectiveStatusLabel(item.status),
+      actionForEffectiveStatus(item.status),
+      item.status === 'pending' ? 'Aberta' : 'Pendente'
+    ])
+  ];
+
+  const preValidationRows: (string | number)[][] = [
     ['Tipo', 'Tag', 'Animal', 'Detalhe'],
     ...issues.map((issue) => [
       issue.type,
@@ -211,8 +389,10 @@ export function exportAuditWorkbook(audit: Audit, records: AuditRecord[], issues
 
   const workbook = XLSX.utils.book_new();
   appendSheet(workbook, summaryRows, 'Resumo');
-  appendSheet(workbook, auditRows.length > 1 ? auditRows : [...auditRows, ['', '', '', '', 'Sem registros', '', '', '', '', '', '']], 'Auditoria');
-  appendSheet(workbook, issueRows.length > 1 ? issueRows : [...issueRows, ['Sem inconsistencias', '', '', '']], 'Pré-validação');
+  appendSheet(workbook, finalRows.length > 1 ? finalRows : [...finalRows, ['Sem resultados', '', '', '', '']], 'Resultado Final');
+  appendSheet(workbook, auditRows.length > 1 ? auditRows : [...auditRows, ['', '', '', '', '', 'Sem registros', '', '', '', '']], 'Auditoria');
+  appendSheet(workbook, pendingRows.length > 1 ? pendingRows : [...pendingRows, ['Sem pendencias', '', '', '', '', '', '', '', '']], 'Pendencias');
+  appendSheet(workbook, preValidationRows.length > 1 ? preValidationRows : [...preValidationRows, ['Sem inconsistencias', '', '', '']], 'Pre-validacao');
 
   const safeFarm = audit.farmName.replace(/[^a-zA-Z0-9_-]+/g, '_');
   XLSX.writeFile(workbook, `BIPTAG_${safeFarm}_${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -222,12 +402,18 @@ export function statusLabel(status: AuditRecord['status']) {
   const labels: Record<AuditRecord['status'], string> = {
     correct: 'Conferido',
     divergence: 'Tag encontrada em outro animal',
+    reassignment: 'Tag reatribuida',
+    linked: 'Tag vinculada em campo',
+    new_tag: 'Nova tag cadastrada em campo',
     possible_swap: 'Possivel troca de tags',
+    replacement_chain: 'Cadeia de substituicoes',
     tag_not_registered: 'Tag nao cadastrada',
-    tag_not_found: 'Tag nao cadastrada',
+    tag_not_found: 'Tag nao localizada',
     tag_without_animal: 'Tag sem animal vinculado',
     animal_not_in_base: 'Animal fora da base',
-    unconfirmed: 'Nao confirmado em campo'
+    unconfirmed: 'Nao confirmado em campo',
+    suspicious_tag: 'Tag suspeita',
+    possible_typo: 'Possivel erro de digitacao'
   };
   return labels[status];
 }

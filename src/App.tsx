@@ -16,7 +16,7 @@ import {
   ScanIcon,
   SwapIcon
 } from './icons/Icons';
-import { parseNedapWorkbook, exportAuditWorkbook, statusLabel } from './services/excel';
+import { parseNedapWorkbook, exportAuditWorkbook, statusLabel, validateSmartTag } from './services/excel';
 import { feedbackCorrect, feedbackWarning, primeFeedbackAudio } from './services/feedback';
 import { isWebNfcSupported, startNfcReader } from './services/nfc';
 import { isSupabaseConfigured, supabase } from './services/supabase';
@@ -24,17 +24,22 @@ import { syncAuditToSupabase } from './services/cloud-sync';
 import {
   classifyReading,
   detectReciprocalSwap,
+  getAnimalTagContext,
   getCurrentRecord,
   getRelatedContext,
+  markPendingTagsNotFound,
   saveReading,
+  type AnimalTagContext,
   type RelatedContext
 } from './services/audit-engine';
 import type {
   Audit,
   AuditRecord,
+  EffectiveTagAssignment,
   ImportIssue,
   ImportPreview,
   RecordStatus,
+  SmartTagPattern,
   TagAssignment
 } from './types/domain';
 import type { Session } from '@supabase/supabase-js';
@@ -47,12 +52,16 @@ type ScanState = {
   assignment: TagAssignment | null;
   existingRecord: AuditRecord | null;
   related: RelatedContext;
+  patternWarning: { status: 'suspicious_tag' | 'invalid_tag'; reason: string } | null;
+  patternConfirmed: boolean;
+  possibleTypo: TagAssignment | null;
   source: 'nfc' | 'manual';
 };
 
 type DecisionState = {
   status: Exclude<RecordStatus, 'correct'>;
   observedAnimal: string | null;
+  animalTagContext: AnimalTagContext | null;
 };
 
 type OutcomeState =
@@ -257,13 +266,21 @@ function HomeView({
     [activeAudit?.id],
     [] as AuditRecord[]
   );
+  const effectiveAssignments = useLiveQuery(
+    () => activeAudit ? db.effectiveTagAssignments.where('auditId').equals(activeAudit.id).toArray() : Promise.resolve<EffectiveTagAssignment[]>([]),
+    [activeAudit?.id],
+    [] as EffectiveTagAssignment[]
+  );
 
   const currentRecords = records.filter((record) => record.isCurrent !== false);
   const metrics = useMemo(() => {
     const correct = currentRecords.filter((record) => record.status === 'correct').length;
     const problems = currentRecords.filter((record) => record.status !== 'correct').length;
-    const auditedUnique = new Set(currentRecords.map((record) => record.tagNumber)).size;
-    const total = activeAudit?.totalTags ?? 0;
+    const validEffective = effectiveAssignments.filter((item) => !['suspicious', 'invalid'].includes(item.status));
+    const auditedUnique = validEffective.length
+      ? validEffective.filter((item) => item.status !== 'pending').length
+      : new Set(currentRecords.map((record) => record.tagNumber)).size;
+    const total = activeAudit?.validTags ?? activeAudit?.totalTags ?? 0;
     return {
       correct,
       problems,
@@ -271,7 +288,7 @@ function HomeView({
       pending: Math.max(total - auditedUnique, 0),
       percent: total ? Math.min(Math.round((auditedUnique / total) * 100), 100) : 0
     };
-  }, [currentRecords, activeAudit]);
+  }, [currentRecords, effectiveAssignments, activeAudit]);
 
   async function pauseAudit() {
     if (!activeAudit || activeAudit.status === 'finished') return;
@@ -282,6 +299,12 @@ function HomeView({
 
   async function finishAudit() {
     if (!activeAudit || activeAudit.status === 'finished') return;
+    const pendingTags = effectiveAssignments.filter((item) => item.status === 'pending');
+    if (pendingTags.length) {
+      const review = window.confirm(`Existem ${pendingTags.length} SmartTags da base que ainda nao foram localizadas. Revisar tags nao localizadas agora?`);
+      if (review) onIssues();
+      return;
+    }
     const ok = window.confirm(`Finalizar a auditoria de ${activeAudit.farmName}? Os dados continuarão salvos e disponíveis para relatório.`);
     if (!ok) return;
     const now = new Date().toISOString();
@@ -319,10 +342,10 @@ function HomeView({
       </div>
 
       <div className="stats-grid field-stats">
-        <StatCard label="Conferidas" value={metrics.auditedUnique} hint={`${metrics.pending} pendentes`} icon={<CheckIcon />} />
+        <StatCard label="Processadas" value={metrics.auditedUnique} hint={`${metrics.pending} pendentes`} icon={<CheckIcon />} />
         <StatCard label="Corretas" value={metrics.correct} tone="success" icon={<CheckIcon />} />
         <StatCard label="Ocorrências" value={metrics.problems} tone={metrics.problems ? 'danger' : 'default'} icon={<IssuesIcon />} />
-        <StatCard label="Total" value={activeAudit.totalTags} icon={<ScanIcon />} />
+        <StatCard label="Tags válidas" value={activeAudit.validTags ?? activeAudit.totalTags} icon={<ScanIcon />} />
       </div>
 
       {activeAudit.status !== 'finished' && (
@@ -371,17 +394,23 @@ function ImportView({ onCreated }: { onCreated: (auditId: string) => void }) {
   const [farmName, setFarmName] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [patternDraft, setPatternDraft] = useState<SmartTagPattern | null>(null);
+  const [patternConfirmed, setPatternConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function handleFile(selected: File | null) {
     setFile(selected);
     setPreview(null);
+    setPatternDraft(null);
+    setPatternConfirmed(false);
     setError(null);
     if (!selected) return;
     setBusy(true);
     try {
-      setPreview(await parseNedapWorkbook(selected));
+      const nextPreview = await parseNedapWorkbook(selected);
+      setPreview(nextPreview);
+      setPatternDraft(nextPreview.pattern);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível ler a planilha.');
     } finally {
@@ -389,8 +418,24 @@ function ImportView({ onCreated }: { onCreated: (auditId: string) => void }) {
     }
   }
 
+  async function applyPattern() {
+    if (!file || !patternDraft) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const nextPreview = await parseNedapWorkbook(file, patternDraft);
+      setPreview(nextPreview);
+      setPatternDraft(nextPreview.pattern);
+      setPatternConfirmed(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Nao foi possivel aplicar o padrao.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function saveImport() {
-    if (!file || !preview || !farmName.trim()) return;
+    if (!file || !preview || !farmName.trim() || !patternConfirmed) return;
     setBusy(true);
     try {
       const auditId = newId('audit');
@@ -405,13 +450,39 @@ function ImportView({ onCreated }: { onCreated: (auditId: string) => void }) {
         startedAt: now,
         status: 'in_progress',
         totalTags: preview.stats.totalTags,
+        totalRows: preview.stats.totalRows,
+        validTags: preview.stats.validTags,
+        suspiciousTags: preview.stats.suspiciousTags,
+        invalidTags: preview.stats.invalidTags,
+        tagPattern: preview.pattern,
         linkedTags: preview.stats.linkedTags,
         issueCount: preview.issues.length
       };
 
-      await db.transaction('rw', db.audits, db.tagAssignments, db.importIssues, async () => {
+      const assignmentRows = preview.assignments.map((assignment) => ({ ...assignment, id: newId('tag'), auditId }));
+      const effectiveRows = assignmentRows.map((assignment) => ({
+        id: newId('effective'),
+        auditId,
+        tagNumber: assignment.tagNumber,
+        originalAnimal: assignment.expectedAnimal,
+        effectiveAnimal: assignment.expectedAnimal,
+        status: assignment.validationStatus === 'invalid_tag'
+          ? 'invalid' as const
+          : assignment.validationStatus === 'suspicious_tag'
+            ? 'suspicious' as const
+            : 'pending' as const,
+        sourceAssignmentId: assignment.id,
+        currentRecordId: null,
+        relatedRecordId: null,
+        updatedAt: now,
+        syncedAt: null,
+        syncStatus: 'pending' as const
+      }));
+
+      await db.transaction('rw', db.audits, db.tagAssignments, db.effectiveTagAssignments, db.importIssues, async () => {
         await db.audits.add(audit);
-        await db.tagAssignments.bulkAdd(preview.assignments.map((assignment) => ({ ...assignment, id: newId('tag'), auditId })));
+        await db.tagAssignments.bulkAdd(assignmentRows);
+        await db.effectiveTagAssignments.bulkAdd(effectiveRows);
         if (preview.issues.length) {
           await db.importIssues.bulkAdd(preview.issues.map((issue) => ({ ...issue, id: newId('issue'), auditId })));
         }
@@ -458,8 +529,30 @@ function ImportView({ onCreated }: { onCreated: (auditId: string) => void }) {
             <StatCard label="Tags sem vínculo" value={preview.stats.tagsWithoutAnimal} tone={preview.stats.tagsWithoutAnimal ? 'warning' : 'default'} />
             <StatCard label="Animais multitag" value={preview.stats.animalsWithMultipleTags} tone={preview.stats.animalsWithMultipleTags ? 'warning' : 'default'} />
           </div>
+          {patternDraft && (
+            <div className="pattern-card">
+              <div>
+                <span className="eyebrow">PADRAO DAS SMARTTAGS</span>
+                <h2>{patternDraft.prefix}</h2>
+                <p>Comprimento: {patternDraft.length} digitos. Formato: somente numeros.</p>
+              </div>
+              <div className="pattern-card__fields">
+                <label>
+                  <span>Prefixo</span>
+                  <input className="text-input" inputMode="numeric" value={patternDraft.prefix} onChange={(event) => { setPatternDraft({ ...patternDraft, prefix: event.target.value.replace(/[^0-9]/g, '') }); setPatternConfirmed(false); }} />
+                </label>
+                <label>
+                  <span>Digitos</span>
+                  <input className="text-input" inputMode="numeric" value={patternDraft.length} onChange={(event) => { setPatternDraft({ ...patternDraft, length: Number(event.target.value.replace(/[^0-9]/g, '')) || 0 }); setPatternConfirmed(false); }} />
+                </label>
+              </div>
+              <button className="button button--secondary button--full" disabled={busy || !patternDraft.prefix || !patternDraft.length} onClick={() => void applyPattern()}>
+                {patternConfirmed ? 'Padrao confirmado' : 'Confirmar padrao'}
+              </button>
+            </div>
+          )}
           <div className="summary-strip"><span><CheckIcon /> Estrutura Nedap reconhecida</span><span>{preview.stats.duplicateTags} tags duplicadas</span></div>
-          <button className="button button--primary button--full button--large" disabled={!farmName.trim() || busy} onClick={saveImport}>Salvar no aparelho e iniciar</button>
+          <button className="button button--primary button--full button--large" disabled={!farmName.trim() || busy || !patternConfirmed} onClick={saveImport}>Salvar no aparelho e iniciar</button>
         </>
       )}
     </section>
@@ -500,19 +593,27 @@ function AuditView({
     [audit?.id],
     [] as AuditRecord[]
   );
+  const effectiveAssignments = useLiveQuery(
+    () => audit ? db.effectiveTagAssignments.where('auditId').equals(audit.id).toArray() : Promise.resolve<EffectiveTagAssignment[]>([]),
+    [audit?.id],
+    [] as EffectiveTagAssignment[]
+  );
 
   const fieldMetrics = useMemo(() => {
     const current = auditRecords.filter((record) => record.isCurrent !== false);
-    const auditedUnique = new Set(current.map((record) => record.tagNumber)).size;
+    const validEffective = effectiveAssignments.filter((item) => !['suspicious', 'invalid'].includes(item.status));
+    const auditedUnique = validEffective.length
+      ? validEffective.filter((item) => item.status !== 'pending').length
+      : new Set(current.map((record) => record.tagNumber)).size;
     const issues = current.filter((record) => record.status !== 'correct').length;
-    const total = audit?.totalTags ?? 0;
+    const total = audit?.validTags ?? audit?.totalTags ?? 0;
     return {
       auditedUnique,
       issues,
       pending: Math.max(total - auditedUnique, 0),
       percent: total ? Math.min(Math.round((auditedUnique / total) * 100), 100) : 0
     };
-  }, [auditRecords, audit]);
+  }, [auditRecords, effectiveAssignments, audit]);
 
   if (!audit) {
     return (
@@ -532,6 +633,18 @@ function AuditView({
 
   const activeAudit = audit;
 
+  async function findPossibleTypo(tagNumber: string) {
+    const suffix = tagNumber.slice(7);
+    const candidates = await db.tagAssignments.where('auditId').equals(activeAudit.id).toArray();
+    return candidates.find(
+      (candidate) =>
+        candidate.validationStatus === 'suspicious_tag' &&
+        candidate.tagNumber !== tagNumber &&
+        candidate.tagNumber.length === tagNumber.length &&
+        candidate.tagNumber.slice(7) === suffix
+    ) ?? null;
+  }
+
   async function processRead(tagNumber: string, rawValue = tagNumber, source: 'nfc' | 'manual' = 'nfc') {
     const normalized = tagNumber.replace(/[^0-9]/g, '').trim();
     if (!normalized) return;
@@ -542,11 +655,26 @@ function AuditView({
     const assignment = await db.tagAssignments.where('[auditId+tagNumber]').equals([activeAudit.id, normalized]).first();
     const existingRecord = await getCurrentRecord(activeAudit.id, normalized);
     const related = await getRelatedContext(activeAudit.id, assignment ?? null);
+    const patternCheck = activeAudit.tagPattern ? validateSmartTag(normalized, activeAudit.tagPattern) : null;
+    const patternWarning = patternCheck && patternCheck.status !== 'valid_tag'
+      ? { status: patternCheck.status, reason: patternCheck.reason }
+      : null;
+    const possibleTypo = !assignment ? await findPossibleTypo(normalized) : null;
 
     setObservedAnimal('');
     setDecision(null);
     setOutcome(null);
-    setScan({ tagNumber: normalized, rawValue, assignment: assignment ?? null, existingRecord, related, source });
+    setScan({
+      tagNumber: normalized,
+      rawValue,
+      assignment: assignment ?? null,
+      existingRecord,
+      related,
+      patternWarning,
+      patternConfirmed: !patternWarning,
+      possibleTypo,
+      source
+    });
     setReaderMessage(`Tag lida: ${normalized}`);
     feedbackCorrect();
   }
@@ -591,6 +719,7 @@ function AuditView({
       const saved = await saveReading({
         auditId: activeAudit.id,
         tagNumber: scan.tagNumber,
+        assignment: scan.assignment,
         expectedAnimal: scan.assignment?.expectedAnimal ?? null,
         observedAnimal: observed,
         status,
@@ -600,11 +729,11 @@ function AuditView({
       });
       feedbackCorrect();
       setOutcome({ kind: 'correct', title: 'Conferência correta', tagNumber: saved.tagNumber, animal: observed });
-      window.setTimeout(() => resetForNext('Leitura salva. Aproxime a próxima SmartTag.'), 3000);
+      window.setTimeout(() => resetForNext('Leitura salva. Aproxime a próxima SmartTag.'), 1300);
       return;
     }
 
-    setDecision({ status, observedAnimal: observed });
+    setDecision({ status, observedAnimal: observed, animalTagContext: await getAnimalTagContext(activeAudit.id, observed) });
     feedbackWarning();
   }
 
@@ -613,6 +742,7 @@ function AuditView({
     const saved = await saveReading({
       auditId: activeAudit.id,
       tagNumber: scan.tagNumber,
+      assignment: scan.assignment,
       expectedAnimal: scan.assignment?.expectedAnimal ?? null,
       observedAnimal: decision.observedAnimal,
       status: decision.status,
@@ -621,7 +751,7 @@ function AuditView({
       existingRecord: scan.existingRecord
     });
 
-    if (saved.status === 'divergence') {
+    if (saved.status === 'divergence' || saved.status === 'reassignment') {
       const swap = await detectReciprocalSwap(saved);
       if (swap) {
         setOutcome({ kind: 'swap', title: 'Possível troca identificada', current: swap.current, other: swap.other });
@@ -648,6 +778,7 @@ function AuditView({
     await saveReading({
       auditId: activeAudit.id,
       tagNumber: scan.tagNumber,
+      assignment: scan.assignment,
       expectedAnimal: scan.assignment?.expectedAnimal ?? null,
       observedAnimal: observedAnimal.trim() || null,
       status: 'unconfirmed',
@@ -720,7 +851,7 @@ function AuditView({
         <div><span>Conferidas</span><strong>{fieldMetrics.auditedUnique}</strong></div>
         <div><span>Pendentes</span><strong>{fieldMetrics.pending}</strong></div>
         <div><span>Ocorrencias</span><strong>{fieldMetrics.issues}</strong></div>
-        <div><span>Total</span><strong>{activeAudit.totalTags}</strong></div>
+        <div><span>Total</span><strong>{activeAudit.validTags ?? activeAudit.totalTags}</strong></div>
       </div>
       <div className="field-progress-bar"><span style={{ width: `${fieldMetrics.percent}%` }} /></div>
 
@@ -745,6 +876,20 @@ function AuditView({
       )}
 
       {scan && !outcome && (
+        scan.patternWarning && !scan.patternConfirmed ? (
+          <div className="field-outcome field-outcome--issue">
+            <IssuesIcon size={52} />
+            <span className="eyebrow">TAG FORA DO PADRAO ESPERADO</span>
+            <h1>Confirmar leitura?</h1>
+            <div className="outcome-summary">
+              <div><span>Tag lida</span><strong>{scan.tagNumber}</strong></div>
+              <div><span>Padrao</span><strong>{activeAudit.tagPattern?.prefix ?? '---'} / {activeAudit.tagPattern?.length ?? '--'} digitos</strong></div>
+              <div><span>Motivo</span><strong>{scan.patternWarning.reason}</strong></div>
+            </div>
+            <button className="button button--primary button--full button--field" onClick={() => setScan({ ...scan, patternConfirmed: true })}>Confirmar tag mesmo assim</button>
+            <button className="button button--ghost button--full" onClick={() => resetForNext('Leitura cancelada. Aproxime a proxima SmartTag.')}>Cancelar leitura</button>
+          </div>
+        ) : (
         <div className="field-conference">
           <div className="field-identifiers">
             <div className="field-id-block field-id-block--tag"><span>TAG LIDA</span><strong>{scan.tagNumber}</strong></div>
@@ -757,6 +902,16 @@ function AuditView({
 
           {scan.related.message && (
             <div className="context-alert context-alert--relation"><SwapIcon /><div><strong>Existe uma ocorrência relacionada</strong><span>{scan.related.message} O BIPTAG vai cruzar esta leitura automaticamente.</span></div></div>
+          )}
+
+          {scan.possibleTypo && (
+            <div className="context-alert context-alert--warning">
+              <IssuesIcon />
+              <div>
+                <strong>Possivel erro de digitacao no cadastro</strong>
+                <span>Tag fisica {scan.tagNumber}. Registro suspeito {scan.possibleTypo.tagNumber} no animal {scan.possibleTypo.expectedAnimal ?? 'sem vinculo'}.</span>
+              </div>
+            </div>
           )}
 
           {!scan.assignment && <div className="context-alert context-alert--danger"><IssuesIcon /><div><strong>Tag não cadastrada</strong><span>Ela não aparece no arquivo Nedap importado. Confirme apenas o brinco que está vendo.</span></div></div>}
@@ -786,6 +941,7 @@ function AuditView({
             <GuidedDecision scan={scan} decision={decision} onConfirm={() => void confirmPhysicalFact()} onCorrect={correctObservedNumber} onUnconfirmed={() => void couldNotConfirm()} />
           )}
         </div>
+        )
       )}
 
       {outcome?.kind === 'correct' && (
@@ -858,13 +1014,21 @@ function GuidedDecision({
 }) {
   const expected = scan.assignment?.expectedAnimal ?? null;
   const observed = decision.observedAnimal ?? '—';
-  const content = decisionCopy(decision.status, expected, observed);
+  const previousTag = decision.animalTagContext?.effective?.tagNumber ?? decision.animalTagContext?.assignment?.tagNumber ?? null;
+  const isReplacement = Boolean(previousTag && previousTag !== scan.tagNumber && ['reassignment', 'linked', 'new_tag'].includes(decision.status));
+  const content = decisionCopy(decision.status, expected, observed, isReplacement);
 
   return (
     <div className="guided-decision">
       <span className="eyebrow">CONFIRME SOMENTE O QUE ESTÁ VENDO</span>
       <h2>{content.title}</h2>
       <p>{content.subtitle}</p>
+      {isReplacement && (
+        <div className="replacement-summary">
+          <div><span>Tag atual do animal</span><strong>{previousTag}</strong></div>
+          <div><span>Tag encontrada</span><strong>{scan.tagNumber}</strong></div>
+        </div>
+      )}
       <div className="decision-number">{observed}</div>
       <button className="button button--primary button--full button--field" onClick={onConfirm}>{content.confirmLabel}</button>
       <button className="button button--secondary button--full" onClick={onCorrect}>Digitei o brinco errado</button>
@@ -874,8 +1038,15 @@ function GuidedDecision({
   );
 }
 
-function decisionCopy(status: Exclude<RecordStatus, 'correct'>, expected: string | null, observed: string) {
-  if (status === 'divergence') {
+function decisionCopy(status: Exclude<RecordStatus, 'correct'>, expected: string | null, observed: string, isReplacement = false) {
+  if (isReplacement) {
+    return {
+      title: `Registrar substituicao no animal ${observed}?`,
+      subtitle: `O animal ${observed} ja possui outra tag cadastrada ou efetiva.`,
+      confirmLabel: 'Sim, registrar substituicao'
+    };
+  }
+  if (status === 'divergence' || status === 'reassignment') {
     return {
       title: `O brinco deste animal é ${observed}?`,
       subtitle: `Esta tag está cadastrada no animal ${expected}.`,
@@ -896,6 +1067,20 @@ function decisionCopy(status: Exclude<RecordStatus, 'correct'>, expected: string
       confirmLabel: `Sim, está no animal ${observed}`
     };
   }
+  if (status === 'linked') {
+    return {
+      title: `Vincular esta tag ao animal ${observed}?`,
+      subtitle: 'A tag existe na base, mas esta sem animal vinculado no Nedap.',
+      confirmLabel: `Sim, vincular ao animal ${observed}`
+    };
+  }
+  if (status === 'new_tag') {
+    return {
+      title: `Usar esta nova tag no animal ${observed}?`,
+      subtitle: 'A SmartTag nao existe na base, mas o animal existe no Nedap.',
+      confirmLabel: 'Sim, registrar nova tag'
+    };
+  }
   if (status === 'tag_not_found' || status === 'tag_not_registered') {
     return {
       title: `Esta tag está no animal ${observed}?`,
@@ -912,7 +1097,9 @@ function decisionCopy(status: Exclude<RecordStatus, 'correct'>, expected: string
 
 function issueSavedTitle(status: RecordStatus) {
   if (status === 'tag_not_registered') return 'Tag nao cadastrada confirmada';
-  if (status === 'divergence') return 'Tag encontrada em outro animal';
+  if (status === 'divergence' || status === 'reassignment') return 'Tag encontrada em outro animal';
+  if (status === 'linked') return 'Tag vinculada em campo';
+  if (status === 'new_tag') return 'Nova tag registrada';
   if (status === 'animal_not_in_base') return 'Animal fora da base';
   if (status === 'tag_without_animal') return 'Tag sem vínculo confirmada';
   if (status === 'tag_not_found') return 'Tag não cadastrada confirmada';
@@ -921,7 +1108,9 @@ function issueSavedTitle(status: RecordStatus) {
 
 function issueSavedMessage(status: RecordStatus, observed: string | null) {
   if (status === 'tag_not_registered') return `A tag foi encontrada fisicamente no animal ${observed ?? ''}, mas nao existe na base importada.`;
-  if (status === 'divergence') return 'O BIPTAG guardou a posição física desta tag e vai cruzar as próximas leituras.';
+  if (status === 'divergence' || status === 'reassignment') return 'O BIPTAG guardou a posicao fisica desta tag e vai cruzar as proximas leituras.';
+  if (status === 'linked') return `A tag sem vinculo no Nedap foi confirmada fisicamente no animal ${observed ?? ''}.`;
+  if (status === 'new_tag') return `A nova SmartTag foi confirmada fisicamente no animal ${observed ?? ''}.`;
   if (status === 'animal_not_in_base') return `O brinco ${observed ?? ''} foi confirmado em campo e ficará separado para revisão.`;
   if (status === 'tag_without_animal') return `O vínculo físico com o animal ${observed ?? ''} foi registrado como sugestão de revisão.`;
   if (status === 'tag_not_found') return `A tag foi encontrada fisicamente no animal ${observed ?? ''}, mas não existe na base importada.`;
@@ -931,6 +1120,7 @@ function issueSavedMessage(status: RecordStatus, observed: string | null) {
 function IssuesView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport: () => void }) {
   const issues = useLiveQuery(() => audit ? db.importIssues.where('auditId').equals(audit.id).toArray() : Promise.resolve<ImportIssue[]>([]), [audit?.id], [] as ImportIssue[]);
   const records = useLiveQuery(() => audit ? db.auditRecords.where('auditId').equals(audit.id).toArray() : Promise.resolve<AuditRecord[]>([]), [audit?.id], [] as AuditRecord[]);
+  const effectiveAssignments = useLiveQuery(() => audit ? db.effectiveTagAssignments.where('auditId').equals(audit.id).toArray() : Promise.resolve<EffectiveTagAssignment[]>([]), [audit?.id], [] as EffectiveTagAssignment[]);
 
   if (!audit) {
     return <section className="page page--centered"><EmptyState icon={<IssuesIcon size={42} />} title="Sem auditoria" text="Importe uma base para visualizar inconsistências e resultados." action={<button className="button button--primary" onClick={onNeedImport}>Importar planilha</button>} /></section>;
@@ -947,9 +1137,17 @@ function IssuesView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
     return true;
   });
   const otherIssues = nonCorrect.filter((record) => record.status !== 'possible_swap');
+  const pendingTags = effectiveAssignments.filter((item) => item.status === 'pending');
+  const displacedTags = effectiveAssignments.filter((item) => item.status === 'displaced');
+  const notFoundTags = effectiveAssignments.filter((item) => item.status === 'not_found');
 
   async function exportReport() {
-    exportAuditWorkbook(activeAudit, records, issues);
+    exportAuditWorkbook(activeAudit, records, issues, effectiveAssignments);
+  }
+
+  async function markMissingTags() {
+    const count = await markPendingTagsNotFound(activeAudit.id);
+    if (count) window.alert(`${count} SmartTags foram marcadas como nao localizadas.`);
   }
 
   return (
@@ -961,8 +1159,19 @@ function IssuesView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
 
       <div className="stats-grid stats-grid--two">
         <StatCard label="Possíveis trocas" value={swapPairs.length} tone={swapPairs.length ? 'warning' : 'default'} />
-        <StatCard label="Outras ocorrências" value={otherIssues.length} tone={otherIssues.length ? 'danger' : 'default'} />
+        <StatCard label="Outras ocorrências" value={otherIssues.length + displacedTags.length + notFoundTags.length} tone={otherIssues.length || displacedTags.length || notFoundTags.length ? 'danger' : 'default'} />
       </div>
+
+      {pendingTags.length > 0 && (
+        <div className="review-action-card">
+          <div>
+            <span className="eyebrow">TAGS NAO LOCALIZADAS</span>
+            <h2>{pendingTags.length} SmartTags ainda sem resultado</h2>
+            <p>Antes de finalizar, revise o lote ou marque as SmartTags restantes como nao localizadas.</p>
+          </div>
+          <button className="button button--secondary button--full" onClick={() => void markMissingTags()}>Marcar pendentes como nao localizadas</button>
+        </div>
+      )}
 
       {swapPairs.length > 0 && (
         <>
@@ -1108,7 +1317,7 @@ function CloudSettingsView({ activeAudit, setToast }: { activeAudit: Audit | nul
     setMessage(null);
     try {
       const result = await syncAuditToSupabase(activeAudit.id);
-      const summary = `Sincronizado: ${result.assignments} tags, ${result.records} leituras e ${result.issues} pendencias.`;
+      const summary = `Sincronizado: ${result.assignments} tags originais, ${result.effectiveAssignments} estados efetivos, ${result.records} leituras e ${result.issues} pendencias.`;
       setMessage(summary);
       setToast(summary);
     } catch (err) {

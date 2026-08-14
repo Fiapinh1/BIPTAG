@@ -19,6 +19,11 @@ create table if not exists public.audits (
   source_file_name text not null,
   status text not null default 'in_progress' check (status in ('draft','active','in_progress','paused','finished')),
   total_tags integer not null default 0,
+  total_rows integer not null default 0,
+  valid_tags integer not null default 0,
+  suspicious_tags integer not null default 0,
+  invalid_tags integer not null default 0,
+  tag_pattern jsonb,
   linked_tags integer not null default 0,
   issue_count integer not null default 0,
   started_at timestamptz not null,
@@ -42,6 +47,25 @@ create table if not exists public.tag_assignments (
   connected_since text,
   last_detected_at text,
   last_detected_farm text,
+  validation_status text not null default 'valid_tag' check (validation_status in ('valid_tag','suspicious_tag','invalid_tag')),
+  validation_reason text,
+  unique (audit_id, tag_number)
+);
+
+create table if not exists public.effective_tag_assignments (
+  id text primary key,
+  audit_id text not null references public.audits(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  tag_number text not null,
+  original_animal text,
+  effective_animal text,
+  status text not null check (status in ('pending','confirmed','reassigned','linked','new_tag','displaced','not_found','suspicious','invalid','unresolved')),
+  source_assignment_id text references public.tag_assignments(id) on delete set null,
+  current_record_id text,
+  related_record_id text,
+  updated_at timestamptz not null,
+  synced_at timestamptz,
+  sync_status text not null default 'pending' check (sync_status in ('pending','synced','error')),
   unique (audit_id, tag_number)
 );
 
@@ -52,7 +76,8 @@ create table if not exists public.audit_records (
   tag_number text not null,
   expected_animal text,
   observed_animal text,
-  status text not null check (status in ('correct','divergence','possible_swap','tag_not_registered','tag_not_found','tag_without_animal','animal_not_in_base','unconfirmed')),
+  effective_animal text,
+  status text not null check (status in ('correct','divergence','reassignment','linked','new_tag','possible_swap','replacement_chain','tag_not_registered','tag_not_found','tag_without_animal','animal_not_in_base','unconfirmed','suspicious_tag','possible_typo')),
   field_decision text not null,
   review_status text not null default 'open',
   note text,
@@ -82,6 +107,9 @@ create index if not exists audits_user_id_idx on public.audits(user_id);
 create index if not exists audits_status_idx on public.audits(status);
 create index if not exists tag_assignments_audit_tag_idx on public.tag_assignments(audit_id, tag_number);
 create index if not exists tag_assignments_audit_animal_idx on public.tag_assignments(audit_id, expected_animal);
+create index if not exists effective_tag_assignments_audit_tag_idx on public.effective_tag_assignments(audit_id, tag_number);
+create index if not exists effective_tag_assignments_audit_animal_idx on public.effective_tag_assignments(audit_id, effective_animal);
+create index if not exists effective_tag_assignments_audit_status_idx on public.effective_tag_assignments(audit_id, status);
 create index if not exists audit_records_audit_id_idx on public.audit_records(audit_id);
 create index if not exists audit_records_audit_sequence_idx on public.audit_records(audit_id, sequence);
 create index if not exists audit_records_tag_number_idx on public.audit_records(tag_number);
@@ -91,6 +119,7 @@ create index if not exists import_issues_audit_id_idx on public.import_issues(au
 alter table public.farms enable row level security;
 alter table public.audits enable row level security;
 alter table public.tag_assignments enable row level security;
+alter table public.effective_tag_assignments enable row level security;
 alter table public.audit_records enable row level security;
 alter table public.import_issues enable row level security;
 
@@ -101,6 +130,9 @@ create policy "users_manage_own_audits" on public.audits for all
 using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 create policy "users_manage_own_assignments" on public.tag_assignments for all
+using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create policy "users_manage_own_effective_assignments" on public.effective_tag_assignments for all
 using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 create policy "users_manage_own_records" on public.audit_records for all

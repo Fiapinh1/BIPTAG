@@ -1,10 +1,11 @@
 import Dexie, { type EntityTable } from 'dexie';
-import type { Audit, AuditRecord, ImportIssue, TagAssignment } from '../types/domain';
+import type { Audit, AuditRecord, EffectiveTagAssignment, ImportIssue, TagAssignment } from '../types/domain';
 import { generateId } from '../utils/id';
 
 class BiptagDB extends Dexie {
   audits!: EntityTable<Audit, 'id'>;
   tagAssignments!: EntityTable<TagAssignment, 'id'>;
+  effectiveTagAssignments!: EntityTable<EffectiveTagAssignment, 'id'>;
   auditRecords!: EntityTable<AuditRecord, 'id'>;
   importIssues!: EntityTable<ImportIssue, 'id'>;
 
@@ -87,6 +88,81 @@ class BiptagDB extends Dexie {
             syncStatus: record.syncStatus ?? 'pending'
           });
         }
+      }
+    });
+
+    this.version(4).stores({
+      audits: 'id, status, createdAt, updatedAt, lastActivityAt, farmName',
+      tagAssignments:
+        'id, auditId, tagNumber, expectedAnimal, validationStatus, [auditId+tagNumber], [auditId+expectedAnimal]',
+      effectiveTagAssignments:
+        'id, auditId, tagNumber, effectiveAnimal, status, currentRecordId, syncStatus, [auditId+tagNumber], [auditId+effectiveAnimal], [auditId+status]',
+      auditRecords:
+        'id, auditId, sequence, tagNumber, status, isCurrent, reviewStatus, scannedAt, createdAt, updatedAt, syncStatus, expectedAnimal, observedAnimal, effectiveAnimal, pairId, [auditId+tagNumber], [auditId+sequence]',
+      importIssues: 'id, auditId, type, tagNumber, animal'
+    }).upgrade(async (tx) => {
+      const audits = tx.table('audits');
+      const assignments = tx.table('tagAssignments');
+      const effective = tx.table('effectiveTagAssignments');
+      const records = tx.table('auditRecords');
+
+      await audits.toCollection().modify((audit: Partial<Audit>) => {
+        audit.totalRows = audit.totalRows ?? audit.totalTags ?? 0;
+        audit.validTags = audit.validTags ?? audit.totalTags ?? 0;
+        audit.suspiciousTags = audit.suspiciousTags ?? 0;
+        audit.invalidTags = audit.invalidTags ?? 0;
+        audit.tagPattern = audit.tagPattern ?? { prefix: '9840000', length: 15, numericOnly: true };
+      });
+
+      await assignments.toCollection().modify((assignment: Partial<TagAssignment>) => {
+        assignment.validationStatus = assignment.validationStatus ?? 'valid_tag';
+        assignment.validationReason = assignment.validationReason ?? null;
+      });
+
+      await records.toCollection().modify((record: Partial<AuditRecord>) => {
+        record.effectiveAnimal = record.effectiveAnimal ?? record.observedAnimal ?? record.expectedAnimal ?? null;
+      });
+
+      const allAssignments = (await assignments.toArray()) as TagAssignment[];
+      const allRecords = (await records.toArray()) as AuditRecord[];
+      const currentRecordByTag = new Map<string, AuditRecord>();
+      for (const record of allRecords.filter((item) => item.isCurrent !== false)) {
+        currentRecordByTag.set(`${record.auditId}:${record.tagNumber}`, record);
+      }
+
+      for (const assignment of allAssignments) {
+        const key = `${assignment.auditId}:${assignment.tagNumber}`;
+        const currentRecord = currentRecordByTag.get(key);
+        const status = assignment.validationStatus === 'invalid_tag'
+          ? 'invalid'
+          : assignment.validationStatus === 'suspicious_tag'
+            ? 'suspicious'
+            : currentRecord
+              ? currentRecord.status === 'correct'
+                ? 'confirmed'
+                : currentRecord.status === 'tag_not_found'
+                  ? 'not_found'
+                  : currentRecord.status === 'tag_without_animal'
+                    ? 'linked'
+                    : currentRecord.status === 'unconfirmed'
+                      ? 'unresolved'
+                      : 'reassigned'
+              : 'pending';
+
+        await effective.add({
+          id: newId('effective'),
+          auditId: assignment.auditId,
+          tagNumber: assignment.tagNumber,
+          originalAnimal: assignment.expectedAnimal,
+          effectiveAnimal: currentRecord?.observedAnimal ?? assignment.expectedAnimal ?? null,
+          status,
+          sourceAssignmentId: assignment.id,
+          currentRecordId: currentRecord?.id ?? null,
+          relatedRecordId: currentRecord?.relatedRecordId ?? null,
+          updatedAt: currentRecord?.updatedAt ?? new Date().toISOString(),
+          syncedAt: null,
+          syncStatus: 'pending'
+        });
       }
     });
   }

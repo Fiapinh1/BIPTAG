@@ -1,13 +1,23 @@
 import { db, newId } from '../db/db';
-import type { AuditRecord, RecordStatus, TagAssignment } from '../types/domain';
+import type { AuditRecord, EffectiveTagAssignment, EffectiveTagStatus, RecordStatus, TagAssignment } from '../types/domain';
 
 export type RelatedContext = {
   records: AuditRecord[];
+  effectiveAssignments: EffectiveTagAssignment[];
   message: string | null;
+};
+
+export type AnimalTagContext = {
+  assignment: TagAssignment | null;
+  effective: EffectiveTagAssignment | null;
 };
 
 function recordOrder(record: AuditRecord) {
   return record.sequence ?? Number.MAX_SAFE_INTEGER;
+}
+
+function isOpenIssue(record: AuditRecord) {
+  return record.isCurrent && record.status !== 'correct' && record.status !== 'unconfirmed';
 }
 
 export async function getCurrentRecord(auditId: string, tagNumber: string) {
@@ -17,35 +27,57 @@ export async function getCurrentRecord(auditId: string, tagNumber: string) {
     .sort((a, b) => recordOrder(b) - recordOrder(a) || b.scannedAt.localeCompare(a.scannedAt))[0] ?? null;
 }
 
+export async function getEffectiveTag(auditId: string, tagNumber: string) {
+  return db.effectiveTagAssignments.where('[auditId+tagNumber]').equals([auditId, tagNumber]).first();
+}
+
+export async function getAnimalTagContext(auditId: string, animal: string | null): Promise<AnimalTagContext> {
+  if (!animal) return { assignment: null, effective: null };
+
+  const [assignment, effectiveCandidates] = await Promise.all([
+    db.tagAssignments.where('[auditId+expectedAnimal]').equals([auditId, animal]).first(),
+    db.effectiveTagAssignments.where('[auditId+effectiveAnimal]').equals([auditId, animal]).toArray()
+  ]);
+
+  const effective = effectiveCandidates.find((item) => !['displaced', 'not_found', 'suspicious', 'invalid'].includes(item.status)) ?? null;
+  return { assignment: assignment ?? null, effective };
+}
+
 export async function getRelatedContext(auditId: string, assignment: TagAssignment | null): Promise<RelatedContext> {
-  if (!assignment?.expectedAnimal) return { records: [], message: null };
+  if (!assignment?.expectedAnimal) return { records: [], effectiveAssignments: [], message: null };
 
-  const current = (await db.auditRecords.where('auditId').equals(auditId).toArray()).filter(
-    (record) => record.isCurrent && record.status !== 'correct' && record.status !== 'unconfirmed'
-  );
+  const [records, effectiveAssignments] = await Promise.all([
+    db.auditRecords.where('auditId').equals(auditId).toArray(),
+    db.effectiveTagAssignments.where('auditId').equals(auditId).toArray()
+  ]);
 
-  const related = current.filter(
+  const relatedRecords = records.filter(
     (record) =>
-      record.expectedAnimal === assignment.expectedAnimal ||
-      record.observedAnimal === assignment.expectedAnimal
+      isOpenIssue(record) &&
+      (record.expectedAnimal === assignment.expectedAnimal || record.observedAnimal === assignment.expectedAnimal)
   );
 
-  if (!related.length) return { records: [], message: null };
+  const relatedEffective = effectiveAssignments.filter(
+    (item) =>
+      item.status === 'displaced' &&
+      (item.originalAnimal === assignment.expectedAnimal || item.effectiveAnimal === assignment.expectedAnimal)
+  );
 
-  const latest = [...related].sort((a, b) => recordOrder(b) - recordOrder(a) || b.scannedAt.localeCompare(a.scannedAt))[0];
+  if (!relatedRecords.length && !relatedEffective.length) return { records: [], effectiveAssignments: [], message: null };
+
+  const latest = [...relatedRecords].sort((a, b) => recordOrder(b) - recordOrder(a) || b.scannedAt.localeCompare(a.scannedAt))[0];
   return {
-    records: related,
+    records: relatedRecords,
+    effectiveAssignments: relatedEffective,
     message: latest
-      ? `Este animal ja possui uma ocorrencia relacionada nesta auditoria. Tag ${latest.tagNumber}; ${latest.expectedAnimal ?? 'sem cadastro'} -> ${latest.observedAnimal ?? 'nao confirmado'}; ${latest.status}.`
-      : `Este animal ja possui ${related.length} ocorrencia relacionada nesta auditoria.`
+      ? `Esta tag ou animal ja esta envolvido em alteracao nesta auditoria. Tag ${latest.tagNumber}; ${latest.expectedAnimal ?? 'sem cadastro'} -> ${latest.observedAnimal ?? 'nao confirmado'}; ${latest.status}.`
+      : `Existe uma tag deslocada relacionada ao animal ${assignment.expectedAnimal}.`
   };
 }
 
 export async function observedAnimalExists(auditId: string, animal: string | null) {
   if (!animal) return false;
-  return Boolean(
-    await db.tagAssignments.where('[auditId+expectedAnimal]').equals([auditId, animal]).first()
-  );
+  return Boolean(await db.tagAssignments.where('[auditId+expectedAnimal]').equals([auditId, animal]).first());
 }
 
 export async function classifyReading(
@@ -53,11 +85,12 @@ export async function classifyReading(
   assignment: TagAssignment | null,
   observedAnimal: string | null
 ): Promise<RecordStatus> {
-  if (!assignment) return 'tag_not_registered';
-  if (!assignment.expectedAnimal) return 'tag_without_animal';
-  if (assignment.expectedAnimal === observedAnimal) return 'correct';
   if (!observedAnimal) return 'unconfirmed';
-  return (await observedAnimalExists(auditId, observedAnimal)) ? 'divergence' : 'animal_not_in_base';
+  const animalExists = await observedAnimalExists(auditId, observedAnimal);
+  if (!assignment) return animalExists ? 'new_tag' : 'tag_not_registered';
+  if (!assignment.expectedAnimal) return animalExists ? 'linked' : 'tag_without_animal';
+  if (assignment.expectedAnimal === observedAnimal) return 'correct';
+  return animalExists ? 'reassignment' : 'animal_not_in_base';
 }
 
 async function getNextSequence(auditId: string) {
@@ -65,9 +98,64 @@ async function getNextSequence(auditId: string) {
   return records.reduce((max, record) => Math.max(max, record.sequence ?? 0), 0) + 1;
 }
 
+function statusForEffectiveRecord(status: RecordStatus): EffectiveTagStatus {
+  if (status === 'correct') return 'confirmed';
+  if (status === 'reassignment' || status === 'divergence' || status === 'possible_swap') return 'reassigned';
+  if (status === 'linked') return 'linked';
+  if (status === 'new_tag') return 'new_tag';
+  if (status === 'tag_not_found') return 'not_found';
+  if (status === 'suspicious_tag' || status === 'possible_typo') return 'suspicious';
+  if (status === 'unconfirmed') return 'unresolved';
+  return 'unresolved';
+}
+
+function reviewForStatus(status: RecordStatus): AuditRecord['reviewStatus'] {
+  return status === 'correct' ? 'not_required' : 'open';
+}
+
+async function upsertEffective(input: {
+  auditId: string;
+  tagNumber: string;
+  originalAnimal: string | null;
+  effectiveAnimal: string | null;
+  status: EffectiveTagStatus;
+  sourceAssignmentId: string | null;
+  currentRecordId: string | null;
+  relatedRecordId: string | null;
+  now: string;
+}) {
+  const existing = await db.effectiveTagAssignments.where('[auditId+tagNumber]').equals([input.auditId, input.tagNumber]).first();
+  const payload = {
+    originalAnimal: input.originalAnimal,
+    effectiveAnimal: input.effectiveAnimal,
+    status: input.status,
+    sourceAssignmentId: input.sourceAssignmentId,
+    currentRecordId: input.currentRecordId,
+    relatedRecordId: input.relatedRecordId,
+    updatedAt: input.now,
+    syncStatus: 'pending' as const
+  };
+
+  if (existing) {
+    await db.effectiveTagAssignments.update(existing.id, payload);
+    return existing.id;
+  }
+
+  const id = newId('effective');
+  await db.effectiveTagAssignments.add({
+    id,
+    auditId: input.auditId,
+    tagNumber: input.tagNumber,
+    ...payload,
+    syncedAt: null
+  });
+  return id;
+}
+
 export async function saveReading(input: {
   auditId: string;
   tagNumber: string;
+  assignment: TagAssignment | null;
   expectedAnimal: string | null;
   observedAnimal: string | null;
   status: RecordStatus;
@@ -79,11 +167,30 @@ export async function saveReading(input: {
   const now = new Date().toISOString();
   const id = newId('record');
   const sequence = await getNextSequence(input.auditId);
+  let relatedRecordId: string | null = null;
 
-  await db.transaction('rw', db.auditRecords, db.audits, async () => {
+  await db.transaction('rw', db.auditRecords, db.effectiveTagAssignments, db.audits, async () => {
     if (input.existingRecord?.isCurrent) {
       await db.auditRecords.update(input.existingRecord.id, { isCurrent: false, updatedAt: now, syncStatus: 'pending' });
     }
+
+    if (input.observedAnimal && input.status !== 'unconfirmed') {
+      const occupied = (await db.effectiveTagAssignments.where('[auditId+effectiveAnimal]').equals([input.auditId, input.observedAnimal]).toArray())
+        .find((item) => item.tagNumber !== input.tagNumber && !['displaced', 'not_found', 'suspicious', 'invalid'].includes(item.status));
+
+      if (occupied) {
+        relatedRecordId = occupied.currentRecordId;
+        await db.effectiveTagAssignments.update(occupied.id, {
+          status: 'displaced',
+          effectiveAnimal: null,
+          relatedRecordId: id,
+          updatedAt: now,
+          syncStatus: 'pending'
+        });
+      }
+    }
+
+    const effectiveAnimal = input.status === 'unconfirmed' ? input.expectedAnimal : input.observedAnimal ?? input.expectedAnimal;
 
     await db.auditRecords.add({
       id,
@@ -92,9 +199,10 @@ export async function saveReading(input: {
       tagNumber: input.tagNumber,
       expectedAnimal: input.expectedAnimal,
       observedAnimal: input.observedAnimal,
+      effectiveAnimal,
       status: input.status,
       fieldDecision: input.fieldDecision,
-      reviewStatus: input.status === 'correct' ? 'not_required' : 'open',
+      reviewStatus: reviewForStatus(input.status),
       note: input.note ?? null,
       scannedAt: now,
       createdAt: now,
@@ -105,7 +213,19 @@ export async function saveReading(input: {
       isCurrent: true,
       supersedesRecordId: input.existingRecord?.id ?? null,
       pairId: null,
-      relatedRecordId: null
+      relatedRecordId
+    });
+
+    await upsertEffective({
+      auditId: input.auditId,
+      tagNumber: input.tagNumber,
+      originalAnimal: input.expectedAnimal,
+      effectiveAnimal,
+      status: statusForEffectiveRecord(input.status),
+      sourceAssignmentId: input.assignment?.id ?? null,
+      currentRecordId: id,
+      relatedRecordId,
+      now
     });
 
     await db.audits.update(input.auditId, {
@@ -121,7 +241,7 @@ export async function saveReading(input: {
 
 export async function detectReciprocalSwap(record: AuditRecord) {
   if (
-    record.status !== 'divergence' ||
+    !['reassignment', 'divergence', 'possible_swap'].includes(record.status) ||
     !record.expectedAnimal ||
     !record.observedAnimal ||
     record.expectedAnimal === record.observedAnimal
@@ -133,7 +253,7 @@ export async function detectReciprocalSwap(record: AuditRecord) {
     (candidate) =>
       candidate.isCurrent &&
       candidate.id !== record.id &&
-      (candidate.status === 'divergence' || candidate.status === 'possible_swap') &&
+      ['reassignment', 'divergence', 'possible_swap'].includes(candidate.status) &&
       candidate.expectedAnimal === record.observedAnimal &&
       candidate.observedAnimal === record.expectedAnimal &&
       candidate.fieldDecision === 'confirmed_physical_animal'
@@ -144,7 +264,7 @@ export async function detectReciprocalSwap(record: AuditRecord) {
 
   const pairId = pair.pairId ?? newId('swap');
   const now = new Date().toISOString();
-  await db.transaction('rw', db.auditRecords, async () => {
+  await db.transaction('rw', db.auditRecords, db.effectiveTagAssignments, async () => {
     await db.auditRecords.update(record.id, {
       status: 'possible_swap',
       pairId,
@@ -161,10 +281,74 @@ export async function detectReciprocalSwap(record: AuditRecord) {
       updatedAt: now,
       syncStatus: 'pending'
     });
+    await db.effectiveTagAssignments.where('[auditId+tagNumber]').equals([record.auditId, record.tagNumber]).modify({
+      currentRecordId: record.id,
+      relatedRecordId: pair.id,
+      updatedAt: now,
+      syncStatus: 'pending'
+    });
+    await db.effectiveTagAssignments.where('[auditId+tagNumber]').equals([pair.auditId, pair.tagNumber]).modify({
+      currentRecordId: pair.id,
+      relatedRecordId: record.id,
+      updatedAt: now,
+      syncStatus: 'pending'
+    });
   });
 
   return {
     current: (await db.auditRecords.get(record.id))!,
     other: (await db.auditRecords.get(pair.id))!
   };
+}
+
+export async function markPendingTagsNotFound(auditId: string) {
+  const now = new Date().toISOString();
+  const pending = (await db.effectiveTagAssignments.where('[auditId+status]').equals([auditId, 'pending']).toArray())
+    .filter((item) => item.originalAnimal || item.tagNumber);
+  if (!pending.length) return 0;
+
+  await db.transaction('rw', db.auditRecords, db.effectiveTagAssignments, db.audits, async () => {
+    let sequence = await getNextSequence(auditId);
+    for (const item of pending) {
+      const id = newId('record');
+      await db.auditRecords.add({
+        id,
+        auditId,
+        sequence,
+        tagNumber: item.tagNumber,
+        expectedAnimal: item.originalAnimal,
+        observedAnimal: null,
+        effectiveAnimal: null,
+        status: 'tag_not_found',
+        fieldDecision: 'review_later',
+        reviewStatus: 'open',
+        note: 'SmartTag valida da base nao localizada durante a auditoria.',
+        scannedAt: now,
+        createdAt: now,
+        updatedAt: now,
+        syncedAt: null,
+        syncStatus: 'pending',
+        source: 'manual',
+        isCurrent: true,
+        supersedesRecordId: null,
+        pairId: null,
+        relatedRecordId: null
+      });
+      await db.effectiveTagAssignments.update(item.id, {
+        status: 'not_found',
+        effectiveAnimal: null,
+        currentRecordId: id,
+        updatedAt: now,
+        syncStatus: 'pending'
+      });
+      sequence += 1;
+    }
+
+    await db.audits.update(auditId, {
+      updatedAt: now,
+      lastActivityAt: now
+    });
+  });
+
+  return pending.length;
 }
