@@ -21,14 +21,20 @@
 }
 
 * { box-sizing: border-box; }
-html { background: var(--bg); }
+html { width: 100%; overflow-x: hidden; background: var(--bg); }
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at top right, rgba(184, 97, 53, 0.06), transparent 32rem),
     var(--bg);
+}
+#root {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
 }
 button, input { font: inherit; }
 button { -webkit-tap-highlight-color: transparent; }
@@ -37,7 +43,7 @@ button:focus-visible, input:focus-visible, summary:focus-visible {
   outline-offset: 2px;
 }
 
-.app-shell { min-height: 100vh; padding-bottom: calc(86px + env(safe-area-inset-bottom)); }
+.app-shell { min-height: 100vh; max-width: 100vw; overflow-x: hidden; padding-bottom: calc(86px + env(safe-area-inset-bottom)); }
 .topbar {
   position: sticky;
   top: 0;
@@ -69,6 +75,11 @@ button:focus-visible, input:focus-visible, summary:focus-visible {
   display: grid; place-items: center;
   color: #d27a48; background: rgba(255,255,255,.06);
   border: 1px solid rgba(255,255,255,.08);
+}
+.brand__mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .brand strong { display: block; letter-spacing: .13em; font-size: 15px; }
 .brand small { display: block; margin-top: 2px; color: #c9beb2; font-size: 10.5px; letter-spacing: .04em; }
@@ -254,8 +265,8 @@ p { color: var(--muted); line-height: 1.55; font-size: 14px; }
 .sync-card .button + .button { margin-top: 8px; }
 
 .bottom-nav {
-  position: fixed; z-index: 30; left: 50%; bottom: 0; transform: translateX(-50%);
-  width: min(820px, 100%); min-height: 70px; padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+  position: fixed; z-index: 30; left: 0; right: 0; bottom: 0; transform: none;
+  width: min(820px, 100vw); margin: 0 auto; min-height: 70px; padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
   display: grid; grid-template-columns: repeat(4,1fr); gap: 2px;
   background: rgba(255,253,249,.97); border-top: 1px solid var(--line); backdrop-filter: blur(14px);
 }
@@ -414,10 +425,13 @@ p { color: var(--muted); line-height: 1.55; font-size: 14px; }
 body {
   background: #eef3ee;
   color: var(--graphite);
+  overflow-x: hidden;
 }
 
 .app-shell {
   background: #eef3ee;
+  max-width: 100vw;
+  overflow-x: hidden;
   padding-bottom: calc(92px + env(safe-area-inset-bottom));
 }
 
@@ -434,8 +448,22 @@ body {
   height: 42px;
   border-radius: 8px;
   color: var(--field-yellow);
-  background: #1e332b;
-  border-color: #315548;
+  background: #ffffff;
+  border-color: #ffffff;
+}
+
+.brand__mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.empty-logo {
+  display: block;
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
 }
 
 .brand strong { font-size: 16px; }
@@ -706,20 +734,31 @@ p {
 }
 
 .bottom-nav {
+  left: 0;
+  right: 0;
+  transform: none;
+  width: min(720px, 100vw);
+  margin: 0 auto;
   min-height: 78px;
-  padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+  padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
   background: #ffffff;
   border-top: 2px solid #bfd0c8;
 }
 
 .nav-button {
   color: #52645c;
-  padding: 7px 3px;
+  min-width: 0;
+  padding: 7px 1px;
   gap: 4px;
+  overflow: hidden;
 }
 
 .nav-button span {
-  font-size: 11px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
   font-weight: 900;
 }
 

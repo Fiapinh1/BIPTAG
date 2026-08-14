@@ -4,7 +4,6 @@ import { db, newId } from './db/db';
 import { EmptyState } from './components/EmptyState';
 import { StatCard } from './components/StatCard';
 import {
-  BiptagMark,
   CheckIcon,
   ChevronRightIcon,
   CloudIcon,
@@ -77,6 +76,10 @@ type OutcomeState =
       current: AuditRecord;
       other: AuditRecord;
     };
+
+function BiptagLogo({ className = '' }: { className?: string }) {
+  return <img className={className} src="/icons/biptag-logo-192.png" alt="BIPTAG" />;
+}
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString('pt-BR', {
@@ -155,7 +158,7 @@ function App() {
     <div className={`app-shell app-shell--${view}`}>
       <header className="topbar">
         <button className="brand" onClick={() => setView('home')} aria-label="Ir para início">
-          <span className="brand__mark"><BiptagMark /></span>
+          <span className="brand__mark"><BiptagLogo /></span>
           <span>
             <strong>BIPTAG</strong>
             <small>Auditoria de SmartTags</small>
@@ -280,7 +283,7 @@ function HomeView({
     return (
       <section className="page page--centered">
         <EmptyState
-          icon={<BiptagMark size={44} />}
+          icon={<BiptagLogo className="empty-logo" />}
           title="BIPTAG pronto para começar"
           text="Importe o Tags.xlsx original do Nedap. A auditoria ficará salva no aparelho e pode continuar em outro dia."
           action={<button className="button button--primary" onClick={onNewAudit}><ImportIcon /> Nova auditoria</button>}

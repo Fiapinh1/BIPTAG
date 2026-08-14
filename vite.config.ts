@@ -12,24 +12,24 @@ export default defineConfig({
         name: 'BIPTAG',
         short_name: 'BIPTAG',
         description: 'Auditoria de SmartTags via NFC',
-        theme_color: '#24211F',
-        background_color: '#F3EFE8',
+        theme_color: '#12201B',
+        background_color: '#EEF3EE',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',
         icons: [
           {
-            src: '/icons/icon-192.png',
+            src: '/icons/biptag-logo-192.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: '/icons/icon-512.png',
+            src: '/icons/biptag-logo-512.png',
             sizes: '512x512',
             type: 'image/png'
           },
           {
-            src: '/icons/icon-maskable-512.png',
+            src: '/icons/biptag-logo-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable'
