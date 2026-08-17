@@ -1108,6 +1108,69 @@ p {
   background: #ffffff;
 }
 
+.review-groups {
+  display: grid;
+  gap: 4px;
+}
+
+.review-section {
+  display: grid;
+  gap: 8px;
+}
+
+.review-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 11px;
+  padding: 13px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--copper);
+  border-radius: 8px;
+}
+
+.review-card--warning {
+  border-left-color: var(--warning);
+}
+
+.review-card--danger {
+  border-left-color: var(--danger);
+}
+
+.review-card__body {
+  display: grid;
+  gap: 7px;
+}
+
+.review-card strong,
+.review-card span,
+.review-card small {
+  display: block;
+}
+
+.review-card strong {
+  font-size: 14px;
+}
+
+.review-card span {
+  color: #5f564e;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.review-card__meta {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+.review-card small {
+  color: #82766c;
+  font-size: 11px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
 .issue-row__icon {
   border-radius: 8px;
   color: #ffffff;

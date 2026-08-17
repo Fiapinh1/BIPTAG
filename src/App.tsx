@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Children, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, newId } from './db/db';
 import { EmptyState } from './components/EmptyState';
@@ -17,7 +17,7 @@ import {
   SwapIcon
 } from './icons/Icons';
 import { parseNedapWorkbook, exportAuditWorkbook, validateSmartTag } from './services/excel';
-import { statusLabel } from './services/audit-labels';
+import { operationalActionLabel, statusLabel } from './services/audit-labels';
 import { feedbackCorrect, feedbackWarning, primeFeedbackAudio } from './services/feedback';
 import { isWebNfcSupported, startNfcReader } from './services/nfc';
 import { isSupabaseConfigured, supabase } from './services/supabase';
@@ -239,7 +239,7 @@ function App() {
   );
 }
 
-function NavButton({ active, label, icon, onClick }: { active: boolean; label: string; icon: React.ReactNode; onClick: () => void }) {
+function NavButton({ active, label, icon, onClick }: { active: boolean; label: string; icon: ReactNode; onClick: () => void }) {
   return (
     <button className={`nav-button ${active ? 'is-active' : ''}`} onClick={onClick}>
       {icon}
@@ -1295,8 +1295,30 @@ function IssuesView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
     seenConflictPairs.add(key);
     return true;
   });
-  const pendingSwaps = nonCorrect.filter((record) => ['reassignment', 'divergence'].includes(record.status));
-  const otherIssues = nonCorrect.filter((record) => !['possible_swap', 'audit_conflict', 'new_tag_conflict', 'reassignment', 'divergence'].includes(record.status));
+  const correctRecords = current.filter((record) => record.status === 'correct' && (!record.operationalAction || record.operationalAction === 'keep_tag'));
+  const pendingSwapRecords = nonCorrect.filter((record) => ['reassignment', 'divergence'].includes(record.status) && record.operationalAction !== 'move_tag');
+  const movementRecords = nonCorrect.filter((record) => record.operationalAction === 'move_tag');
+  const removedRecords = current.filter((record) => record.operationalAction === 'remove_tag');
+  const replacementRecords = current.filter((record) => record.operationalAction === 'replace_tag');
+  const newTagRecords = nonCorrect.filter((record) => ['new_tag', 'tag_not_registered'].includes(record.status) || record.operationalAction === 'register_new_tag');
+  const unlinkedRecords = nonCorrect.filter((record) => ['linked', 'tag_without_animal'].includes(record.status) || record.operationalAction === 'link_tag');
+  const unconfirmedRecords = nonCorrect.filter((record) => record.status === 'unconfirmed');
+  const notFoundRecords = nonCorrect.filter((record) => record.status === 'tag_not_found');
+  const actionRecords = current.filter((record) => record.operationalAction && record.operationalAction !== 'keep_tag');
+  const groupedIds = new Set([
+    ...swapRecords,
+    ...conflictPairs,
+    ...newTagConflictRecords,
+    ...pendingSwapRecords,
+    ...movementRecords,
+    ...removedRecords,
+    ...replacementRecords,
+    ...newTagRecords,
+    ...unlinkedRecords,
+    ...unconfirmedRecords,
+    ...notFoundRecords
+  ].map((record) => record.id));
+  const otherIssues = nonCorrect.filter((record) => !groupedIds.has(record.id));
   const pendingTags = effectiveAssignments.filter((item) => item.status === 'pending');
   const displacedTags = effectiveAssignments.filter((item) => item.status === 'displaced');
   const notFoundTags = effectiveAssignments.filter((item) => item.status === 'not_found');
@@ -1318,11 +1340,10 @@ function IssuesView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
       </div>
 
       <div className="stats-grid stats-grid--two">
-        <StatCard label="Trocas confirmadas" value={swapPairs.length} tone={swapPairs.length ? 'warning' : 'default'} />
-        <StatCard label="Trocas pendentes" value={pendingSwaps.length} tone={pendingSwaps.length ? 'warning' : 'default'} />
-        <StatCard label="Conflitos" value={conflictPairs.length} tone={conflictPairs.length ? 'danger' : 'default'} />
-        <StatCard label="Conflitos tag nova" value={newTagConflictRecords.length} tone={newTagConflictRecords.length ? 'danger' : 'default'} />
-        <StatCard label="Outras ocorrências" value={otherIssues.length + displacedTags.length + notFoundTags.length} tone={otherIssues.length || displacedTags.length || notFoundTags.length ? 'danger' : 'default'} />
+        <StatCard label="Trocas" value={swapPairs.length} tone={swapPairs.length ? 'warning' : 'default'} />
+        <StatCard label="Pendentes" value={pendingSwapRecords.length} tone={pendingSwapRecords.length ? 'warning' : 'default'} />
+        <StatCard label="Conflitos" value={conflictPairs.length + newTagConflictRecords.length} tone={conflictPairs.length || newTagConflictRecords.length ? 'danger' : 'default'} />
+        <StatCard label="Acoes" value={actionRecords.length + displacedTags.length + notFoundTags.length} tone={actionRecords.length || displacedTags.length || notFoundTags.length ? 'danger' : 'default'} />
       </div>
 
       {pendingTags.length > 0 && (
@@ -1336,44 +1357,78 @@ function IssuesView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
         </div>
       )}
 
-      {swapPairs.length > 0 && (
-        <>
-          <div className="section-heading section-heading--compact"><div><span className="eyebrow">CRUZADAS</span><h2>Possíveis trocas</h2></div></div>
-          <div className="issue-list">
-            {swapPairs.map((record) => {
-              const other = swapRecords.find((candidate) => candidate.id === record.relatedRecordId);
-              return <SwapRow key={record.id} record={record} other={other ?? null} />;
-            })}
-          </div>
-        </>
-      )}
+      <div className="review-groups">
+        <ReviewSection eyebrow="TAGS CORRETAS" title="Tags corretas mantidas" emptyText="Nenhuma tag correta mantida.">
+          {correctRecords.map((record) => <ReviewRecordCard key={record.id} record={record} />)}
+        </ReviewSection>
 
-      {conflictPairs.length > 0 && (
-        <>
-          <div className="section-heading section-heading--compact"><div><span className="eyebrow">CONFLITOS</span><h2>Conflitos de auditoria</h2></div></div>
-          <div className="issue-list">
-            {conflictPairs.map((record) => <RecordRow key={record.id} record={record} />)}
-          </div>
-        </>
-      )}
+        <ReviewSection eyebrow="TROCAS" title="Trocas confirmadas" emptyText="Nenhuma troca identificada.">
+          {swapPairs.map((record) => {
+            const other = swapRecords.find((candidate) => candidate.id === record.relatedRecordId);
+            return <ReviewSwapCard key={record.id} record={record} other={other ?? null} />;
+          })}
+        </ReviewSection>
 
-      {newTagConflictRecords.length > 0 && (
-        <>
-          <div className="section-heading section-heading--compact"><div><span className="eyebrow">TAG NOVA</span><h2>Conflitos de tag nova</h2></div></div>
-          <div className="issue-list">
-            {newTagConflictRecords.map((record) => <RecordRow key={record.id} record={record} />)}
-          </div>
-        </>
-      )}
+        <ReviewSection eyebrow="TROCAS PENDENTES" title="Trocas pendentes" emptyText="Nenhuma troca pendente.">
+          {pendingSwapRecords.map((record) => <ReviewRecordCard key={record.id} record={record} tone="warning" />)}
+        </ReviewSection>
 
-      <div className="section-heading section-heading--compact"><div><h2>Ocorrências de campo</h2></div></div>
-      <div className="issue-list">
-        {otherIssues.length ? otherIssues.map((record) => <RecordRow key={record.id} record={record} />) : <p className="muted-block">Nenhuma outra ocorrência registrada.</p>}
-      </div>
+        <ReviewSection eyebrow="MOVIMENTACOES" title="Tags movimentadas" emptyText="Nenhuma movimentacao pendente.">
+          {movementRecords.map((record) => <ReviewRecordCard key={record.id} record={record} />)}
+        </ReviewSection>
 
-      <div className="section-heading section-heading--compact"><div><h2>Pré-validação da planilha</h2></div></div>
-      <div className="issue-list">
-        {issues.length ? issues.map((issue) => <IssueRow key={issue.id} issue={issue} />) : <p className="muted-block">Nenhum problema encontrado na importação.</p>}
+        <ReviewSection eyebrow="SUBSTITUICOES" title="Substituicoes de tag" emptyText="Nenhuma substituicao registrada.">
+          {replacementRecords.map((record) => <ReviewRecordCard key={record.id} record={record} />)}
+        </ReviewSection>
+
+        <ReviewSection eyebrow="TAGS NOVAS" title="Tags novas" emptyText="Nenhuma tag nova registrada.">
+          {newTagRecords.map((record) => <ReviewRecordCard key={record.id} record={record} />)}
+        </ReviewSection>
+
+        <ReviewSection eyebrow="TAGS REMOVIDAS" title="Tags removidas" emptyText="Nenhuma tag removida registrada.">
+          {removedRecords.map((record) => <ReviewRecordCard key={record.id} record={record} tone="warning" />)}
+        </ReviewSection>
+
+        <ReviewSection eyebrow="SEM VINCULO" title="Tags sem vinculo" emptyText="Nenhuma tag sem vinculo registrada.">
+          {unlinkedRecords.map((record) => <ReviewRecordCard key={record.id} record={record} />)}
+        </ReviewSection>
+
+        <ReviewSection eyebrow="ANIMAIS" title="Animais sem tag" emptyText="Nenhum animal sem tag confirmado.">
+          {displacedTags.map((item) => <ReviewEffectiveCard key={item.id} item={item} />)}
+        </ReviewSection>
+
+        <ReviewSection eyebrow="CONFLITOS AUDITORIA" title="Conflitos de auditoria" emptyText="Nenhum conflito de auditoria registrado.">
+          {conflictPairs.map((record) => <ReviewRecordCard key={record.id} record={record} tone="danger" />)}
+        </ReviewSection>
+
+        <ReviewSection eyebrow="CONFLITOS TAG NOVA" title="Conflitos de tag nova" emptyText="Nenhum conflito de tag nova registrado.">
+          {newTagConflictRecords.map((record) => <ReviewRecordCard key={record.id} record={record} tone="danger" />)}
+        </ReviewSection>
+
+        <ReviewSection eyebrow="NAO CONFIRMADAS" title="Nao confirmadas" emptyText="Nenhuma leitura nao confirmada.">
+          {unconfirmedRecords.map((record) => <ReviewRecordCard key={record.id} record={record} tone="warning" />)}
+        </ReviewSection>
+
+        <ReviewSection eyebrow="NAO LOCALIZADAS" title="Tags nao localizadas" emptyText="Nenhuma tag marcada como nao localizada.">
+          {notFoundRecords.map((record) => <ReviewRecordCard key={record.id} record={record} tone="warning" />)}
+          {notFoundTags.map((item) => <ReviewEffectiveCard key={item.id} item={item} />)}
+        </ReviewSection>
+
+        <ReviewSection eyebrow="CONHECIDOS" title="Problemas conhecidos" emptyText="Nenhum problema conhecido cadastrado." />
+
+        <ReviewSection eyebrow="OUTRAS" title="Outras investigacoes" emptyText="Nenhuma outra investigacao registrada.">
+          {otherIssues.map((record) => <ReviewRecordCard key={record.id} record={record} />)}
+        </ReviewSection>
+
+        <ReviewSection eyebrow="PRE-VALIDACAO" title="Pre-validacao da planilha" emptyText="Nenhum problema encontrado na importacao.">
+          {issues.map((issue) => <IssueRow key={issue.id} issue={issue} />)}
+        </ReviewSection>
+
+        <ReviewSection eyebrow="ACOES NEDAP" title="Acoes para executar no Nedap" emptyText="Nenhuma acao operacional pendente.">
+          {actionRecords.map((record) => <ReviewRecordCard key={record.id} record={record} />)}
+          {displacedTags.map((item) => <ReviewEffectiveCard key={`action-${item.id}`} item={item} />)}
+          {notFoundTags.map((item) => <ReviewEffectiveCard key={`action-${item.id}`} item={item} />)}
+        </ReviewSection>
       </div>
 
       <button className="button button--secondary button--full" onClick={exportReport}><ReportIcon /> Exportar relatório Excel</button>
@@ -1381,31 +1436,133 @@ function IssuesView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
   );
 }
 
-function SwapRow({ record, other }: { record: AuditRecord; other: AuditRecord | null }) {
+function ReviewSection({
+  eyebrow,
+  title,
+  emptyText,
+  children
+}: {
+  eyebrow: string;
+  title: string;
+  emptyText: string;
+  children?: ReactNode;
+}) {
+  const content = Children.toArray(children);
+  const hasContent = content.length > 0;
+
   return (
-    <div className="issue-row issue-row--swap">
+    <section className="review-section">
+      <div className="section-heading section-heading--compact">
+        <div><span className="eyebrow">{eyebrow}</span><h2>{title}</h2></div>
+      </div>
+      <div className="issue-list">
+        {hasContent ? content : <p className="muted-block">{emptyText}</p>}
+      </div>
+    </section>
+  );
+}
+
+function ReviewSwapCard({ record, other }: { record: AuditRecord; other: AuditRecord | null }) {
+  const summary = `${record.expectedAnimal ?? '-'} <-> ${record.observedAnimal ?? '-'}`;
+  return (
+    <div className="review-card review-card--warning">
       <span className="issue-row__icon"><SwapIcon /></span>
-      <div>
+      <div className="review-card__body">
         <strong>Troca identificada</strong>
-        <span>{record.expectedAnimal} ↔ {record.observedAnimal}</span>
-        <small>Tag {record.tagNumber}{other ? ` · Tag ${other.tagNumber}` : ''}</small>
+        <span>{summary}</span>
+        <div className="review-card__meta">
+          <small>Animal: {record.expectedAnimal ?? '-'} / {record.observedAnimal ?? '-'}</small>
+          <small>Tag: {record.tagNumber}{other ? ` / ${other.tagNumber}` : ''}</small>
+          <small>Acao sugerida: TROCAR TAGS</small>
+          <small>Origem: {record.source === 'nfc' ? 'NFC' : 'Manual'}</small>
+        </div>
+        <button className="button button--ghost button--full" onClick={() => showSwapDetails(record, other)}>Ver detalhes</button>
       </div>
     </div>
   );
 }
 
-function RecordRow({ record }: { record: AuditRecord }) {
+function ReviewRecordCard({ record, tone = 'default' }: { record: AuditRecord; tone?: 'default' | 'warning' | 'danger' }) {
+  const action = operationalActionLabel(record.operationalAction) || statusLabel(record.status);
   return (
-    <div className="issue-row issue-row--field">
+    <div className={`review-card review-card--${tone}`}>
       <span className="issue-row__icon"><IssuesIcon /></span>
-      <div>
+      <div className="review-card__body">
         <strong>{statusLabel(record.status)}</strong>
-        <span>Tag {record.tagNumber}</span>
-        <small>Nedap: {record.expectedAnimal ?? '—'} · Brinco visto: {record.observedAnimal ?? '—'}</small>
-        {(record.actionNote || record.note) && <small>{record.actionNote ?? record.note}</small>}
+        <span>{`${record.expectedAnimal ?? 'Sem cadastro'} -> ${record.observedAnimal ?? 'Nao informado'}`}</span>
+        <div className="review-card__meta">
+          <small>Animal: {record.observedAnimal ?? record.expectedAnimal ?? '-'}</small>
+          <small>Tag: {record.tagNumber}</small>
+          <small>Acao sugerida: {action || 'INVESTIGAR'}</small>
+          <small>Origem: {record.source === 'nfc' ? 'NFC' : 'Manual'}</small>
+        </div>
+        <button className="button button--ghost button--full" onClick={() => showRecordDetails(record)}>Ver detalhes</button>
       </div>
     </div>
   );
+}
+
+function ReviewEffectiveCard({ item }: { item: EffectiveTagAssignment }) {
+  return (
+    <div className="review-card review-card--danger">
+      <span className="issue-row__icon"><IssuesIcon /></span>
+      <div className="review-card__body">
+        <strong>Animal sem tag</strong>
+        <span>{`${item.originalAnimal ?? '-'} -> sem tag confirmada`}</span>
+        <div className="review-card__meta">
+          <small>Animal: {item.originalAnimal ?? '-'}</small>
+          <small>Tag anterior: {item.tagNumber}</small>
+          <small>Acao sugerida: INVESTIGAR</small>
+          <small>Origem: Auditoria</small>
+        </div>
+        <button className="button button--ghost button--full" onClick={() => showEffectiveDetails(item)}>Ver detalhes</button>
+      </div>
+    </div>
+  );
+}
+
+function showRecordDetails(record: AuditRecord) {
+  window.alert([
+    'EVIDENCIA NEDAP',
+    record.expectedAnimal ?? 'Sem cadastro',
+    '',
+    'EVIDENCIA DE CAMPO',
+    record.observedAnimal ?? 'Nao informada',
+    '',
+    'TAG',
+    record.tagNumber,
+    '',
+    'ACAO SUGERIDA',
+    operationalActionLabel(record.operationalAction) || statusLabel(record.status),
+    '',
+    record.actionNote ?? record.note ?? ''
+  ].filter((line) => line !== '').join('\n'));
+}
+
+function showSwapDetails(record: AuditRecord, other: AuditRecord | null) {
+  window.alert([
+    'TROCA IDENTIFICADA',
+    `${record.expectedAnimal ?? '-'} <-> ${record.observedAnimal ?? '-'}`,
+    '',
+    'TAGS',
+    other ? `${record.tagNumber} / ${other.tagNumber}` : record.tagNumber,
+    '',
+    'ACAO SUGERIDA',
+    'TROCAR TAGS'
+  ].join('\n'));
+}
+
+function showEffectiveDetails(item: EffectiveTagAssignment) {
+  window.alert([
+    'ANIMAL SEM TAG',
+    item.originalAnimal ?? '-',
+    '',
+    'TAG ANTERIOR',
+    item.tagNumber,
+    '',
+    'ACAO SUGERIDA',
+    'INVESTIGAR'
+  ].join('\n'));
 }
 
 function IssueRow({ issue }: { issue: ImportIssue }) {
