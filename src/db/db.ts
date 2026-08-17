@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
-import type { Audit, AuditRecord, EffectiveTagAssignment, ImportIssue, TagAssignment } from '../types/domain';
+import type { Audit, AuditRecord, EffectiveTagAssignment, ImportIssue, KnownIssue, TagAssignment } from '../types/domain';
 import { generateId } from '../utils/id';
 
 class BiptagDB extends Dexie {
@@ -8,6 +8,7 @@ class BiptagDB extends Dexie {
   effectiveTagAssignments!: EntityTable<EffectiveTagAssignment, 'id'>;
   auditRecords!: EntityTable<AuditRecord, 'id'>;
   importIssues!: EntityTable<ImportIssue, 'id'>;
+  knownIssues!: EntityTable<KnownIssue, 'id'>;
 
   constructor() {
     super('biptag-db');
@@ -181,6 +182,18 @@ class BiptagDB extends Dexie {
         record.operationalAction = record.operationalAction ?? defaultOperationalAction(record.status);
         record.actionNote = record.actionNote ?? null;
       });
+    });
+
+    this.version(6).stores({
+      audits: 'id, status, createdAt, updatedAt, lastActivityAt, farmName',
+      tagAssignments:
+        'id, auditId, tagNumber, expectedAnimal, validationStatus, [auditId+tagNumber], [auditId+expectedAnimal]',
+      effectiveTagAssignments:
+        'id, auditId, tagNumber, effectiveAnimal, status, currentRecordId, syncStatus, [auditId+tagNumber], [auditId+effectiveAnimal], [auditId+status]',
+      auditRecords:
+        'id, auditId, sequence, tagNumber, status, operationalAction, isCurrent, reviewStatus, scannedAt, createdAt, updatedAt, syncStatus, expectedAnimal, observedAnimal, effectiveAnimal, pairId, [auditId+tagNumber], [auditId+sequence]',
+      importIssues: 'id, auditId, type, tagNumber, animal',
+      knownIssues: 'id, auditId, tagNumber, type, createdAt, updatedAt, syncStatus, [auditId+tagNumber], [auditId+type]'
     });
   }
 }

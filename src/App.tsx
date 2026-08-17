@@ -17,7 +17,7 @@ import {
   SwapIcon
 } from './icons/Icons';
 import { parseNedapWorkbook, exportAuditWorkbook, validateSmartTag } from './services/excel';
-import { operationalActionLabel, statusLabel } from './services/audit-labels';
+import { knownIssueActionLabel, knownIssueLabel, operationalActionLabel, statusLabel } from './services/audit-labels';
 import { feedbackCorrect, feedbackWarning, primeFeedbackAudio } from './services/feedback';
 import { isWebNfcSupported, startNfcReader } from './services/nfc';
 import { isSupabaseConfigured, supabase } from './services/supabase';
@@ -40,6 +40,8 @@ import type {
   EffectiveTagAssignment,
   ImportIssue,
   ImportPreview,
+  KnownIssue,
+  KnownIssueType,
   OperationalAction,
   RecordStatus,
   SmartTagPattern,
@@ -47,7 +49,7 @@ import type {
 } from './types/domain';
 import type { Session } from '@supabase/supabase-js';
 
-type View = 'home' | 'import' | 'audit' | 'issues' | 'settings';
+type View = 'home' | 'import' | 'audit' | 'issues' | 'knownIssues' | 'settings';
 
 type ScanState = {
   tagNumber: string;
@@ -58,8 +60,18 @@ type ScanState = {
   patternWarning: { status: 'suspicious_tag' | 'invalid_tag'; reason: string } | null;
   patternConfirmed: boolean;
   possibleTypo: TagAssignment | null;
+  knownIssue: KnownIssue | null;
   source: 'nfc' | 'manual';
 };
+
+const KNOWN_ISSUE_OPTIONS: { value: KnownIssueType; label: string }[] = [
+  { value: 'never_sent_data', label: 'NEVER SENT DATA' },
+  { value: 'stopped_sending', label: 'PAROU DE ENVIAR DADOS' },
+  { value: 'without_linked_animal', label: 'SEM ANIMAL VINCULADO' },
+  { value: 'reversed_collar', label: 'DE TRAS PARA FRENTE' },
+  { value: 'tag_out_of_use', label: 'TAG FORA DE USO' },
+  { value: 'other', label: 'OUTRO' }
+];
 
 type DecisionState = {
   status: Exclude<RecordStatus, 'correct'>;
@@ -206,6 +218,7 @@ function App() {
               setView('audit');
             }}
             onIssues={() => setView('issues')}
+            onKnownIssues={() => setView('knownIssues')}
             setToast={setToast}
           />
         )}
@@ -223,6 +236,9 @@ function App() {
         )}
         {view === 'issues' && (
           <IssuesView audit={selectedAudit} onNeedImport={() => setView('import')} />
+        )}
+        {view === 'knownIssues' && (
+          <KnownIssuesView audit={selectedAudit} onNeedImport={() => setView('import')} setToast={setToast} />
         )}
         {view === 'settings' && <CloudSettingsView activeAudit={selectedAudit} setToast={setToast} />}
       </main>
@@ -255,6 +271,7 @@ function HomeView({
   onNewAudit,
   onAudit,
   onIssues,
+  onKnownIssues,
   setToast
 }: {
   audits: Audit[];
@@ -263,6 +280,7 @@ function HomeView({
   onNewAudit: () => void;
   onAudit: () => void;
   onIssues: () => void;
+  onKnownIssues: () => void;
   setToast: (value: string) => void;
 }) {
   const records = useLiveQuery(
@@ -366,6 +384,11 @@ function HomeView({
       <button className="secondary-row" onClick={onIssues}>
         <span><IssuesIcon /> Revisar ocorrências e possíveis trocas</span>
         <strong>{metrics.problems + activeAudit.issueCount}</strong>
+      </button>
+
+      <button className="secondary-row" onClick={onKnownIssues}>
+        <span><IssuesIcon /> Problemas conhecidos antes da ordenha</span>
+        <ChevronRightIcon />
       </button>
 
       {activeAudit.status !== 'finished' && (
@@ -563,6 +586,184 @@ function ImportView({ onCreated }: { onCreated: (auditId: string) => void }) {
   );
 }
 
+function KnownIssuesView({
+  audit,
+  onNeedImport,
+  setToast
+}: {
+  audit: Audit | null;
+  onNeedImport: () => void;
+  setToast: (value: string) => void;
+}) {
+  const knownIssues = useLiveQuery(
+    () => audit ? db.knownIssues.where('auditId').equals(audit.id).toArray() : Promise.resolve<KnownIssue[]>([]),
+    [audit?.id],
+    [] as KnownIssue[]
+  );
+  const [tagNumber, setTagNumber] = useState('');
+  const [type, setType] = useState<KnownIssueType>('never_sent_data');
+  const [note, setNote] = useState('');
+  const [filter, setFilter] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  if (!audit) {
+    return (
+      <section className="page page--centered">
+        <EmptyState icon={<IssuesIcon size={42} />} title="Sem auditoria" text="Importe uma base antes de cadastrar problemas conhecidos." action={<button className="button button--primary" onClick={onNeedImport}>Importar planilha</button>} />
+      </section>
+    );
+  }
+
+  const activeAudit = audit;
+  const normalizedFilter = filter.replace(/[^0-9]/g, '');
+  const visibleIssues = knownIssues
+    .filter((issue) => !normalizedFilter || issue.tagNumber.includes(normalizedFilter))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+
+  function resetForm() {
+    setTagNumber('');
+    setType('never_sent_data');
+    setNote('');
+    setEditingId(null);
+  }
+
+  function editKnownIssue(issue: KnownIssue) {
+    setEditingId(issue.id);
+    setTagNumber(issue.tagNumber);
+    setType(issue.type);
+    setNote(issue.note ?? '');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function saveKnownIssue() {
+    const normalizedTag = tagNumber.replace(/[^0-9]/g, '').trim();
+    if (!normalizedTag) {
+      setToast('Informe a SmartTag do problema conhecido.');
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const existing = knownIssues.find((issue) => issue.tagNumber === normalizedTag && issue.id !== editingId);
+    if (editingId) {
+      await db.knownIssues.update(editingId, {
+        tagNumber: normalizedTag,
+        type,
+        note: note.trim() || null,
+        updatedAt: now,
+        syncStatus: 'pending'
+      });
+      setToast('Problema conhecido atualizado.');
+      resetForm();
+      return;
+    }
+
+    if (existing) {
+      await db.knownIssues.update(existing.id, {
+        type,
+        note: note.trim() || null,
+        updatedAt: now,
+        syncStatus: 'pending'
+      });
+      setToast('Problema conhecido atualizado para esta tag.');
+      resetForm();
+      return;
+    }
+
+    await db.knownIssues.add({
+      id: newId('known_issue'),
+      auditId: activeAudit.id,
+      tagNumber: normalizedTag,
+      type,
+      note: note.trim() || null,
+      createdAt: now,
+      updatedAt: now,
+      syncStatus: 'pending'
+    });
+    setToast('Problema conhecido cadastrado.');
+    resetForm();
+  }
+
+  async function removeKnownIssue(issue: KnownIssue) {
+    const ok = window.confirm(`Remover problema conhecido da tag ${issue.tagNumber}?`);
+    if (!ok) return;
+    await db.knownIssues.delete(issue.id);
+    if (editingId === issue.id) resetForm();
+    setToast('Problema conhecido removido.');
+  }
+
+  return (
+    <section className="page">
+      <div className="section-heading">
+        <div>
+          <span className="eyebrow">ANTES DA ORDENHA</span>
+          <h1>Problemas conhecidos</h1>
+          <p>Cadastre tags que ja precisam de atencao. Ao bipar, o BIPTAG mostra o aviso e continua a auditoria.</p>
+        </div>
+      </div>
+
+      <div className="form-card known-issue-form">
+        <label className="field-label" htmlFor="known-tag">SmartTag</label>
+        <input id="known-tag" className="text-input" inputMode="numeric" placeholder="9840000..." value={tagNumber} onChange={(event) => setTagNumber(event.target.value.replace(/[^0-9]/g, ''))} />
+
+        <label className="field-label" htmlFor="known-type">Tipo</label>
+        <select id="known-type" className="text-input" value={type} onChange={(event) => setType(event.target.value as KnownIssueType)}>
+          {KNOWN_ISSUE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
+
+        <label className="field-label" htmlFor="known-note">Observacao opcional</label>
+        <textarea id="known-note" className="text-input known-issue-note" rows={3} placeholder="Ex.: conferir posicao do colar na proxima passagem" value={note} onChange={(event) => setNote(event.target.value)} />
+
+        <button className="button button--primary button--full" onClick={() => void saveKnownIssue()}>
+          {editingId ? 'Atualizar problema conhecido' : 'Adicionar problema conhecido'}
+        </button>
+        {editingId && <button className="button button--ghost button--full" onClick={resetForm}>Cancelar edicao</button>}
+      </div>
+
+      <div className="section-heading section-heading--compact">
+        <div><span className="eyebrow">LISTA</span><h2>{knownIssues.length} problemas cadastrados</h2></div>
+      </div>
+      <input className="text-input" inputMode="numeric" placeholder="Filtrar por tag" value={filter} onChange={(event) => setFilter(event.target.value.replace(/[^0-9]/g, ''))} />
+
+      <div className="issue-list">
+        {visibleIssues.length ? visibleIssues.map((issue) => (
+          <KnownIssueCard key={issue.id} issue={issue} onEdit={editKnownIssue} onRemove={(item) => void removeKnownIssue(item)} />
+        )) : <p className="muted-block">Nenhum problema conhecido cadastrado.</p>}
+      </div>
+    </section>
+  );
+}
+
+function KnownIssueCard({
+  issue,
+  onEdit,
+  onRemove
+}: {
+  issue: KnownIssue;
+  onEdit?: (issue: KnownIssue) => void;
+  onRemove?: (issue: KnownIssue) => void;
+}) {
+  return (
+    <div className="review-card review-card--warning">
+      <span className="issue-row__icon"><IssuesIcon /></span>
+      <div className="review-card__body">
+        <strong>{knownIssueLabel(issue.type)}</strong>
+        <span>Tag {issue.tagNumber}</span>
+        <div className="review-card__meta">
+          <small>Acao sugerida: {knownIssueActionLabel(issue.type)}</small>
+          <small>Atualizado: {formatDate(issue.updatedAt)}</small>
+          {issue.note && <small>{issue.note}</small>}
+        </div>
+        {(onEdit || onRemove) && (
+          <div className="known-issue-actions">
+            {onEdit && <button className="button button--ghost" onClick={() => onEdit(issue)}>Editar</button>}
+            {onRemove && <button className="button button--ghost" onClick={() => onRemove(issue)}>Remover</button>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AuditView({
   audit,
   onNeedImport,
@@ -660,9 +861,10 @@ function AuditView({
     if (lastRead.current?.tag === normalized && now - lastRead.current.at < 1800) return;
     lastRead.current = { tag: normalized, at: now };
 
-    const [assignment, existingRecord] = await Promise.all([
+    const [assignment, existingRecord, knownIssue] = await Promise.all([
       db.tagAssignments.where('[auditId+tagNumber]').equals([activeAudit.id, normalized]).first(),
-      getCurrentRecord(activeAudit.id, normalized)
+      getCurrentRecord(activeAudit.id, normalized),
+      db.knownIssues.where('[auditId+tagNumber]').equals([activeAudit.id, normalized]).first()
     ]);
     const patternCheck = activeAudit.tagPattern ? validateSmartTag(normalized, activeAudit.tagPattern) : null;
     const patternWarning = patternCheck && patternCheck.status !== 'valid_tag'
@@ -686,6 +888,7 @@ function AuditView({
       patternWarning,
       patternConfirmed: !patternWarning,
       possibleTypo,
+      knownIssue: knownIssue ?? null,
       source
     });
     setReaderMessage(`Tag lida: ${normalized}`);
@@ -901,6 +1104,13 @@ function AuditView({
     setToast('Observacao adicionada ao relatorio.');
   }
 
+  async function markCorrectTagOutOfUse(recordId: string) {
+    const note = window.prompt('Motivo para marcar esta tag fora de uso:');
+    if (note === null) return;
+    await setOperationalAction(recordId, 'tag_out_of_use', note.trim() || 'Tag marcada como fora de uso em campo.');
+    resetForNext('Acao registrada: tag fora de uso. Aproxime a proxima SmartTag.');
+  }
+
   function correctObservedNumber() {
     setDecision(null);
     focusObservedInput();
@@ -1026,6 +1236,16 @@ function AuditView({
             <div className="context-alert context-alert--warning"><IssuesIcon /><div><strong>Esta tag já foi conferida</strong><span>Resultado anterior: {statusLabel(scan.existingRecord.status)}. A nova confirmação ficará registrada no histórico.</span></div></div>
           )}
 
+          {scan.knownIssue && (
+            <div className="context-alert context-alert--known">
+              <IssuesIcon />
+              <div>
+                <strong>Problema conhecido: {knownIssueLabel(scan.knownIssue.type)}</strong>
+                <span>Acao sugerida: {knownIssueActionLabel(scan.knownIssue.type)}. {scan.knownIssue.note ?? 'Continue a auditoria normalmente.'}</span>
+              </div>
+            </div>
+          )}
+
           {scan.related.message && (
             <div className="context-alert context-alert--relation"><SwapIcon /><div><strong>Existe uma ocorrência relacionada</strong><span>{scan.related.message} O BIPTAG vai cruzar esta leitura automaticamente.</span></div></div>
           )}
@@ -1087,6 +1307,7 @@ function AuditView({
           {showCorrectOptions && (
             <div className="field-more-options">
               <button className="button button--ghost button--full" onClick={() => void addCorrectObservation(outcome.recordId)}>Adicionar observação</button>
+              <button className="button button--secondary button--full" onClick={() => void markCorrectTagOutOfUse(outcome.recordId)}>Tag fora de uso</button>
             </div>
           )}
         </div>
@@ -1271,6 +1492,7 @@ function IssuesView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
   const issues = useLiveQuery(() => audit ? db.importIssues.where('auditId').equals(audit.id).toArray() : Promise.resolve<ImportIssue[]>([]), [audit?.id], [] as ImportIssue[]);
   const records = useLiveQuery(() => audit ? db.auditRecords.where('auditId').equals(audit.id).toArray() : Promise.resolve<AuditRecord[]>([]), [audit?.id], [] as AuditRecord[]);
   const effectiveAssignments = useLiveQuery(() => audit ? db.effectiveTagAssignments.where('auditId').equals(audit.id).toArray() : Promise.resolve<EffectiveTagAssignment[]>([]), [audit?.id], [] as EffectiveTagAssignment[]);
+  const knownIssues = useLiveQuery(() => audit ? db.knownIssues.where('auditId').equals(audit.id).toArray() : Promise.resolve<KnownIssue[]>([]), [audit?.id], [] as KnownIssue[]);
 
   if (!audit) {
     return <section className="page page--centered"><EmptyState icon={<IssuesIcon size={42} />} title="Sem auditoria" text="Importe uma base para visualizar inconsistências e resultados." action={<button className="button button--primary" onClick={onNeedImport}>Importar planilha</button>} /></section>;
@@ -1324,7 +1546,7 @@ function IssuesView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
   const notFoundTags = effectiveAssignments.filter((item) => item.status === 'not_found');
 
   async function exportReport() {
-    exportAuditWorkbook(activeAudit, records, issues, effectiveAssignments);
+    exportAuditWorkbook(activeAudit, records, issues, effectiveAssignments, knownIssues);
   }
 
   async function markMissingTags() {
@@ -1414,7 +1636,9 @@ function IssuesView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
           {notFoundTags.map((item) => <ReviewEffectiveCard key={item.id} item={item} />)}
         </ReviewSection>
 
-        <ReviewSection eyebrow="CONHECIDOS" title="Problemas conhecidos" emptyText="Nenhum problema conhecido cadastrado." />
+        <ReviewSection eyebrow="CONHECIDOS" title="Problemas conhecidos" emptyText="Nenhum problema conhecido cadastrado.">
+          {knownIssues.map((issue) => <KnownIssueCard key={issue.id} issue={issue} />)}
+        </ReviewSection>
 
         <ReviewSection eyebrow="OUTRAS" title="Outras investigacoes" emptyText="Nenhuma outra investigacao registrada.">
           {otherIssues.map((record) => <ReviewRecordCard key={record.id} record={record} />)}
@@ -1656,7 +1880,7 @@ function CloudSettingsView({ activeAudit, setToast }: { activeAudit: Audit | nul
     setMessage(null);
     try {
       const result = await syncAuditToSupabase(activeAudit.id);
-      const summary = `Sincronizado: ${result.assignments} tags originais, ${result.effectiveAssignments} estados efetivos, ${result.records} leituras e ${result.issues} pendencias.`;
+      const summary = `Sincronizado: ${result.assignments} tags originais, ${result.effectiveAssignments} estados efetivos, ${result.records} leituras, ${result.issues} pendencias e ${result.knownIssues} problemas conhecidos.`;
       setMessage(summary);
       setToast(summary);
     } catch (err) {

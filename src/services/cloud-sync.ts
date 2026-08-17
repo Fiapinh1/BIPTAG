@@ -1,12 +1,13 @@
 import { db } from '../db/db';
 import { supabase } from './supabase';
-import type { Audit, AuditRecord, EffectiveTagAssignment, ImportIssue, TagAssignment } from '../types/domain';
+import type { Audit, AuditRecord, EffectiveTagAssignment, ImportIssue, KnownIssue, TagAssignment } from '../types/domain';
 
 type SyncResult = {
   assignments: number;
   effectiveAssignments: number;
   records: number;
   issues: number;
+  knownIssues: number;
 };
 
 const syncedAt = () => new Date().toISOString();
@@ -130,6 +131,21 @@ function issueRow(issue: ImportIssue, userId: string) {
   };
 }
 
+function knownIssueRow(issue: KnownIssue, userId: string) {
+  return {
+    id: issue.id,
+    audit_id: issue.auditId,
+    user_id: userId,
+    tag_number: issue.tagNumber,
+    type: issue.type,
+    note: issue.note,
+    created_at: issue.createdAt,
+    updated_at: issue.updatedAt,
+    synced_at: syncedAt(),
+    sync_status: issue.syncStatus
+  };
+}
+
 async function upsertInChunks(table: string, rows: Record<string, unknown>[], size = 500) {
   if (!rows.length) return;
   const client = requireSupabase();
@@ -146,10 +162,11 @@ export async function syncAuditToSupabase(auditId: string): Promise<SyncResult> 
   const audit = await db.audits.get(auditId);
   if (!audit) throw new Error('Auditoria local nao encontrada.');
 
-  const [assignments, records, issues] = await Promise.all([
+  const [assignments, records, issues, knownIssues] = await Promise.all([
     db.tagAssignments.where('auditId').equals(auditId).toArray(),
     db.auditRecords.where('auditId').equals(auditId).toArray(),
-    db.importIssues.where('auditId').equals(auditId).toArray()
+    db.importIssues.where('auditId').equals(auditId).toArray(),
+    db.knownIssues.where('auditId').equals(auditId).toArray()
   ]);
   const effectiveAssignments = await db.effectiveTagAssignments.where('auditId').equals(auditId).toArray();
 
@@ -168,6 +185,15 @@ export async function syncAuditToSupabase(auditId: string): Promise<SyncResult> 
   }
   await upsertInChunks('audit_records', records.map((record) => recordRow(record, userId)));
   await upsertInChunks('import_issues', issues.map((issue) => issueRow(issue, userId)));
+  let knownIssuesSynced = false;
+  try {
+    await upsertInChunks('known_issues', knownIssues.map((issue) => knownIssueRow(issue, userId)));
+    knownIssuesSynced = true;
+  } catch (err) {
+    const message = typeof err === 'object' && err && 'message' in err ? String((err as { message?: unknown }).message) : String(err);
+    if (!message.includes('known_issues')) throw err;
+    console.warn('Tabela known_issues ainda nao existe no Supabase remoto. Problemas conhecidos continuam salvos offline.');
+  }
 
   const synced = syncedAt();
   await db.auditRecords.where('auditId').equals(auditId).modify({
@@ -180,11 +206,17 @@ export async function syncAuditToSupabase(auditId: string): Promise<SyncResult> 
       syncStatus: 'synced'
     });
   }
+  if (knownIssuesSynced) {
+    await db.knownIssues.where('auditId').equals(auditId).modify({
+      syncStatus: 'synced'
+    });
+  }
 
   return {
     assignments: assignments.length,
     effectiveAssignments: effectiveSynced ? effectiveAssignments.length : 0,
     records: records.length,
-    issues: issues.length
+    issues: issues.length,
+    knownIssues: knownIssuesSynced ? knownIssues.length : 0
   };
 }

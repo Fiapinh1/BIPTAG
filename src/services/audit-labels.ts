@@ -1,4 +1,4 @@
-import type { AuditRecord, OperationalAction, RecordStatus } from '../types/domain';
+import type { AuditRecord, KnownIssueType, OperationalAction, RecordStatus } from '../types/domain';
 
 export function operationalActionLabel(action: OperationalAction | null | undefined) {
   const labels: Record<OperationalAction, string> = {
@@ -9,9 +9,34 @@ export function operationalActionLabel(action: OperationalAction | null | undefi
     link_tag: 'VINCULAR TAG',
     swap_tags: 'TROCAR TAGS',
     move_tag: 'MOVER TAG',
+    tag_out_of_use: 'TAG FORA DE USO',
     investigate: 'INVESTIGAR'
   };
   return action ? labels[action] : '';
+}
+
+export function knownIssueLabel(type: KnownIssueType) {
+  const labels: Record<KnownIssueType, string> = {
+    never_sent_data: 'NEVER SENT DATA',
+    stopped_sending: 'PAROU DE ENVIAR DADOS',
+    without_linked_animal: 'SEM ANIMAL VINCULADO',
+    reversed_collar: 'DE TRAS PARA FRENTE',
+    tag_out_of_use: 'TAG FORA DE USO',
+    other: 'OUTRO'
+  };
+  return labels[type];
+}
+
+export function knownIssueActionLabel(type: KnownIssueType) {
+  const labels: Record<KnownIssueType, string> = {
+    never_sent_data: 'INVESTIGAR',
+    stopped_sending: 'INVESTIGAR',
+    without_linked_animal: 'VINCULAR TAG',
+    reversed_collar: 'INVERTER O COLAR',
+    tag_out_of_use: 'TAG FORA DE USO',
+    other: 'INVESTIGAR'
+  };
+  return labels[type];
 }
 
 export function statusLabel(status: RecordStatus) {

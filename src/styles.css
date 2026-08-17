@@ -1023,6 +1023,11 @@ p {
   font-size: 12px;
 }
 
+.context-alert--known {
+  border-color: var(--copper);
+  background: #fff8ec;
+}
+
 .field-question,
 .guided-decision,
 .field-outcome {
@@ -1169,6 +1174,22 @@ p {
   font-size: 11px;
   line-height: 1.35;
   word-break: break-word;
+}
+
+.known-issue-form {
+  gap: 10px;
+}
+
+.known-issue-note {
+  min-height: 96px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.known-issue-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
 .issue-row__icon {

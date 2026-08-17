@@ -5,12 +5,13 @@ import type {
   EffectiveTagAssignment,
   ImportIssue,
   ImportPreview,
+  KnownIssue,
   RecordStatus,
   SmartTagPattern,
   TagAssignment,
   TagValidationStatus
 } from '../types/domain';
-import { fieldDecisionLabel, operationalActionLabel, statusLabel } from './audit-labels';
+import { fieldDecisionLabel, knownIssueActionLabel, knownIssueLabel, operationalActionLabel, statusLabel } from './audit-labels';
 
 const REQUIRED_HEADERS = ['Numero de tag', 'Animal'];
 const DEFAULT_PATTERN: SmartTagPattern = { prefix: '9840000', length: 15, numericOnly: true };
@@ -323,6 +324,9 @@ function nedapInstruction(record: AuditRecord) {
   if (record.operationalAction === 'move_tag') {
     return `Remover vinculo do animal ${record.expectedAnimal ?? ''} e vincular tag ${record.tagNumber} ao animal ${record.observedAnimal ?? ''}.`;
   }
+  if (record.operationalAction === 'tag_out_of_use') {
+    return `Marcar tag ${record.tagNumber} como fora de uso.`;
+  }
   if (record.operationalAction === 'keep_tag') {
     return `Manter tag atual no animal ${record.observedAnimal ?? record.expectedAnimal ?? ''}.`;
   }
@@ -345,7 +349,8 @@ export function exportAuditWorkbook(
   audit: Audit,
   records: AuditRecord[],
   issues: ImportIssue[],
-  effectiveAssignments: EffectiveTagAssignment[] = []
+  effectiveAssignments: EffectiveTagAssignment[] = [],
+  knownIssues: KnownIssue[] = []
 ) {
   const ordered = chronological(records);
   const current = records.filter((record) => record.isCurrent !== false);
@@ -380,6 +385,8 @@ export function exportAuditWorkbook(
     ['Conflitos de Tag Nova', countStatus(current, 'new_tag_conflict')],
     ['Tags removidas', current.filter((record) => record.operationalAction === 'remove_tag').length],
     ['Substituicoes de tag', current.filter((record) => record.operationalAction === 'replace_tag').length],
+    ['Tags fora de uso', current.filter((record) => record.operationalAction === 'tag_out_of_use').length],
+    ['Problemas conhecidos', knownIssues.length],
     ['Cadeias', countStatus(current, 'replacement_chain')],
     ['Pendencias', pending + current.filter((record) => record.reviewStatus === 'open').length],
     ['Percentual processado', percent(processedCount, totalValid)]
@@ -566,7 +573,25 @@ export function exportAuditWorkbook(
       ])
   ]);
 
-  addSection('10. ACOES PARA EXECUTAR NO NEDAP', actionRows[0], actionRows.slice(1));
+  addSection('10. PROBLEMAS CONHECIDOS', ['Tag', 'Problema', 'Acao sugerida', 'Observacao'], knownIssues.map((issue) => [
+    blank(issue.tagNumber),
+    knownIssueLabel(issue.type),
+    knownIssueActionLabel(issue.type),
+    blank(issue.note)
+  ]));
+
+  addSection('11. ACOES PARA EXECUTAR NO NEDAP', actionRows[0], actionRows.slice(1));
+
+  const knownIssueRows: (string | number)[][] = [
+    ['Tag', 'Problema', 'Acao sugerida', 'Observacao', 'Atualizado em'],
+    ...knownIssues.map((issue) => [
+      blank(issue.tagNumber),
+      knownIssueLabel(issue.type),
+      knownIssueActionLabel(issue.type),
+      blank(issue.note),
+      formatDateTime(issue.updatedAt)
+    ])
+  ];
 
   const preValidationRows: (string | number)[][] = [
     ['Tipo', 'Tag', 'Animal', 'Detalhe'],
@@ -585,6 +610,7 @@ export function exportAuditWorkbook(
   appendSheet(workbook, pendingRows.length > 1 ? pendingRows : [...pendingRows, ['Sem pendencias', '', '', '', '', '', '', '', '']], 'Pendencias');
   appendSheet(workbook, operationalRows, 'Relatorio Operacional');
   appendSheet(workbook, actionRows.length > 1 ? actionRows : [...actionRows, ['Sem acoes', '', '', '', '', '', '', '', '']], 'Acoes Nedap');
+  appendSheet(workbook, knownIssueRows.length > 1 ? knownIssueRows : [...knownIssueRows, ['Sem problemas conhecidos', '', '', '', '']], 'Problemas Conhecidos');
   appendSheet(workbook, preValidationRows.length > 1 ? preValidationRows : [...preValidationRows, ['Sem inconsistencias', '', '', '']], 'Pre-validacao');
 
   const safeFarm = audit.farmName.replace(/[^a-zA-Z0-9_-]+/g, '_');

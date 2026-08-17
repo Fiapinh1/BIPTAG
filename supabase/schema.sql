@@ -81,7 +81,7 @@ create table if not exists public.audit_records (
   field_decision text not null,
   review_status text not null default 'open',
   note text,
-  operational_action text check (operational_action in ('keep_tag','remove_tag','replace_tag','register_new_tag','link_tag','swap_tags','move_tag','investigate')),
+  operational_action text check (operational_action in ('keep_tag','remove_tag','replace_tag','register_new_tag','link_tag','swap_tags','move_tag','tag_out_of_use','investigate')),
   action_note text,
   scanned_at timestamptz not null,
   created_at timestamptz not null default now(),
@@ -105,6 +105,20 @@ create table if not exists public.import_issues (
   detail text not null
 );
 
+create table if not exists public.known_issues (
+  id text primary key,
+  audit_id text not null references public.audits(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  tag_number text not null,
+  type text not null check (type in ('never_sent_data','stopped_sending','without_linked_animal','reversed_collar','tag_out_of_use','other')),
+  note text,
+  created_at timestamptz not null,
+  updated_at timestamptz not null,
+  synced_at timestamptz,
+  sync_status text not null default 'pending' check (sync_status in ('pending','synced','error')),
+  unique (audit_id, tag_number)
+);
+
 create index if not exists audits_user_id_idx on public.audits(user_id);
 create index if not exists audits_status_idx on public.audits(status);
 create index if not exists tag_assignments_audit_tag_idx on public.tag_assignments(audit_id, tag_number);
@@ -117,6 +131,9 @@ create index if not exists audit_records_audit_sequence_idx on public.audit_reco
 create index if not exists audit_records_tag_number_idx on public.audit_records(tag_number);
 create index if not exists audit_records_pair_id_idx on public.audit_records(pair_id);
 create index if not exists import_issues_audit_id_idx on public.import_issues(audit_id);
+create index if not exists known_issues_audit_id_idx on public.known_issues(audit_id);
+create index if not exists known_issues_audit_tag_idx on public.known_issues(audit_id, tag_number);
+create index if not exists known_issues_audit_type_idx on public.known_issues(audit_id, type);
 
 alter table public.farms enable row level security;
 alter table public.audits enable row level security;
@@ -124,6 +141,7 @@ alter table public.tag_assignments enable row level security;
 alter table public.effective_tag_assignments enable row level security;
 alter table public.audit_records enable row level security;
 alter table public.import_issues enable row level security;
+alter table public.known_issues enable row level security;
 
 create policy "users_manage_own_farms" on public.farms for all
 using (auth.uid() = user_id) with check (auth.uid() = user_id);
@@ -141,4 +159,7 @@ create policy "users_manage_own_records" on public.audit_records for all
 using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 create policy "users_manage_own_import_issues" on public.import_issues for all
+using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create policy "users_manage_own_known_issues" on public.known_issues for all
 using (auth.uid() = user_id) with check (auth.uid() = user_id);

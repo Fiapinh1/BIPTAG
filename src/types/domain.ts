@@ -34,7 +34,15 @@ export type OperationalAction =
   | 'link_tag'
   | 'swap_tags'
   | 'move_tag'
+  | 'tag_out_of_use'
   | 'investigate';
+export type KnownIssueType =
+  | 'never_sent_data'
+  | 'stopped_sending'
+  | 'without_linked_animal'
+  | 'reversed_collar'
+  | 'tag_out_of_use'
+  | 'other';
 export type TagValidationStatus = 'valid_tag' | 'suspicious_tag' | 'invalid_tag';
 export type EffectiveTagStatus =
   | 'pending'
@@ -145,6 +153,17 @@ export interface ImportIssue {
   tagNumber: string | null;
   animal: string | null;
   detail: string;
+}
+
+export interface KnownIssue {
+  id: string;
+  auditId: string;
+  tagNumber: string;
+  type: KnownIssueType;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+  syncStatus: SyncStatus;
 }
 
 export interface ImportPreview {
