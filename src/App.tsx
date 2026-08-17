@@ -304,10 +304,16 @@ function HomeView({
   setToast: (value: string) => void;
 }) {
   const [showImportPanel, setShowImportPanel] = useState(false);
+  const [animalSearch, setAnimalSearch] = useState('');
   const records = useLiveQuery(
     () => activeAudit ? db.auditRecords.where('auditId').equals(activeAudit.id).toArray() : Promise.resolve<AuditRecord[]>([]),
     [activeAudit?.id],
     [] as AuditRecord[]
+  );
+  const tagAssignments = useLiveQuery(
+    () => activeAudit ? db.tagAssignments.where('auditId').equals(activeAudit.id).toArray() : Promise.resolve<TagAssignment[]>([]),
+    [activeAudit?.id],
+    [] as TagAssignment[]
   );
   const effectiveAssignments = useLiveQuery(
     () => activeAudit ? db.effectiveTagAssignments.where('auditId').equals(activeAudit.id).toArray() : Promise.resolve<EffectiveTagAssignment[]>([]),
@@ -332,6 +338,40 @@ function HomeView({
       percent: total ? Math.min(Math.round((auditedUnique / total) * 100), 100) : 0
     };
   }, [currentRecords, effectiveAssignments, activeAudit]);
+  const animalSearchNumber = animalSearch.replace(/[^0-9A-Za-z_-]/g, '').trim();
+  const animalLookup = useMemo(() => {
+    if (!animalSearchNumber) return null;
+
+    const assignments = tagAssignments.filter((assignment) => assignment.expectedAnimal === animalSearchNumber);
+    const recordMatches = currentRecords.filter(
+      (record) =>
+        record.expectedAnimal === animalSearchNumber ||
+        record.observedAnimal === animalSearchNumber ||
+        record.effectiveAnimal === animalSearchNumber
+    );
+    const effectiveMatches = effectiveAssignments.filter(
+      (item) => item.originalAnimal === animalSearchNumber || item.effectiveAnimal === animalSearchNumber
+    );
+    const tagNumbers = Array.from(new Set([
+      ...assignments.map((assignment) => assignment.tagNumber),
+      ...recordMatches.map((record) => record.tagNumber),
+      ...effectiveMatches.map((item) => item.tagNumber)
+    ]));
+    const latestRecordForTag = (tagNumber: string) =>
+      recordMatches
+        .filter((record) => record.tagNumber === tagNumber)
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.scannedAt.localeCompare(a.scannedAt))[0] ?? null;
+
+    return {
+      animal: animalSearchNumber,
+      tags: tagNumbers.map((tagNumber) => {
+        const assignment = assignments.find((item) => item.tagNumber === tagNumber) ?? tagAssignments.find((item) => item.tagNumber === tagNumber) ?? null;
+        const effective = effectiveMatches.find((item) => item.tagNumber === tagNumber) ?? effectiveAssignments.find((item) => item.tagNumber === tagNumber) ?? null;
+        const record = latestRecordForTag(tagNumber) ?? currentRecords.find((item) => item.tagNumber === tagNumber) ?? null;
+        return { tagNumber, assignment, effective, record };
+      })
+    };
+  }, [animalSearchNumber, tagAssignments, currentRecords, effectiveAssignments]);
 
   async function pauseAudit() {
     if (!activeAudit || activeAudit.status === 'finished') return;
@@ -416,6 +456,57 @@ function HomeView({
           </button>
         </div>
       )}
+
+      <div className="animal-lookup-card">
+        <div className="animal-lookup-card__header">
+          <div>
+            <span className="eyebrow">CONSULTA RAPIDA</span>
+            <h2>Buscar tag pelo brinco</h2>
+          </div>
+          <AnimalIcon size={26} />
+        </div>
+        <div className="animal-lookup-card__search">
+          <input
+            className="text-input"
+            inputMode="numeric"
+            placeholder="Digite o numero do brinco"
+            value={animalSearch}
+            onChange={(event) => setAnimalSearch(event.target.value.replace(/[^0-9A-Za-z_-]/g, ''))}
+          />
+          {animalSearch && <button className="button button--ghost" onClick={() => setAnimalSearch('')}>Limpar</button>}
+        </div>
+
+        {animalLookup && (
+          animalLookup.tags.length ? (
+            <div className="animal-lookup-results">
+              {animalLookup.tags.map(({ tagNumber, assignment, effective, record }) => {
+                const action = operationalActionLabel(record?.operationalAction) || (record ? statusLabel(record.status) : '');
+                const status = action || (effective && effective.status !== 'pending' ? 'Alterado na auditoria' : 'Cadastro Nedap');
+                const detail = record
+                  ? `Nedap ${record.expectedAnimal ?? 'sem vinculo'} | campo ${record.observedAnimal ?? 'nao informado'}`
+                  : effective?.effectiveAnimal && effective.effectiveAnimal !== assignment?.expectedAnimal
+                    ? `Cadastro ${effective.originalAnimal ?? 'sem vinculo'} | atual ${effective.effectiveAnimal}`
+                    : `Animal ${assignment?.expectedAnimal ?? effective?.originalAnimal ?? animalLookup.animal}`;
+                return (
+                  <div className="animal-lookup-result" key={tagNumber}>
+                    <TagIcon size={22} />
+                    <div>
+                      <span>{status}</span>
+                      <strong>{tagNumber}</strong>
+                      <small>{detail}</small>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="animal-lookup-empty">
+              <IssuesIcon size={20} />
+              <span>Nenhuma tag encontrada para o brinco {animalLookup.animal} nesta base.</span>
+            </div>
+          )
+        )}
+      </div>
 
       <button className="secondary-row" onClick={onKnownIssues}>
         <span><IssuesIcon /> Problemas conhecidos antes da ordenha</span>

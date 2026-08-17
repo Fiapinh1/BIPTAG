@@ -2806,3 +2806,160 @@ body {
     margin-top: 14px;
   }
 }
+
+/* Fase 10 - consulta rapida por brinco */
+.home-page > .animal-lookup-card {
+  order: 3;
+}
+
+.home-page > .field-stats {
+  order: 4;
+}
+
+.home-page > .secondary-row,
+.home-page > .embedded-import,
+.home-page > .session-actions,
+.home-page > .section-heading,
+.home-page > .audit-history,
+.home-page > .link-button {
+  order: 5;
+}
+
+.animal-lookup-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(20, 91, 73, .2);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, #ffffff 0%, #f7fbf9 100%);
+  box-shadow: 0 10px 24px rgba(16, 33, 28, .06);
+}
+
+.animal-lookup-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.animal-lookup-card__header h2 {
+  margin: 3px 0 0;
+  color: var(--field-ink);
+  font-size: 20px;
+  letter-spacing: 0;
+}
+
+.animal-lookup-card__header svg {
+  color: var(--field-green-2);
+}
+
+.animal-lookup-card__search {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.animal-lookup-card__search .text-input {
+  min-height: 58px;
+  font-size: 20px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.animal-lookup-card__search .button {
+  min-height: 58px;
+  border-radius: 10px;
+}
+
+.animal-lookup-results {
+  display: grid;
+  gap: 8px;
+}
+
+.animal-lookup-result,
+.animal-lookup-empty {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 11px;
+  align-items: center;
+  padding: 13px;
+  border: 1px solid #d4e3dc;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .8);
+}
+
+.animal-lookup-result > svg,
+.animal-lookup-empty > svg {
+  color: var(--field-green-2);
+}
+
+.animal-lookup-result span,
+.animal-lookup-result strong,
+.animal-lookup-result small {
+  display: block;
+}
+
+.animal-lookup-result span {
+  color: #52645c;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.animal-lookup-result strong {
+  margin-top: 2px;
+  color: var(--field-ink);
+  font-size: clamp(24px, 7vw, 36px);
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.animal-lookup-result small,
+.animal-lookup-empty span {
+  margin-top: 5px;
+  color: #5f6d67;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.animal-lookup-empty {
+  border-color: rgba(184, 75, 68, .24);
+  background: #fff8f7;
+}
+
+.animal-lookup-empty > svg {
+  color: var(--field-red);
+}
+
+@media (min-width: 860px) {
+  .home-page > .animal-lookup-card {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 430px) {
+  .animal-lookup-card {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .animal-lookup-card__header h2 {
+    font-size: 17px;
+  }
+
+  .animal-lookup-card__search {
+    grid-template-columns: 1fr;
+  }
+
+  .animal-lookup-card__search .text-input {
+    min-height: 56px;
+    font-size: 22px;
+  }
+
+  .animal-lookup-card__search .button {
+    min-height: 48px;
+  }
+}
