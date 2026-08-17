@@ -155,14 +155,48 @@ function knownIssueRow(issue: KnownIssue, userId: string) {
   };
 }
 
-async function upsertInChunks(table: string, rows: Record<string, unknown>[], size = 500) {
+function errorMessage(err: unknown) {
+  return typeof err === 'object' && err && 'message' in err ? String((err as { message?: unknown }).message) : String(err);
+}
+
+function missingColumn(message: string) {
+  return message.match(/Could not find the '([^']+)' column/)?.[1] ?? null;
+}
+
+function isMissingRelation(message: string, table: string) {
+  return message.includes(table) && (message.includes('Could not find the table') || message.includes('relation') || message.includes('404'));
+}
+
+async function upsertWithColumnFallback(table: string, rows: Record<string, unknown>[], size = 500) {
   if (!rows.length) return;
   const client = requireSupabase();
-  for (let index = 0; index < rows.length; index += size) {
-    const chunk = rows.slice(index, index + size);
-    const { error } = await client.from(table).upsert(chunk as never, { onConflict: 'id' });
-    if (error) throw error;
+  let nextRows = rows;
+
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    try {
+      for (let index = 0; index < nextRows.length; index += size) {
+        const chunk = nextRows.slice(index, index + size);
+        const { error } = await client.from(table).upsert(chunk as never, { onConflict: 'id' });
+        if (error) throw error;
+      }
+      return;
+    } catch (err) {
+      const message = errorMessage(err);
+      const column = missingColumn(message);
+      if (!column || !nextRows.some((row) => column in row)) throw err;
+      console.warn(`Coluna ${column} ainda nao existe em ${table}. Sincronizando sem este campo ate atualizar o schema.`);
+      nextRows = nextRows.map((row) => {
+        const { [column]: _removed, ...rest } = row;
+        return rest;
+      });
+    }
   }
+
+  throw new Error(`Nao foi possivel sincronizar ${table}. Atualize o schema do Supabase.`);
+}
+
+async function upsertInChunks(table: string, rows: Record<string, unknown>[], size = 500) {
+  await upsertWithColumnFallback(table, rows, size);
 }
 
 export async function syncAuditToSupabase(auditId: string): Promise<SyncResult> {
@@ -179,8 +213,7 @@ export async function syncAuditToSupabase(auditId: string): Promise<SyncResult> 
   ]);
   const effectiveAssignments = await db.effectiveTagAssignments.where('auditId').equals(auditId).toArray();
 
-  const { error: auditError } = await client.from('audits').upsert(auditRow(audit, userId), { onConflict: 'id' });
-  if (auditError) throw auditError;
+  await upsertWithColumnFallback('audits', [auditRow(audit, userId)]);
 
   await upsertInChunks('tag_assignments', assignments.map((assignment) => assignmentRow(assignment, userId)));
   let effectiveSynced = false;
@@ -188,8 +221,8 @@ export async function syncAuditToSupabase(auditId: string): Promise<SyncResult> 
     await upsertInChunks('effective_tag_assignments', effectiveAssignments.map((assignment) => effectiveRow(assignment, userId)));
     effectiveSynced = true;
   } catch (err) {
-    const message = typeof err === 'object' && err && 'message' in err ? String((err as { message?: unknown }).message) : String(err);
-    if (!message.includes('effective_tag_assignments')) throw err;
+    const message = errorMessage(err);
+    if (!isMissingRelation(message, 'effective_tag_assignments')) throw err;
     console.warn('Tabela effective_tag_assignments ainda nao existe no Supabase remoto. Sincronizacao local preservada.');
   }
   await upsertInChunks('audit_records', records.map((record) => recordRow(record, userId)));
@@ -199,8 +232,8 @@ export async function syncAuditToSupabase(auditId: string): Promise<SyncResult> 
     await upsertInChunks('known_issues', knownIssues.map((issue) => knownIssueRow(issue, userId)));
     knownIssuesSynced = true;
   } catch (err) {
-    const message = typeof err === 'object' && err && 'message' in err ? String((err as { message?: unknown }).message) : String(err);
-    if (!message.includes('known_issues')) throw err;
+    const message = errorMessage(err);
+    if (!isMissingRelation(message, 'known_issues')) throw err;
     console.warn('Tabela known_issues ainda nao existe no Supabase remoto. Problemas conhecidos continuam salvos offline.');
   }
 
@@ -273,11 +306,11 @@ export async function pullAuditsFromSupabase(): Promise<PullResult> {
   if (issuesResponse.error) throw issuesResponse.error;
   if (effectiveResponse.error) {
     const message = effectiveResponse.error.message ?? '';
-    if (!message.includes('effective_tag_assignments')) throw effectiveResponse.error;
+    if (!isMissingRelation(message, 'effective_tag_assignments')) throw effectiveResponse.error;
   }
   if (knownIssuesResponse.error) {
     const message = knownIssuesResponse.error.message ?? '';
-    if (!message.includes('known_issues')) throw knownIssuesResponse.error;
+    if (!isMissingRelation(message, 'known_issues')) throw knownIssuesResponse.error;
   }
 
   const audits = (auditsResponse.data ?? []).map((row) => ({
@@ -292,10 +325,10 @@ export async function pullAuditsFromSupabase(): Promise<PullResult> {
     finishedAt: row.finished_at ?? undefined,
     status: row.status === 'active' ? 'in_progress' : row.status,
     totalTags: row.total_tags,
-    totalRows: row.total_rows,
-    validTags: row.valid_tags,
-    suspiciousTags: row.suspicious_tags,
-    invalidTags: row.invalid_tags,
+    totalRows: row.total_rows ?? row.total_tags,
+    validTags: row.valid_tags ?? row.total_tags,
+    suspiciousTags: row.suspicious_tags ?? 0,
+    invalidTags: row.invalid_tags ?? 0,
     tagPattern: row.tag_pattern ?? undefined,
     linkedTags: row.linked_tags,
     issueCount: row.issue_count
@@ -311,8 +344,8 @@ export async function pullAuditsFromSupabase(): Promise<PullResult> {
     connectedSince: row.connected_since,
     lastDetectedAt: row.last_detected_at,
     lastDetectedFarm: row.last_detected_farm,
-    validationStatus: row.validation_status,
-    validationReason: row.validation_reason
+    validationStatus: row.validation_status ?? 'valid_tag',
+    validationReason: row.validation_reason ?? null
   })) as TagAssignment[];
 
   const effectiveAssignments = (effectiveResponse.data ?? []).map((row) => ({
