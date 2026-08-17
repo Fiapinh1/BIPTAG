@@ -6,5 +6,6 @@ dist
 *.tsbuildinfo
 *.zip
 .DS_Store
+supabase/.temp/
 .vscode/*
 !.vscode/extensions.json

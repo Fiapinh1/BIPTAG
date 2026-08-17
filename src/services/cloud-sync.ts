@@ -167,6 +167,20 @@ function isMissingRelation(message: string, table: string) {
   return message.includes(table) && (message.includes('Could not find the table') || message.includes('relation') || message.includes('404'));
 }
 
+function uniqueBy<T>(items: T[], keyFor: (item: T) => string) {
+  const seen = new Set<string>();
+  const result: T[] = [];
+
+  for (const item of items) {
+    const key = keyFor(item);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+
+  return result;
+}
+
 async function upsertWithColumnFallback(table: string, rows: Record<string, unknown>[], size = 500) {
   if (!rows.length) return;
   const client = requireSupabase();
@@ -212,13 +226,15 @@ export async function syncAuditToSupabase(auditId: string): Promise<SyncResult> 
     db.knownIssues.where('auditId').equals(auditId).toArray()
   ]);
   const effectiveAssignments = await db.effectiveTagAssignments.where('auditId').equals(auditId).toArray();
+  const assignmentsToSync = uniqueBy(assignments, (assignment) => `${assignment.auditId}:${assignment.tagNumber}`);
+  const effectiveAssignmentsToSync = uniqueBy(effectiveAssignments, (assignment) => `${assignment.auditId}:${assignment.tagNumber}`);
 
   await upsertWithColumnFallback('audits', [auditRow(audit, userId)]);
 
-  await upsertInChunks('tag_assignments', assignments.map((assignment) => assignmentRow(assignment, userId)));
+  await upsertInChunks('tag_assignments', assignmentsToSync.map((assignment) => assignmentRow(assignment, userId)));
   let effectiveSynced = false;
   try {
-    await upsertInChunks('effective_tag_assignments', effectiveAssignments.map((assignment) => effectiveRow(assignment, userId)));
+    await upsertInChunks('effective_tag_assignments', effectiveAssignmentsToSync.map((assignment) => effectiveRow(assignment, userId)));
     effectiveSynced = true;
   } catch (err) {
     const message = errorMessage(err);
@@ -255,8 +271,8 @@ export async function syncAuditToSupabase(auditId: string): Promise<SyncResult> 
   }
 
   return {
-    assignments: assignments.length,
-    effectiveAssignments: effectiveSynced ? effectiveAssignments.length : 0,
+    assignments: assignmentsToSync.length,
+    effectiveAssignments: effectiveSynced ? effectiveAssignmentsToSync.length : 0,
     records: records.length,
     issues: issues.length,
     knownIssues: knownIssuesSynced ? knownIssues.length : 0

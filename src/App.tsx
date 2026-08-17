@@ -26,7 +26,7 @@ import { knownIssueActionLabel, knownIssueLabel, operationalActionLabel, statusL
 import { feedbackCorrect, feedbackWarning, primeFeedbackAudio } from './services/feedback';
 import { isWebNfcSupported, startNfcReader } from './services/nfc';
 import { isSupabaseConfigured, isUsingBundledSupabaseConfig, supabase } from './services/supabase';
-import { deleteAuditEverywhere, pullAuditsFromSupabase, syncAllAuditsToSupabase } from './services/cloud-sync';
+import { deleteAuditEverywhere, pullAuditsFromSupabase, syncAllAuditsToSupabase, syncAuditToSupabase } from './services/cloud-sync';
 import {
   classifyReading,
   defaultOperationalAction,
@@ -301,12 +301,30 @@ function App() {
     }
   }
 
+  async function syncCreatedAuditInBackground(auditId: string) {
+    if (!isSupabaseConfigured || !supabase || !online || !cloudSession) return;
+    if (autoSyncBusy.current) {
+      window.setTimeout(() => void syncCreatedAuditInBackground(auditId), 1800);
+      return;
+    }
+    autoSyncBusy.current = true;
+    try {
+      await syncAuditToSupabase(auditId);
+      setToast('Auditoria salva no banco. Ela ja pode aparecer nos outros dispositivos.');
+    } catch (err) {
+      console.warn('Nao foi possivel sincronizar a auditoria criada com o Supabase.', err);
+      setToast('Auditoria salva neste aparelho. Abra Configuracao para sincronizar com o banco.');
+    } finally {
+      autoSyncBusy.current = false;
+    }
+  }
+
   useEffect(() => {
-    if (!isSupabaseConfigured || !supabase || !online || !cloudSession || !audits.length) return;
+    if (!isSupabaseConfigured || !supabase || !online || !cloudSession) return;
     void syncAllInBackground();
     const timer = window.setInterval(() => void syncAllInBackground(), 45000);
     return () => window.clearInterval(timer);
-  }, [online, cloudSession?.user.id, audits.length]);
+  }, [online, cloudSession?.user.id]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !online || !cloudSession) return;
@@ -317,10 +335,10 @@ function App() {
   }, [online, cloudSession?.user.id]);
 
   useEffect(() => {
-    if (!isSupabaseConfigured || !supabase || !online || !cloudSession || !audits.length) return;
+    if (!isSupabaseConfigured || !supabase || !online || !cloudSession) return;
     const timer = window.setTimeout(() => void syncAllInBackground(), 5000);
     return () => window.clearTimeout(timer);
-  }, [pendingSyncSignal, auditUpdateSignal, online, cloudSession?.user.id, audits.length]);
+  }, [pendingSyncSignal, auditUpdateSignal, online, cloudSession?.user.id]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !online || !cloudSession || pulledCloudUserId === cloudSession.user.id) return;
@@ -397,7 +415,7 @@ function App() {
               setSelectedAuditId(auditId);
               setToast(cloudSession ? 'Fazenda criada e sincronizacao iniciada.' : 'Fazenda salva neste aparelho. Entre no Supabase para aparecer nos outros dispositivos.');
               setView('audit');
-              void syncAllInBackground();
+              void syncCreatedAuditInBackground(auditId);
             }}
             onAudit={async () => {
               if (selectedAudit) await chooseAudit(selectedAudit);
@@ -414,7 +432,7 @@ function App() {
               setSelectedAuditId(auditId);
               setToast(cloudSession ? 'Base importada e sincronizacao iniciada.' : 'Base salva neste aparelho. Entre no Supabase para aparecer nos outros dispositivos.');
               setView('audit');
-              void syncAllInBackground();
+              void syncCreatedAuditInBackground(auditId);
             }}
           />
         )}

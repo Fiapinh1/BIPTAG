@@ -70,8 +70,34 @@ create index if not exists known_issues_audit_id_idx on public.known_issues(audi
 create index if not exists known_issues_audit_tag_idx on public.known_issues(audit_id, tag_number);
 create index if not exists known_issues_audit_type_idx on public.known_issues(audit_id, type);
 
+alter table if exists public.farms enable row level security;
+alter table if exists public.audits enable row level security;
+alter table if exists public.tag_assignments enable row level security;
+alter table if exists public.audit_records enable row level security;
+alter table if exists public.import_issues enable row level security;
 alter table public.effective_tag_assignments enable row level security;
 alter table public.known_issues enable row level security;
+
+grant usage on schema public to anon, authenticated;
+
+do $$
+declare
+  table_name text;
+begin
+  foreach table_name in array array[
+    'farms',
+    'audits',
+    'tag_assignments',
+    'effective_tag_assignments',
+    'audit_records',
+    'import_issues',
+    'known_issues'
+  ] loop
+    if to_regclass('public.' || table_name) is not null then
+      execute format('grant select, insert, update, delete on table public.%I to authenticated', table_name);
+    end if;
+  end loop;
+end $$;
 
 drop policy if exists "users_manage_own_effective_assignments" on public.effective_tag_assignments;
 create policy "users_manage_own_effective_assignments" on public.effective_tag_assignments for all

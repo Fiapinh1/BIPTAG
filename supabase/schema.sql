@@ -143,6 +143,17 @@ alter table public.audit_records enable row level security;
 alter table public.import_issues enable row level security;
 alter table public.known_issues enable row level security;
 
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on table
+  public.farms,
+  public.audits,
+  public.tag_assignments,
+  public.effective_tag_assignments,
+  public.audit_records,
+  public.import_issues,
+  public.known_issues
+to authenticated;
+
 create policy "users_manage_own_farms" on public.farms for all
 using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
