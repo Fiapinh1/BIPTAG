@@ -10,6 +10,15 @@ type SyncResult = {
   knownIssues: number;
 };
 
+export type PullResult = {
+  audits: number;
+  assignments: number;
+  effectiveAssignments: number;
+  records: number;
+  issues: number;
+  knownIssues: number;
+};
+
 const syncedAt = () => new Date().toISOString();
 
 function requireSupabase() {
@@ -219,4 +228,191 @@ export async function syncAuditToSupabase(auditId: string): Promise<SyncResult> 
     issues: issues.length,
     knownIssues: knownIssuesSynced ? knownIssues.length : 0
   };
+}
+
+export async function syncAllAuditsToSupabase() {
+  await requireUserId();
+  const audits = await db.audits.toArray();
+  const results: SyncResult[] = [];
+  for (const audit of audits) {
+    results.push(await syncAuditToSupabase(audit.id));
+  }
+  return {
+    audits: audits.length,
+    assignments: results.reduce((sum, item) => sum + item.assignments, 0),
+    effectiveAssignments: results.reduce((sum, item) => sum + item.effectiveAssignments, 0),
+    records: results.reduce((sum, item) => sum + item.records, 0),
+    issues: results.reduce((sum, item) => sum + item.issues, 0),
+    knownIssues: results.reduce((sum, item) => sum + item.knownIssues, 0)
+  };
+}
+
+export async function pullAuditsFromSupabase(): Promise<PullResult> {
+  const client = requireSupabase();
+  await requireUserId();
+
+  const [
+    auditsResponse,
+    assignmentsResponse,
+    effectiveResponse,
+    recordsResponse,
+    issuesResponse,
+    knownIssuesResponse
+  ] = await Promise.all([
+    client.from('audits').select('*').order('updated_at', { ascending: false }),
+    client.from('tag_assignments').select('*'),
+    client.from('effective_tag_assignments').select('*'),
+    client.from('audit_records').select('*'),
+    client.from('import_issues').select('*'),
+    client.from('known_issues').select('*')
+  ]);
+
+  if (auditsResponse.error) throw auditsResponse.error;
+  if (assignmentsResponse.error) throw assignmentsResponse.error;
+  if (recordsResponse.error) throw recordsResponse.error;
+  if (issuesResponse.error) throw issuesResponse.error;
+  if (effectiveResponse.error) {
+    const message = effectiveResponse.error.message ?? '';
+    if (!message.includes('effective_tag_assignments')) throw effectiveResponse.error;
+  }
+  if (knownIssuesResponse.error) {
+    const message = knownIssuesResponse.error.message ?? '';
+    if (!message.includes('known_issues')) throw knownIssuesResponse.error;
+  }
+
+  const audits = (auditsResponse.data ?? []).map((row) => ({
+    id: row.id,
+    farmName: row.farm_name,
+    sourceFileName: row.source_file_name,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    lastActivityAt: row.last_activity_at,
+    startedAt: row.started_at,
+    pausedAt: row.paused_at ?? undefined,
+    finishedAt: row.finished_at ?? undefined,
+    status: row.status === 'active' ? 'in_progress' : row.status,
+    totalTags: row.total_tags,
+    totalRows: row.total_rows,
+    validTags: row.valid_tags,
+    suspiciousTags: row.suspicious_tags,
+    invalidTags: row.invalid_tags,
+    tagPattern: row.tag_pattern ?? undefined,
+    linkedTags: row.linked_tags,
+    issueCount: row.issue_count
+  })) as Audit[];
+
+  const assignments = (assignmentsResponse.data ?? []).map((row) => ({
+    id: row.id,
+    auditId: row.audit_id,
+    tagNumber: row.tag_number,
+    functionName: row.function_name,
+    typeName: row.type_name,
+    expectedAnimal: row.expected_animal,
+    connectedSince: row.connected_since,
+    lastDetectedAt: row.last_detected_at,
+    lastDetectedFarm: row.last_detected_farm,
+    validationStatus: row.validation_status,
+    validationReason: row.validation_reason
+  })) as TagAssignment[];
+
+  const effectiveAssignments = (effectiveResponse.data ?? []).map((row) => ({
+    id: row.id,
+    auditId: row.audit_id,
+    tagNumber: row.tag_number,
+    originalAnimal: row.original_animal,
+    effectiveAnimal: row.effective_animal,
+    status: row.status,
+    sourceAssignmentId: row.source_assignment_id,
+    currentRecordId: row.current_record_id,
+    relatedRecordId: row.related_record_id,
+    updatedAt: row.updated_at,
+    syncedAt: row.synced_at,
+    syncStatus: 'synced'
+  })) as EffectiveTagAssignment[];
+
+  const records = (recordsResponse.data ?? []).map((row) => ({
+    id: row.id,
+    auditId: row.audit_id,
+    sequence: row.sequence,
+    tagNumber: row.tag_number,
+    expectedAnimal: row.expected_animal,
+    observedAnimal: row.observed_animal,
+    effectiveAnimal: row.effective_animal,
+    status: row.status,
+    fieldDecision: row.field_decision,
+    reviewStatus: row.review_status,
+    note: row.note,
+    operationalAction: row.operational_action,
+    actionNote: row.action_note,
+    scannedAt: row.scanned_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    syncedAt: row.synced_at,
+    syncStatus: 'synced',
+    source: row.source,
+    isCurrent: row.is_current,
+    supersedesRecordId: row.supersedes_record_id,
+    pairId: row.pair_id,
+    relatedRecordId: row.related_record_id
+  })) as AuditRecord[];
+
+  const issues = (issuesResponse.data ?? []).map((row) => ({
+    id: row.id,
+    auditId: row.audit_id,
+    type: row.type,
+    tagNumber: row.tag_number,
+    animal: row.animal,
+    detail: row.detail
+  })) as ImportIssue[];
+
+  const knownIssues = (knownIssuesResponse.data ?? []).map((row) => ({
+    id: row.id,
+    auditId: row.audit_id,
+    tagNumber: row.tag_number,
+    type: row.type,
+    note: row.note,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    syncStatus: 'synced'
+  })) as KnownIssue[];
+
+  await db.transaction('rw', [db.audits, db.tagAssignments, db.effectiveTagAssignments, db.auditRecords, db.importIssues, db.knownIssues], async () => {
+    if (audits.length) await db.audits.bulkPut(audits);
+    if (assignments.length) await db.tagAssignments.bulkPut(assignments);
+    if (effectiveAssignments.length) await db.effectiveTagAssignments.bulkPut(effectiveAssignments);
+    if (records.length) await db.auditRecords.bulkPut(records);
+    if (issues.length) await db.importIssues.bulkPut(issues);
+    if (knownIssues.length) await db.knownIssues.bulkPut(knownIssues);
+  });
+
+  return {
+    audits: audits.length,
+    assignments: assignments.length,
+    effectiveAssignments: effectiveAssignments.length,
+    records: records.length,
+    issues: issues.length,
+    knownIssues: knownIssues.length
+  };
+}
+
+export async function deleteAuditEverywhere(auditId: string) {
+  const client = supabase;
+  if (client) {
+    const { data } = await client.auth.getSession();
+    if (data.session) {
+      const { error } = await client.from('audits').delete().eq('id', auditId);
+      if (error) throw error;
+    }
+  }
+
+  await db.transaction('rw', [db.audits, db.tagAssignments, db.effectiveTagAssignments, db.auditRecords, db.importIssues, db.knownIssues], async () => {
+    await Promise.all([
+      db.tagAssignments.where('auditId').equals(auditId).delete(),
+      db.effectiveTagAssignments.where('auditId').equals(auditId).delete(),
+      db.auditRecords.where('auditId').equals(auditId).delete(),
+      db.importIssues.where('auditId').equals(auditId).delete(),
+      db.knownIssues.where('auditId').equals(auditId).delete()
+    ]);
+    await db.audits.delete(auditId);
+  });
 }

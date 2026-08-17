@@ -3285,3 +3285,142 @@ body {
     height: 40px;
   }
 }
+
+/* Fase 13 - persistencia em nuvem, historico acionavel e popups BIPTAG */
+.audit-history__item {
+  padding: 0;
+  overflow: hidden;
+  cursor: default;
+}
+
+.audit-history__open {
+  appearance: none;
+  border: 0;
+  min-width: 0;
+  flex: 1;
+  padding: 13px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.audit-history__delete {
+  appearance: none;
+  border: 0;
+  align-self: stretch;
+  width: 52px;
+  display: grid;
+  place-items: center;
+  color: #8e3f38;
+  background: rgba(165, 74, 66, .08);
+  border-left: 1px solid rgba(165, 74, 66, .15);
+  cursor: pointer;
+}
+
+.audit-history__delete:active {
+  background: rgba(165, 74, 66, .16);
+}
+
+.app-dialog {
+  z-index: 120;
+}
+
+.app-dialog__panel {
+  width: min(430px, 100%);
+  gap: 16px;
+  padding: 20px;
+  text-align: center;
+  white-space: pre-line;
+}
+
+.app-dialog__icon {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 24px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #16755c, #0b3b31);
+  box-shadow: 0 14px 32px rgba(13, 75, 61, .22);
+}
+
+.app-dialog__panel--warning .app-dialog__icon {
+  background: linear-gradient(135deg, #dfa821, #a96f2f);
+}
+
+.app-dialog__panel--danger .app-dialog__icon {
+  background: linear-gradient(135deg, #c45a4f, #8e3f38);
+}
+
+.app-dialog__panel--success .app-dialog__icon {
+  background: linear-gradient(135deg, #32d59f, #16755c);
+}
+
+.app-dialog__body h2 {
+  margin: 4px 0 8px;
+  color: var(--field-ink, #10211c);
+  font-size: clamp(25px, 7vw, 36px);
+  letter-spacing: 0;
+}
+
+.app-dialog__body p {
+  margin: 0;
+  color: #5e6862;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.app-dialog__body .text-input {
+  margin-top: 14px;
+  min-height: 58px;
+  text-align: center;
+  font-size: 18px;
+}
+
+.app-dialog__actions {
+  display: grid;
+  gap: 9px;
+}
+
+.nfc-panel--field:not(.is-active) {
+  border-color: rgba(184, 97, 53, .52);
+  background:
+    radial-gradient(circle at 50% 28%, rgba(184, 97, 53, .18), transparent 210px),
+    linear-gradient(135deg, #17120f 0%, #261d18 50%, #34251d 100%);
+}
+
+.nfc-panel--field:not(.is-active) .nfc-panel__status {
+  border-color: rgba(255, 217, 90, .32);
+  color: #ffe7a4;
+}
+
+.nfc-panel--field:not(.is-active) .nfc-panel__status span {
+  background: #dfa821;
+  animation: none;
+}
+
+.nfc-panel--field.is-active {
+  border-color: rgba(50, 213, 159, .95);
+  background:
+    radial-gradient(circle at 50% 28%, rgba(50, 213, 159, .3), transparent 230px),
+    linear-gradient(135deg, #041b15 0%, #063c30 50%, #075241 100%);
+  box-shadow:
+    0 0 0 5px rgba(50, 213, 159, .14),
+    0 0 34px rgba(50, 213, 159, .24),
+    0 26px 64px rgba(7, 23, 19, .3);
+}
+
+.nfc-panel--field.is-active .nfc-panel__visual {
+  border-color: rgba(50, 213, 159, .58);
+  box-shadow:
+    0 0 0 12px rgba(50, 213, 159, .07),
+    0 0 0 28px rgba(50, 213, 159, .045),
+    0 0 44px rgba(50, 213, 159, .28),
+    inset 0 0 40px rgba(50, 213, 159, .2);
+}

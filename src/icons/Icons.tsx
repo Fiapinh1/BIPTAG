@@ -159,3 +159,14 @@ export function ActionIcon({ size = 22, ...props }: IconProps) {
     </svg>
   );
 }
+
+export function TrashIcon({ size = 22, ...props }: IconProps) {
+  return (
+    <svg {...base(size)} {...props}>
+      <path d="M4 7h16" />
+      <path d="M10 11v6M14 11v6" />
+      <path d="M6 7l1 14h10l1-14" />
+      <path d="M9 7V4h6v3" />
+    </svg>
+  );
+}

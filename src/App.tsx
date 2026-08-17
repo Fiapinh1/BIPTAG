@@ -17,14 +17,15 @@ import {
   ReportIcon,
   ScanIcon,
   SwapIcon,
-  TagIcon
+  TagIcon,
+  TrashIcon
 } from './icons/Icons';
 import { parseNedapWorkbook, exportAuditWorkbook, validateSmartTag } from './services/excel';
 import { knownIssueActionLabel, knownIssueLabel, operationalActionLabel, statusLabel } from './services/audit-labels';
 import { feedbackCorrect, feedbackWarning, primeFeedbackAudio } from './services/feedback';
 import { isWebNfcSupported, startNfcReader } from './services/nfc';
 import { isSupabaseConfigured, supabase } from './services/supabase';
-import { syncAuditToSupabase } from './services/cloud-sync';
+import { deleteAuditEverywhere, pullAuditsFromSupabase, syncAllAuditsToSupabase } from './services/cloud-sync';
 import {
   classifyReading,
   defaultOperationalAction,
@@ -53,6 +54,58 @@ import type {
 import type { Session } from '@supabase/supabase-js';
 
 type View = 'home' | 'import' | 'audit' | 'issues' | 'knownIssues' | 'settings';
+
+type DialogTone = 'default' | 'danger' | 'warning' | 'success';
+
+type AppDialogRequest =
+  | {
+      kind: 'alert';
+      title: string;
+      message: string;
+      confirmLabel?: string;
+      tone?: DialogTone;
+      resolve: () => void;
+    }
+  | {
+      kind: 'confirm';
+      title: string;
+      message: string;
+      confirmLabel?: string;
+      cancelLabel?: string;
+      tone?: DialogTone;
+      resolve: (value: boolean) => void;
+    }
+  | {
+      kind: 'prompt';
+      title: string;
+      message?: string;
+      placeholder?: string;
+      initialValue?: string;
+      confirmLabel?: string;
+      cancelLabel?: string;
+      tone?: DialogTone;
+      resolve: (value: string | null) => void;
+    };
+
+const DIALOG_EVENT = 'biptag:dialog';
+
+const appDialog = {
+  alert(options: Omit<Extract<AppDialogRequest, { kind: 'alert' }>, 'kind' | 'resolve'>) {
+    return new Promise<void>((resolve) => {
+      window.dispatchEvent(new CustomEvent(DIALOG_EVENT, { detail: { ...options, kind: 'alert', resolve } }));
+    });
+  },
+  confirm(options: Omit<Extract<AppDialogRequest, { kind: 'confirm' }>, 'kind' | 'resolve'>) {
+    return new Promise<boolean>((resolve) => {
+      window.dispatchEvent(new CustomEvent(DIALOG_EVENT, { detail: { ...options, kind: 'confirm', resolve } }));
+    });
+  },
+  prompt(options: Omit<Extract<AppDialogRequest, { kind: 'prompt' }>, 'kind' | 'resolve'>) {
+    return new Promise<string | null>((resolve) => {
+      window.dispatchEvent(new CustomEvent(DIALOG_EVENT, { detail: { ...options, kind: 'prompt', resolve } }));
+    });
+  }
+};
 
 type ScanState = {
   tagNumber: string;
@@ -142,11 +195,27 @@ function App() {
   const [view, setView] = useState<View>('home');
   const [online, setOnline] = useState(navigator.onLine);
   const [toast, setToast] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<AppDialogRequest | null>(null);
+  const [cloudSession, setCloudSession] = useState<Session | null>(null);
+  const [pulledCloudUserId, setPulledCloudUserId] = useState<string | null>(null);
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(
     () => localStorage.getItem('biptag-selected-audit')
   );
+  const autoSyncBusy = useRef(false);
 
   const audits = useLiveQuery(() => db.audits.orderBy('createdAt').reverse().toArray(), [], []);
+  const pendingSyncSignal = useLiveQuery(async () => {
+    const [records, effective, known] = await Promise.all([
+      db.auditRecords.where('syncStatus').equals('pending').count(),
+      db.effectiveTagAssignments.where('syncStatus').equals('pending').count(),
+      db.knownIssues.where('syncStatus').equals('pending').count()
+    ]);
+    return `${records}:${effective}:${known}`;
+  }, [], '0:0:0');
+  const auditUpdateSignal = useMemo(
+    () => audits.map((audit) => `${audit.id}:${audit.status}:${audit.updatedAt}`).join('|'),
+    [audits]
+  );
 
   const selectedAudit = useMemo(() => {
     if (!audits.length) return null;
@@ -195,11 +264,102 @@ function App() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  useEffect(() => {
+    const handleDialog = (event: Event) => {
+      setDialog((event as CustomEvent<AppDialogRequest>).detail);
+    };
+    window.addEventListener(DIALOG_EVENT, handleDialog);
+    return () => window.removeEventListener(DIALOG_EVENT, handleDialog);
+  }, []);
+
+  useEffect(() => {
+    if (!supabase) return;
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (mounted) setCloudSession(data.session);
+    }).catch(() => undefined);
+
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setCloudSession(nextSession);
+      if (!nextSession) setPulledCloudUserId(null);
+    });
+
+    return () => {
+      mounted = false;
+      data.subscription.unsubscribe();
+    };
+  }, []);
+
+  async function syncAllInBackground() {
+    if (!isSupabaseConfigured || !supabase || !online || !cloudSession || autoSyncBusy.current) return;
+    autoSyncBusy.current = true;
+    try {
+      await syncAllAuditsToSupabase();
+    } catch (err) {
+      console.warn('Nao foi possivel sincronizar automaticamente com o Supabase.', err);
+    } finally {
+      autoSyncBusy.current = false;
+    }
+  }
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase || !online || !cloudSession || !audits.length) return;
+    void syncAllInBackground();
+    const timer = window.setInterval(() => void syncAllInBackground(), 45000);
+    return () => window.clearInterval(timer);
+  }, [online, cloudSession?.user.id, audits.length]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase || !online || !cloudSession || !audits.length) return;
+    const timer = window.setTimeout(() => void syncAllInBackground(), 5000);
+    return () => window.clearTimeout(timer);
+  }, [pendingSyncSignal, auditUpdateSignal, online, cloudSession?.user.id, audits.length]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase || !online || !cloudSession || pulledCloudUserId === cloudSession.user.id) return;
+    setPulledCloudUserId(cloudSession.user.id);
+    pullAuditsFromSupabase()
+      .then((result) => {
+        if (result.audits) setToast(`${result.audits} auditoria(s) carregada(s) do banco de dados.`);
+      })
+      .catch((err) => console.warn('Nao foi possivel carregar auditorias do Supabase.', err));
+  }, [online, cloudSession?.user.id, pulledCloudUserId]);
+
   async function chooseAudit(audit: Audit) {
     setSelectedAuditId(audit.id);
     if (audit.status === 'paused') {
       const now = new Date().toISOString();
       await db.audits.update(audit.id, { status: 'in_progress', pausedAt: undefined, updatedAt: now, lastActivityAt: now });
+    }
+  }
+
+  async function deleteAudit(audit: Audit) {
+    const ok = await appDialog.confirm({
+      title: 'Excluir auditoria?',
+      message: `A auditoria de ${audit.farmName} sera removida deste aparelho${cloudSession ? ' e do banco de dados' : ''}. Essa acao nao altera o Nedap.`,
+      confirmLabel: 'Excluir auditoria',
+      cancelLabel: 'Cancelar',
+      tone: 'danger'
+    });
+    if (!ok) return;
+
+    try {
+      await deleteAuditEverywhere(audit.id);
+      const remaining = audits.filter((item) => item.id !== audit.id);
+      const next = remaining.find((item) => item.status !== 'finished') ?? remaining[0] ?? null;
+      setSelectedAuditId(next?.id ?? null);
+      if (!next) {
+        localStorage.removeItem('biptag-selected-audit');
+        setView('home');
+      }
+      setToast('Auditoria excluida.');
+    } catch (err) {
+      await appDialog.alert({
+        title: 'Nao foi possivel excluir',
+        message: err instanceof Error ? err.message : 'Tente novamente com conexao ativa.',
+        tone: 'danger'
+      });
     }
   }
 
@@ -226,10 +386,12 @@ function App() {
             audits={audits}
             activeAudit={selectedAudit}
             onSelectAudit={(audit) => void chooseAudit(audit)}
+            onDeleteAudit={(audit) => void deleteAudit(audit)}
             onImportCreated={(auditId) => {
               setSelectedAuditId(auditId);
               setToast('Fazenda criada e base salva neste aparelho.');
               setView('audit');
+              void syncAllInBackground();
             }}
             onAudit={async () => {
               if (selectedAudit) await chooseAudit(selectedAudit);
@@ -246,6 +408,7 @@ function App() {
               setSelectedAuditId(auditId);
               setToast('Base importada e salva neste aparelho.');
               setView('audit');
+              void syncAllInBackground();
             }}
           />
         )}
@@ -268,6 +431,7 @@ function App() {
       </nav>
 
       {toast ? <div className="toast">{toast}</div> : null}
+      <AppDialogModal dialog={dialog} onClose={() => setDialog(null)} />
     </div>
   );
 }
@@ -281,10 +445,70 @@ function NavButton({ active, label, icon, onClick }: { active: boolean; label: s
   );
 }
 
+function AppDialogModal({ dialog, onClose }: { dialog: AppDialogRequest | null; onClose: () => void }) {
+  const [promptValue, setPromptValue] = useState('');
+
+  useEffect(() => {
+    setPromptValue(dialog?.kind === 'prompt' ? dialog.initialValue ?? '' : '');
+  }, [dialog]);
+
+  if (!dialog) return null;
+
+  function finish(value: boolean | string | null | undefined) {
+    if (!dialog) return;
+    if (dialog.kind === 'alert') dialog.resolve();
+    if (dialog.kind === 'confirm') dialog.resolve(Boolean(value));
+    if (dialog.kind === 'prompt') dialog.resolve(typeof value === 'string' ? value : null);
+    onClose();
+  }
+
+  return (
+    <div className="app-modal app-dialog" role="dialog" aria-modal="true" aria-labelledby="app-dialog-title">
+      <div className={`app-modal__panel app-dialog__panel app-dialog__panel--${dialog.tone ?? 'default'}`}>
+        <div className="app-dialog__icon">
+          {dialog.tone === 'danger' || dialog.tone === 'warning' ? <IssuesIcon size={34} /> : <CheckIcon size={34} />}
+        </div>
+        <div className="app-dialog__body">
+          <span className="eyebrow">BIPTAG</span>
+          <h2 id="app-dialog-title">{dialog.title}</h2>
+          {dialog.message && <p>{dialog.message}</p>}
+          {dialog.kind === 'prompt' && (
+            <input
+              className="text-input"
+              autoFocus
+              placeholder={dialog.placeholder}
+              value={promptValue}
+              onChange={(event) => setPromptValue(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') finish(promptValue);
+                if (event.key === 'Escape') finish(null);
+              }}
+            />
+          )}
+        </div>
+        <div className="app-dialog__actions">
+          {dialog.kind !== 'alert' && (
+            <button className="button button--ghost button--full" onClick={() => finish(dialog.kind === 'confirm' ? false : null)}>
+              {dialog.kind === 'prompt' ? dialog.cancelLabel ?? 'Cancelar' : dialog.cancelLabel ?? 'Voltar'}
+            </button>
+          )}
+          <button
+            className={`button button--full ${dialog.tone === 'danger' ? 'button--danger' : 'button--primary'}`}
+            onClick={() => finish(dialog.kind === 'prompt' ? promptValue : true)}
+          >
+            {dialog.confirmLabel ?? (dialog.kind === 'alert' ? 'Entendi' : 'Confirmar')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function HomeView({
   audits,
   activeAudit,
   onSelectAudit,
+  onDeleteAudit,
   onImportCreated,
   onAudit,
   onIssues,
@@ -294,6 +518,7 @@ function HomeView({
   audits: Audit[];
   activeAudit: Audit | null;
   onSelectAudit: (audit: Audit) => void;
+  onDeleteAudit: (audit: Audit) => void;
   onImportCreated: (auditId: string) => void;
   onAudit: () => void;
   onIssues: () => void;
@@ -382,11 +607,23 @@ function HomeView({
     if (!activeAudit || activeAudit.status === 'finished') return;
     const pendingTags = effectiveAssignments.filter((item) => item.status === 'pending');
     if (pendingTags.length) {
-      const review = window.confirm(`Existem ${pendingTags.length} SmartTags da base que ainda nao foram localizadas. Revisar tags nao localizadas agora?`);
+      const review = await appDialog.confirm({
+        title: 'Revisar tags pendentes?',
+        message: `Existem ${pendingTags.length} SmartTags da base que ainda nao foram localizadas. Revise antes de finalizar para o relatorio ficar completo.`,
+        confirmLabel: 'Abrir revisao',
+        cancelLabel: 'Continuar depois',
+        tone: 'warning'
+      });
       if (review) onIssues();
       return;
     }
-    const ok = window.confirm(`Finalizar a auditoria de ${activeAudit.farmName}? Os dados continuarão salvos e disponíveis para relatório.`);
+    const ok = await appDialog.confirm({
+      title: 'Finalizar auditoria?',
+      message: `Finalizar a auditoria de ${activeAudit.farmName}? Os dados continuam salvos para abrir depois, exportar relatorio e sincronizar no banco.`,
+      confirmLabel: 'Finalizar',
+      cancelLabel: 'Voltar',
+      tone: 'success'
+    });
     if (!ok) return;
     const now = new Date().toISOString();
     await db.audits.update(activeAudit.id, { status: 'finished', finishedAt: now, updatedAt: now, lastActivityAt: now });
@@ -566,10 +803,15 @@ function HomeView({
           <div className="section-heading section-heading--compact"><div><span className="eyebrow">HISTÓRICO</span><h2>Auditorias salvas</h2></div></div>
           <div className="audit-history">
             {audits.slice(0, 6).map((audit) => (
-              <button key={audit.id} className={`audit-history__item ${audit.id === activeAudit.id ? 'is-selected' : ''}`} onClick={() => onSelectAudit(audit)}>
+              <div key={audit.id} className={`audit-history__item ${audit.id === activeAudit.id ? 'is-selected' : ''}`}>
+                <button className="audit-history__open" onClick={() => onSelectAudit(audit)}>
                 <span><strong>{audit.farmName}</strong><small>{formatShortDate(audit.lastActivityAt || audit.updatedAt)} · {audit.status === 'finished' ? 'Finalizada' : audit.status === 'paused' ? 'Pausada' : 'Em andamento'}</small></span>
-                <ChevronRightIcon />
-              </button>
+                  <ChevronRightIcon />
+                </button>
+                <button className="audit-history__delete" onClick={() => onDeleteAudit(audit)} title="Excluir auditoria" aria-label={`Excluir auditoria ${audit.farmName}`}>
+                  <TrashIcon size={19} />
+                </button>
+              </div>
             ))}
           </div>
         </>
@@ -848,7 +1090,13 @@ function KnownIssuesView({
   }
 
   async function removeKnownIssue(issue: KnownIssue) {
-    const ok = window.confirm(`Remover problema conhecido da tag ${issue.tagNumber}?`);
+    const ok = await appDialog.confirm({
+      title: 'Remover problema conhecido?',
+      message: `A tag ${issue.tagNumber} deixara de mostrar aviso automatico durante a leitura.`,
+      confirmLabel: 'Remover',
+      cancelLabel: 'Cancelar',
+      tone: 'danger'
+    });
     if (!ok) return;
     await db.knownIssues.delete(issue.id);
     if (editingId === issue.id) resetForm();
@@ -1287,7 +1535,12 @@ function AuditView({
   }
 
   async function addCorrectObservation(recordId: string) {
-    const note = window.prompt('Observacao para o relatorio:');
+    const note = await appDialog.prompt({
+      title: 'Adicionar observacao',
+      message: 'Escreva a observacao que deve aparecer no relatorio final desta SmartTag.',
+      placeholder: 'Ex.: conferir colar na proxima ordenha',
+      confirmLabel: 'Salvar observacao'
+    });
     if (note === null) return;
     await setOperationalAction(recordId, 'keep_tag', note.trim() || 'Observacao adicionada em campo.');
     setOutcome({
@@ -1301,7 +1554,12 @@ function AuditView({
   }
 
   async function markCorrectTagOutOfUse(recordId: string) {
-    const note = window.prompt('Motivo para marcar esta tag fora de uso:');
+    const note = await appDialog.prompt({
+      title: 'Tag fora de uso',
+      message: 'Informe o motivo para o relatorio operacional.',
+      placeholder: 'Ex.: colar retirado em campo',
+      confirmLabel: 'Registrar'
+    });
     if (note === null) return;
     await setOperationalAction(recordId, 'tag_out_of_use', note.trim() || 'Tag marcada como fora de uso em campo.');
     setOutcome({
@@ -1899,7 +2157,13 @@ function IssuesView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
 
   async function markMissingTags() {
     const count = await markPendingTagsNotFound(activeAudit.id);
-    if (count) window.alert(`${count} SmartTags foram marcadas como nao localizadas.`);
+    if (count) {
+      await appDialog.alert({
+        title: 'Tags marcadas',
+        message: `${count} SmartTags foram marcadas como nao localizadas e entraram nas acoes de revisao.`,
+        tone: 'warning'
+      });
+    }
   }
 
   return (
@@ -2094,47 +2358,41 @@ function ReviewEffectiveCard({ item }: { item: EffectiveTagAssignment }) {
 }
 
 function showRecordDetails(record: AuditRecord) {
-  window.alert([
-    'EVIDENCIA NEDAP',
-    record.expectedAnimal ?? 'Sem cadastro',
-    '',
-    'EVIDENCIA DE CAMPO',
-    record.observedAnimal ?? 'Nao informada',
-    '',
-    'TAG',
-    record.tagNumber,
-    '',
-    'ACAO SUGERIDA',
-    operationalActionLabel(record.operationalAction) || statusLabel(record.status),
-    '',
-    record.actionNote ?? record.note ?? ''
-  ].filter((line) => line !== '').join('\n'));
+  void appDialog.alert({
+    title: 'Detalhe da ocorrencia',
+    message: [
+      `Evidencia Nedap: ${record.expectedAnimal ?? 'Sem cadastro'}`,
+      `Evidencia de campo: ${record.observedAnimal ?? 'Nao informada'}`,
+      `Tag: ${record.tagNumber}`,
+      `Acao sugerida: ${operationalActionLabel(record.operationalAction) || statusLabel(record.status)}`,
+      record.actionNote ?? record.note ?? ''
+    ].filter((line) => line !== '').join('\n'),
+    tone: record.status === 'audit_conflict' || record.status === 'new_tag_conflict' ? 'danger' : 'warning'
+  });
 }
 
 function showSwapDetails(record: AuditRecord, other: AuditRecord | null) {
-  window.alert([
-    'TROCA IDENTIFICADA',
-    `${record.expectedAnimal ?? '-'} <-> ${record.observedAnimal ?? '-'}`,
-    '',
-    'TAGS',
-    other ? `${record.tagNumber} / ${other.tagNumber}` : record.tagNumber,
-    '',
-    'ACAO SUGERIDA',
-    'TROCAR TAGS'
-  ].join('\n'));
+  void appDialog.alert({
+    title: 'Troca identificada',
+    message: [
+      `${record.expectedAnimal ?? '-'} <-> ${record.observedAnimal ?? '-'}`,
+      `Tags: ${other ? `${record.tagNumber} / ${other.tagNumber}` : record.tagNumber}`,
+      'Acao sugerida: TROCAR TAGS'
+    ].join('\n'),
+    tone: 'warning'
+  });
 }
 
 function showEffectiveDetails(item: EffectiveTagAssignment) {
-  window.alert([
-    'ANIMAL SEM TAG',
-    item.originalAnimal ?? '-',
-    '',
-    'TAG ANTERIOR',
-    item.tagNumber,
-    '',
-    'ACAO SUGERIDA',
-    'INVESTIGAR'
-  ].join('\n'));
+  void appDialog.alert({
+    title: 'Animal sem tag',
+    message: [
+      `Animal: ${item.originalAnimal ?? '-'}`,
+      `Tag anterior: ${item.tagNumber}`,
+      'Acao sugerida: INVESTIGAR'
+    ].join('\n'),
+    tone: 'warning'
+  });
 }
 
 function IssueRow({ issue }: { issue: ImportIssue }) {
@@ -2220,15 +2478,11 @@ function CloudSettingsView({ activeAudit, setToast }: { activeAudit: Audit | nul
   }
 
   async function syncNow() {
-    if (!activeAudit) {
-      setMessage('Nenhuma auditoria local selecionada para sincronizar.');
-      return;
-    }
     setBusy(true);
     setMessage(null);
     try {
-      const result = await syncAuditToSupabase(activeAudit.id);
-      const summary = `Sincronizado: ${result.assignments} tags originais, ${result.effectiveAssignments} estados efetivos, ${result.records} leituras, ${result.issues} pendencias e ${result.knownIssues} problemas conhecidos.`;
+      const result = await syncAllAuditsToSupabase();
+      const summary = `Banco atualizado: ${result.audits} auditoria(s), ${result.assignments} tags originais, ${result.effectiveAssignments} estados efetivos, ${result.records} leituras, ${result.issues} pendencias e ${result.knownIssues} problemas conhecidos.`;
       setMessage(summary);
       setToast(summary);
     } catch (err) {
@@ -2238,9 +2492,24 @@ function CloudSettingsView({ activeAudit, setToast }: { activeAudit: Audit | nul
     }
   }
 
+  async function pullNow() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const result = await pullAuditsFromSupabase();
+      const summary = `Carregado do banco: ${result.audits} auditoria(s), ${result.assignments} tags originais, ${result.records} leituras e ${result.knownIssues} problemas conhecidos.`;
+      setMessage(summary);
+      setToast(summary);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Nao foi possivel baixar as auditorias.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section className="page">
-      <div className="section-heading"><div><span className="eyebrow">CONFIGURACAO</span><h1>BIPTAG Web V0.3</h1><p>Offline-first, mobile-first e conectado ao Supabase para backup manual.</p></div></div>
+      <div className="section-heading"><div><span className="eyebrow">CONFIGURACAO</span><h1>BIPTAG Web V0.3</h1><p>Offline-first, mobile-first e conectado ao Supabase para salvar todas as auditorias.</p></div></div>
       <div className="settings-card">
         <div className="settings-row"><span className="settings-row__icon"><CloudIcon /></span><div><strong>Supabase</strong><small>{isSupabaseConfigured ? 'Variaveis configuradas' : 'Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY'}</small></div><span className={`status-dot ${isSupabaseConfigured ? 'is-ok' : ''}`} /></div>
         <div className="settings-row"><span className="settings-row__icon"><CheckIcon /></span><div><strong>Conta</strong><small>{session?.user.email ?? (session ? 'Sessao ativa' : 'Entre para liberar backup na nuvem')}</small></div><span className={`status-dot ${session ? 'is-ok' : ''}`} /></div>
@@ -2257,7 +2526,8 @@ function CloudSettingsView({ activeAudit, setToast }: { activeAudit: Audit | nul
             </>
           ) : (
             <>
-              <button className="button button--primary button--full" disabled={busy || !activeAudit} onClick={() => void syncNow()}><CloudIcon /> Sincronizar auditoria atual</button>
+              <button className="button button--primary button--full" disabled={busy} onClick={() => void syncNow()}><CloudIcon /> Salvar todas auditorias no banco</button>
+              <button className="button button--secondary button--full" disabled={busy} onClick={() => void pullNow()}><CloudIcon /> Abrir auditorias do banco</button>
               <button className="button button--ghost button--full" disabled={busy} onClick={() => void signOut()}>Sair da conta</button>
             </>
           )}
@@ -2265,7 +2535,7 @@ function CloudSettingsView({ activeAudit, setToast }: { activeAudit: Audit | nul
         </div>
       )}
 
-      <div className="technical-note"><strong>Persistencia entre dias</strong><p>Auditorias, base importada e leituras continuam no IndexedDB do navegador. A sincronizacao envia uma copia para o Supabase quando houver sessao ativa.</p></div>
+      <div className="technical-note"><strong>Persistencia entre dias</strong><p>Auditorias, base importada e leituras continuam neste aparelho e no Supabase quando houver sessao ativa. Auditoria atual: {activeAudit?.farmName ?? 'nenhuma selecionada'}.</p></div>
     </section>
   );
 }
