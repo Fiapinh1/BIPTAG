@@ -170,3 +170,12 @@ export function TrashIcon({ size = 22, ...props }: IconProps) {
     </svg>
   );
 }
+
+export function PlusIcon({ size = 22, ...props }: IconProps) {
+  return (
+    <svg {...base(size)} {...props}>
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </svg>
+  );
+}

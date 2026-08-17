@@ -13,6 +13,7 @@ import {
   ImportIcon,
   IssuesIcon,
   PauseIcon,
+  PlusIcon,
   PlayIcon,
   ReportIcon,
   ScanIcon,
@@ -198,9 +199,7 @@ function App() {
   const [dialog, setDialog] = useState<AppDialogRequest | null>(null);
   const [cloudSession, setCloudSession] = useState<Session | null>(null);
   const [pulledCloudUserId, setPulledCloudUserId] = useState<string | null>(null);
-  const [selectedAuditId, setSelectedAuditId] = useState<string | null>(
-    () => localStorage.getItem('biptag-selected-audit')
-  );
+  const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
   const autoSyncBusy = useRef(false);
 
   const audits = useLiveQuery(() => db.audits.orderBy('createdAt').reverse().toArray(), [], []);
@@ -218,23 +217,22 @@ function App() {
   );
 
   const selectedAudit = useMemo(() => {
-    if (!audits.length) return null;
-    return (
-      audits.find((audit) => audit.id === selectedAuditId) ??
-      audits.find((audit) => audit.status !== 'finished') ??
-      audits[0]
-    );
+    if (!audits.length || !selectedAuditId) return null;
+    return audits.find((audit) => audit.id === selectedAuditId) ?? null;
   }, [audits, selectedAuditId]);
 
   useEffect(() => {
-    if (!selectedAudit && audits.length) {
-      const next = audits.find((audit) => audit.status !== 'finished') ?? audits[0];
-      setSelectedAuditId(next.id);
+    if (selectedAuditId && audits.length && !audits.some((audit) => audit.id === selectedAuditId)) {
+      setSelectedAuditId(null);
     }
-  }, [audits, selectedAudit]);
+  }, [audits, selectedAuditId]);
 
   useEffect(() => {
-    if (selectedAuditId) localStorage.setItem('biptag-selected-audit', selectedAuditId);
+    if (selectedAuditId) {
+      localStorage.setItem('biptag-selected-audit', selectedAuditId);
+    } else {
+      localStorage.removeItem('biptag-selected-audit');
+    }
   }, [selectedAuditId]);
 
   useEffect(() => {
@@ -311,6 +309,14 @@ function App() {
   }, [online, cloudSession?.user.id, audits.length]);
 
   useEffect(() => {
+    if (!isSupabaseConfigured || !supabase || !online || !cloudSession) return;
+    const timer = window.setInterval(() => {
+      pullAuditsFromSupabase().catch((err) => console.warn('Nao foi possivel atualizar auditorias do Supabase.', err));
+    }, 60000);
+    return () => window.clearInterval(timer);
+  }, [online, cloudSession?.user.id]);
+
+  useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !online || !cloudSession || !audits.length) return;
     const timer = window.setTimeout(() => void syncAllInBackground(), 5000);
     return () => window.clearTimeout(timer);
@@ -346,13 +352,8 @@ function App() {
 
     try {
       await deleteAuditEverywhere(audit.id);
-      const remaining = audits.filter((item) => item.id !== audit.id);
-      const next = remaining.find((item) => item.status !== 'finished') ?? remaining[0] ?? null;
-      setSelectedAuditId(next?.id ?? null);
-      if (!next) {
-        localStorage.removeItem('biptag-selected-audit');
-        setView('home');
-      }
+      setSelectedAuditId(null);
+      setView('home');
       setToast('Auditoria excluida.');
     } catch (err) {
       await appDialog.alert({
@@ -426,8 +427,22 @@ function App() {
 
       <nav className="bottom-nav" aria-label="Navegação principal">
         <NavButton active={view === 'home'} label="Início" icon={<HomeIcon />} onClick={() => setView('home')} />
-        <NavButton active={view === 'audit'} label="Auditar" icon={<ScanIcon />} onClick={() => setView('audit')} />
-        <NavButton active={view === 'issues' || view === 'knownIssues'} label="Revisão" icon={<IssuesIcon />} onClick={() => setView('issues')} />
+        <NavButton active={view === 'audit'} label="Auditar" icon={<ScanIcon />} onClick={() => {
+          if (!selectedAudit) {
+            setToast('Escolha uma fazenda na tela inicial antes de auditar.');
+            setView('home');
+            return;
+          }
+          setView('audit');
+        }} />
+        <NavButton active={view === 'issues' || view === 'knownIssues'} label="Revisão" icon={<IssuesIcon />} onClick={() => {
+          if (!selectedAudit) {
+            setToast('Escolha uma fazenda na tela inicial antes de revisar.');
+            setView('home');
+            return;
+          }
+          setView('issues');
+        }} />
       </nav>
 
       {toast ? <div className="toast">{toast}</div> : null}
@@ -640,8 +655,8 @@ function HomeView({
       <div className="app-modal__panel app-modal__panel--wide">
         <div className="app-modal__header">
           <div>
-            <span className="eyebrow">NOVA FAZENDA</span>
-            <h2 id="create-farm-title">Criar fazenda</h2>
+            <span className="eyebrow">NOVA AUDITORIA</span>
+            <h2 id="create-farm-title">Criar auditoria</h2>
           </div>
           <button className="app-modal__close" onClick={() => setShowCreateFarmModal(false)} aria-label="Fechar">×</button>
         </div>
@@ -709,22 +724,43 @@ function HomeView({
   if (!activeAudit) {
     return (
       <section className="page home-page">
-        <div className="home-hero">
+        <div className="home-toolbar">
           <div>
-            <span className="eyebrow">BIPTAG</span>
-            <h1>Auditoria de SmartTags no campo</h1>
-            <p>Crie a fazenda, importe o Tags.xlsx do Nedap e comece a conferência pelo celular.</p>
+            <span className="eyebrow">INICIO</span>
+            <h1>Auditorias</h1>
+            <p>{audits.length ? 'Escolha uma fazenda para abrir a auditoria.' : 'Nenhuma auditoria selecionada.'}</p>
           </div>
-          <BiptagLogo className="home-hero__logo" />
+          <button className="home-add-button" onClick={() => setShowCreateFarmModal(true)} aria-label="Criar nova auditoria">
+            <PlusIcon size={28} />
+          </button>
         </div>
-        <button className="field-action field-action--primary" onClick={() => setShowCreateFarmModal(true)}>
-          <span className="field-action__icon"><ImportIcon size={30} /></span>
-          <span>
-            <strong>Criar fazenda</strong>
-            <small>Importar Tags.xlsx do Nedap</small>
-          </span>
-          <ChevronRightIcon />
-        </button>
+        {audits.length ? (
+          <div className="audit-picker">
+            {audits.map((audit) => (
+              <div key={audit.id} className="audit-history__item audit-history__item--picker">
+                <button className="audit-history__open" onClick={() => onSelectAudit(audit)}>
+                  <span>
+                    <strong>{audit.farmName}</strong>
+                    <small>{formatShortDate(audit.lastActivityAt || audit.updatedAt)} - {audit.status === 'finished' ? 'Finalizada' : audit.status === 'paused' ? 'Pausada' : 'Em andamento'}</small>
+                  </span>
+                  <ChevronRightIcon />
+                </button>
+                <button className="audit-history__delete" onClick={() => onDeleteAudit(audit)} title="Excluir auditoria" aria-label={`Excluir auditoria ${audit.farmName}`}>
+                  <TrashIcon size={19} />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="home-empty-state">
+            <span className="home-empty-state__icon"><ImportIcon size={36} /></span>
+            <h2>Criar nova auditoria</h2>
+            <p>Importe o Tags.xlsx original do Nedap para iniciar a primeira fazenda neste aparelho.</p>
+            <button className="button button--primary button--full button--large" onClick={() => setShowCreateFarmModal(true)}>
+              <PlusIcon /> Nova auditoria
+            </button>
+          </div>
+        )}
         {createFarmModal}
       </section>
     );
@@ -732,6 +768,17 @@ function HomeView({
 
   return (
     <section className="page home-page">
+      <div className="home-toolbar">
+        <div>
+          <span className="eyebrow">FAZENDA ABERTA</span>
+          <h1>{activeAudit.farmName}</h1>
+          <p>Use esta auditoria ou abra outra fazenda abaixo.</p>
+        </div>
+        <button className="home-add-button" onClick={() => setShowCreateFarmModal(true)} aria-label="Criar nova auditoria">
+          <PlusIcon size={28} />
+        </button>
+      </div>
+
       <div className="home-dashboard">
       <div className="hero-card field-hero">
         <div>
@@ -786,11 +833,6 @@ function HomeView({
         <ChevronRightIcon />
       </button>
 
-      <button className="secondary-row" onClick={() => setShowCreateFarmModal(true)}>
-        <span><ImportIcon /> Criar outra fazenda / importar Tags.xlsx</span>
-        <ChevronRightIcon />
-      </button>
-
       {activeAudit.status !== 'finished' && (
         <div className="session-actions">
           <button className="button button--ghost" onClick={pauseAudit}><PauseIcon /> Pausar</button>
@@ -798,11 +840,11 @@ function HomeView({
         </div>
       )}
 
-      {audits.length > 1 && (
+      {audits.length > 0 && (
         <>
           <div className="section-heading section-heading--compact"><div><span className="eyebrow">HISTÓRICO</span><h2>Auditorias salvas</h2></div></div>
           <div className="audit-history">
-            {audits.slice(0, 6).map((audit) => (
+            {audits.map((audit) => (
               <div key={audit.id} className={`audit-history__item ${audit.id === activeAudit.id ? 'is-selected' : ''}`}>
                 <button className="audit-history__open" onClick={() => onSelectAudit(audit)}>
                 <span><strong>{audit.farmName}</strong><small>{formatShortDate(audit.lastActivityAt || audit.updatedAt)} · {audit.status === 'finished' ? 'Finalizada' : audit.status === 'paused' ? 'Pausada' : 'Em andamento'}</small></span>
@@ -932,13 +974,19 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
     <section className={embedded ? 'embedded-import' : 'page'}>
       <div className="section-heading">
         <div>
-          <span className="eyebrow">{embedded ? 'CRIAR FAZENDA' : 'NOVA AUDITORIA'}</span>
-          <h1>{embedded ? 'Nova fazenda' : 'Importar base Nedap'}</h1>
-          <p>Informe a fazenda e use o <strong>Tags.xlsx original</strong>. Depois de salvar, a auditoria fica persistida no aparelho.</p>
+          <span className="eyebrow">NOVA AUDITORIA</span>
+          <h1>{embedded ? 'Planejar auditoria' : 'Criar nova auditoria'}</h1>
+          <p>Nomeie a fazenda, importe o <strong>Tags.xlsx original</strong> e confirme o padrao das SmartTags antes de ir para o campo.</p>
         </div>
       </div>
 
-      <div className="form-card">
+      <div className="import-steps" aria-label="Etapas da nova auditoria">
+        <span className={farmName.trim() ? 'is-complete' : ''}>1. Fazenda</span>
+        <span className={file ? 'is-complete' : ''}>2. Arquivo</span>
+        <span className={patternConfirmed ? 'is-complete' : ''}>3. Validacao</span>
+      </div>
+
+      <div className="form-card import-plan-card">
         <label className="field-label" htmlFor="farm">Fazenda</label>
         <input id="farm" className="text-input" placeholder="Ex.: Fazenda Santa Juliana" value={farmName} onChange={(event) => setFarmName(event.target.value)} />
 
@@ -985,7 +1033,7 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
             </div>
           )}
           <div className="summary-strip"><span><CheckIcon /> Estrutura Nedap reconhecida</span><span>{preview.stats.duplicateTags} tags duplicadas</span></div>
-          <button className="button button--primary button--full button--large" disabled={!farmName.trim() || busy || !patternConfirmed} onClick={saveImport}>Salvar no aparelho e iniciar</button>
+          <button className="button button--primary button--full button--large" disabled={!farmName.trim() || busy || !patternConfirmed} onClick={saveImport}>Salvar e iniciar auditoria</button>
         </>
       )}
     </section>

@@ -2594,6 +2594,10 @@ body {
   order: 1;
 }
 
+.home-page > .home-toolbar {
+  order: 0;
+}
+
 .home-page > .home-action-grid {
   order: 2;
 }
@@ -2663,6 +2667,7 @@ body {
   }
 
   .home-page > .home-dashboard,
+  .home-page > .home-toolbar,
   .home-page > .home-action-grid,
   .home-page > .field-stats,
   .home-page > .secondary-row,
@@ -3423,4 +3428,164 @@ body {
     0 0 0 28px rgba(50, 213, 159, .045),
     0 0 44px rgba(50, 213, 159, .28),
     inset 0 0 40px rgba(50, 213, 159, .2);
+}
+
+/* Fase 14 - Home sem fazenda selecionada e criacao planejada */
+.home-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 4px 0 8px;
+}
+
+.home-toolbar h1 {
+  margin: 3px 0 4px;
+  letter-spacing: 0;
+}
+
+.home-toolbar p {
+  margin: 0;
+  max-width: 560px;
+}
+
+.home-add-button {
+  appearance: none;
+  border: 1px solid rgba(50, 213, 159, .34);
+  width: 58px;
+  height: 58px;
+  flex: 0 0 58px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  color: #ffffff;
+  background:
+    radial-gradient(circle at top left, rgba(255,255,255,.22), transparent 34px),
+    linear-gradient(135deg, #16755c 0%, #0a4a3b 100%);
+  box-shadow: 0 12px 28px rgba(13, 75, 61, .2), 0 6px 0 rgba(7, 44, 35, .28);
+  cursor: pointer;
+}
+
+.home-add-button:active {
+  transform: translateY(2px);
+  box-shadow: 0 8px 20px rgba(13, 75, 61, .18), 0 3px 0 rgba(7, 44, 35, .28);
+}
+
+.audit-picker {
+  display: grid;
+  gap: 10px;
+}
+
+.audit-history__item--picker {
+  min-height: 76px;
+  background:
+    radial-gradient(circle at top right, rgba(50, 213, 159, .08), transparent 170px),
+    #ffffff;
+}
+
+.audit-history__item--picker .audit-history__open strong {
+  font-size: 18px;
+}
+
+.audit-history__item--picker .audit-history__open small {
+  font-size: 12px;
+}
+
+.home-empty-state {
+  min-height: 320px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 12px;
+  padding: 28px 18px;
+  border: 1px solid rgba(50, 213, 159, .22);
+  border-radius: 20px;
+  text-align: center;
+  background:
+    radial-gradient(circle at top, rgba(50, 213, 159, .12), transparent 230px),
+    #ffffff;
+  box-shadow: 0 16px 40px rgba(16, 33, 28, .08);
+}
+
+.home-empty-state__icon {
+  width: 76px;
+  height: 76px;
+  display: grid;
+  place-items: center;
+  border-radius: 24px;
+  color: #16755c;
+  background: rgba(50, 213, 159, .12);
+}
+
+.home-empty-state h2 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.home-empty-state p {
+  margin: 0 0 8px;
+  max-width: 360px;
+}
+
+.import-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.import-steps span {
+  min-height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d5e3dd;
+  border-radius: 12px;
+  color: #68746f;
+  background: #ffffff;
+  font-size: 11px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.import-steps span.is-complete {
+  color: #0f6e55;
+  border-color: rgba(22, 117, 92, .35);
+  background: rgba(50, 213, 159, .1);
+}
+
+.import-plan-card {
+  background:
+    radial-gradient(circle at top right, rgba(50, 213, 159, .08), transparent 210px),
+    #ffffff;
+}
+
+@media (max-width: 430px) {
+  .home-toolbar {
+    padding-top: 2px;
+    align-items: flex-start;
+  }
+
+  .home-toolbar h1 {
+    font-size: 30px;
+  }
+
+  .home-toolbar p {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .home-add-button {
+    width: 52px;
+    height: 52px;
+    flex-basis: 52px;
+    border-radius: 16px;
+  }
+
+  .audit-history__item--picker .audit-history__open strong {
+    font-size: 16px;
+  }
+
+  .import-steps {
+    grid-template-columns: 1fr;
+  }
 }
