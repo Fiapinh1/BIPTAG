@@ -254,17 +254,6 @@ function countPairs(records: AuditRecord[], status: RecordStatus) {
   return pairIds.size || countStatus(records, status);
 }
 
-function uniquePairLeaders(records: AuditRecord[], status: RecordStatus) {
-  const seenPairs = new Set<string>();
-  return records.filter((record) => {
-    if (record.status !== status) return false;
-    if (!record.pairId) return true;
-    if (seenPairs.has(record.pairId)) return false;
-    seenPairs.add(record.pairId);
-    return true;
-  });
-}
-
 function percent(done: number, total: number) {
   return total ? `${Math.min(Math.round((done / total) * 100), 100)}%` : '0%';
 }
@@ -345,6 +334,26 @@ function nedapInstruction(record: AuditRecord) {
   return 'Revisar antes de executar no Nedap.';
 }
 
+function actionPriority(record: AuditRecord) {
+  if (record.status === 'audit_conflict' || record.status === 'new_tag_conflict') return 'Alta';
+  if (record.status === 'unconfirmed' || record.status === 'tag_not_found') return 'Alta';
+  if (record.operationalAction === 'remove_tag' || record.operationalAction === 'tag_out_of_use') return 'Alta';
+  if (record.operationalAction === 'investigate') return 'Alta';
+  if (record.operationalAction === 'keep_tag') return 'Baixa';
+  return 'Media';
+}
+
+function effectivePriority(status: EffectiveTagAssignment['status']) {
+  if (status === 'displaced' || status === 'not_found' || status === 'unresolved') return 'Alta';
+  if (status === 'pending') return 'Media';
+  return 'Baixa';
+}
+
+function knownIssuePriority(issue: KnownIssue) {
+  if (issue.type === 'tag_out_of_use' || issue.type === 'never_sent_data' || issue.type === 'stopped_sending') return 'Alta';
+  return 'Media';
+}
+
 export function exportAuditWorkbook(
   audit: Audit,
   records: AuditRecord[],
@@ -354,8 +363,6 @@ export function exportAuditWorkbook(
 ) {
   const ordered = chronological(records);
   const current = records.filter((record) => record.isCurrent !== false);
-  const confirmedSwapRows = uniquePairLeaders(records, 'possible_swap');
-  const auditConflictRows = uniquePairLeaders(records, 'audit_conflict');
   const validEffective = effectiveAssignments.filter((item) => !['suspicious', 'invalid'].includes(item.status));
   const processedEffective = validEffective.filter((item) => item.status !== 'pending');
   const processedCount = validEffective.length ? processedEffective.length : new Set(current.map((record) => record.tagNumber)).size;
@@ -392,205 +399,112 @@ export function exportAuditWorkbook(
     ['Percentual processado', percent(processedCount, totalValid)]
   ];
 
-  const finalRows: (string | number)[][] = [
-    ['Tag', 'Animal Original', 'Animal Final', 'Situacao', 'Acao Necessaria'],
-    ...effectiveAssignments.map((item) => [
-      blank(item.tagNumber),
-      blank(item.originalAnimal),
-      blank(item.effectiveAnimal),
-      effectiveStatusLabel(item.status),
-      actionForEffectiveStatus(item.status)
-    ])
-  ];
-
-  const auditRows: (string | number)[][] = [
-    ['Sequencia', 'Tag', 'Animal Original', 'Animal Observado', 'Animal Efetivo', 'Resultado', 'Decisao', 'Acao Operacional', 'Observacao da Acao', 'Data/Hora', 'Origem NFC/Manual', 'Ocorrencia Relacionada'],
+  const fieldEvidenceRows: (string | number)[][] = [
+    ['Sequencia', 'Data/Hora', 'Origem', 'Tag', 'Animal Nedap', 'Animal Campo', 'Decisao do Tecnico', 'Status Interno', 'Acao Gerada', 'Ocorrencia Relacionada', 'Observacao'],
     ...ordered.map((record) => [
       record.sequence ?? '',
+      formatDateTime(record.scannedAt),
+      record.source === 'nfc' ? 'NFC' : 'Manual',
       blank(record.tagNumber),
       blank(record.expectedAnimal),
       blank(record.observedAnimal),
-      blank(record.effectiveAnimal),
-      statusLabel(record.status),
       fieldDecisionLabel(record.fieldDecision),
+      statusLabel(record.status),
       operationalActionLabel(record.operationalAction),
-      blank(record.actionNote ?? record.note),
-      formatDateTime(record.scannedAt),
-      record.source === 'nfc' ? 'NFC' : 'Manual',
-      blank(record.relatedRecordId ?? record.pairId)
+      blank(record.relatedRecordId ?? record.pairId),
+      blank(record.actionNote ?? record.note)
     ])
   ];
 
   const pendingRows: (string | number)[][] = [
-    ['Tipo', 'Tag', 'Animal original', 'Animal encontrado', 'Tag anterior', 'Tag nova', 'Motivo', 'Acao sugerida', 'Status'],
-    ...current.filter((record) => record.status !== 'correct').map((record) => [
-      record.status,
+    ['Grupo', 'Prioridade', 'Tag', 'Animal Nedap', 'Animal Campo', 'Motivo', 'Acao sugerida', 'Status', 'Observacao'],
+    ...current
+      .filter((record) => record.status !== 'correct' || record.reviewStatus === 'open')
+      .map((record) => [
+      record.status === 'audit_conflict' || record.status === 'new_tag_conflict' ? 'Conflitos'
+        : record.status === 'unconfirmed' ? 'Nao confirmadas'
+        : record.status === 'tag_not_found' ? 'Tags nao localizadas'
+        : 'Outras investigacoes',
+      actionPriority(record),
       blank(record.tagNumber),
       blank(record.expectedAnimal),
       blank(record.observedAnimal),
-      '',
-      blank(record.tagNumber),
       statusLabel(record.status),
-      record.status === 'audit_conflict'
-        ? 'Revisar leituras antes de corrigir o cadastro'
-        : record.status === 'new_tag_conflict'
-          ? 'Validar manualmente a SmartTag nova'
-        : record.status === 'unconfirmed'
-          ? 'Revisar em campo'
-          : 'Corrigir cadastro no Nedap quando aplicavel',
-      reviewLabel(record.reviewStatus)
+      actionNeeded(record),
+      reviewLabel(record.reviewStatus),
+      blank(record.actionNote ?? record.note)
     ]),
     ...effectiveAssignments.filter((item) => ['pending', 'not_found', 'displaced'].includes(item.status)).map((item) => [
-      item.status,
+      item.status === 'displaced' ? 'Animais sem tag' : item.status === 'not_found' ? 'Tags nao localizadas' : 'Tags pendentes',
+      effectivePriority(item.status),
       blank(item.tagNumber),
       blank(item.originalAnimal),
       blank(item.effectiveAnimal),
-      item.status === 'displaced' ? blank(item.tagNumber) : '',
-      '',
       effectiveStatusLabel(item.status),
       actionForEffectiveStatus(item.status),
-      item.status === 'pending' ? 'Aberta' : 'Pendente'
+      'Pendente',
+      item.status === 'displaced'
+        ? `Animal ${item.originalAnimal ?? ''} ficou sem tag confirmada.`
+        : actionForEffectiveStatus(item.status)
+    ]),
+    ...knownIssues.map((issue) => [
+      'Problemas conhecidos',
+      knownIssuePriority(issue),
+      blank(issue.tagNumber),
+      '',
+      '',
+      knownIssueLabel(issue.type),
+      knownIssueActionLabel(issue.type),
+      'Aberta',
+      blank(issue.note)
     ])
   ];
 
   const actionRows: (string | number)[][] = [
-    ['Acao', 'Tag', 'Animal original', 'Animal encontrado', 'Tag anterior', 'Tag nova', 'O que aconteceu', 'Decidido em campo', 'Executar no Nedap'],
+    ['Prioridade', 'Acao', 'Animal', 'Tag', 'Tag Antiga', 'Tag Nova', 'De', 'Para', 'Motivo', 'Status', 'Observacao'],
     ...current
       .filter((record) => record.status !== 'correct' || record.operationalAction !== 'keep_tag' || record.actionNote)
       .map((record) => [
+        actionPriority(record),
         actionNeeded(record),
+        blank(record.observedAnimal ?? record.expectedAnimal),
         blank(record.tagNumber),
-        blank(record.expectedAnimal),
-        blank(record.observedAnimal),
         record.operationalAction === 'replace_tag' || record.operationalAction === 'remove_tag' ? blank(record.tagNumber) : '',
         record.operationalAction === 'register_new_tag' ? blank(record.tagNumber) : '',
-        statusLabel(record.status),
-        blank(record.actionNote ?? record.note),
-        nedapInstruction(record)
-      ])
-  ];
-
-  const operationalRows: (string | number)[][] = [
-    ['RELATORIO OPERACIONAL BIPTAG'],
-    ['Fazenda', blank(audit.farmName)],
-    ['Gerado em', formatDateTime(new Date().toISOString())],
-    []
-  ];
-
-  const addSection = (title: string, header: (string | number)[], rows: (string | number)[][]) => {
-    operationalRows.push([title]);
-    operationalRows.push(header);
-    operationalRows.push(...(rows.length ? rows : [['Sem registros']]));
-    operationalRows.push([]);
-  };
-
-  addSection('1. TAGS CORRETAS', ['Animal', 'Tag', 'Decisao de campo', 'Observacao'], current
-    .filter((record) => record.status === 'correct')
-    .map((record) => [
-      blank(record.observedAnimal ?? record.expectedAnimal),
-      blank(record.tagNumber),
-      operationalActionLabel(record.operationalAction),
-      blank(record.actionNote ?? record.note)
-    ]));
-
-  addSection('2. TROCAS CONFIRMADAS', ['Troca', 'Tag lida', 'Tag relacionada', 'Executar no Nedap'], confirmedSwapRows.map((record) => {
-    const related = records.find((candidate) => candidate.pairId === record.pairId && candidate.id !== record.id);
-    return [
-      `${record.expectedAnimal ?? ''} <-> ${record.observedAnimal ?? ''}`,
-      blank(record.tagNumber),
-      blank(related?.tagNumber),
-      nedapInstruction(record)
-    ];
-  }));
-
-  addSection('3. TROCAS PENDENTES', ['Tag', 'Animal original', 'Animal visto', 'Status', 'Acao'], current
-    .filter((record) => ['reassignment', 'divergence'].includes(record.status))
-    .map((record) => [
-      blank(record.tagNumber),
-      blank(record.expectedAnimal),
-      blank(record.observedAnimal),
-      statusLabel(record.status),
-      nedapInstruction(record)
-    ]));
-
-  addSection('4. TAGS NOVAS PARA CADASTRO', ['Tag', 'Animal', 'Acao'], current
-    .filter((record) => record.status === 'new_tag' || record.operationalAction === 'register_new_tag')
-    .map((record) => [
-      blank(record.tagNumber),
-      blank(record.observedAnimal),
-      nedapInstruction(record)
-    ]));
-
-  addSection('5. TAGS REMOVIDAS', ['Animal', 'Tag', 'Acao'], current
-    .filter((record) => record.operationalAction === 'remove_tag')
-    .map((record) => [
-      blank(record.observedAnimal ?? record.expectedAnimal),
-      blank(record.tagNumber),
-      nedapInstruction(record)
-    ]));
-
-  addSection('6. SUBSTITUICOES DE TAG', ['Animal', 'Tag antiga', 'Tag nova', 'Acao'], current
-    .filter((record) => record.operationalAction === 'replace_tag')
-    .map((record) => [
-      blank(record.observedAnimal ?? record.expectedAnimal),
-      blank(record.tagNumber),
-      '',
-      nedapInstruction(record)
-    ]));
-
-  addSection('7. CONFLITOS DE AUDITORIA', ['Tag', 'Animal original', 'Animal visto', 'Mensagem'], auditConflictRows.map((record) => [
-    blank(record.tagNumber),
-    blank(record.expectedAnimal),
-    blank(record.observedAnimal),
-    blank(record.note ?? record.actionNote)
-  ]));
-
-  addSection('8. CONFLITOS DE TAG NOVA', ['Tag', 'Primeiro animal', 'Novo animal', 'Mensagem'], current
-    .filter((record) => record.status === 'new_tag_conflict')
-    .map((record) => [
-      blank(record.tagNumber),
-      blank(record.expectedAnimal),
-      blank(record.observedAnimal),
-      blank(record.note ?? record.actionNote)
-    ]));
-
-  addSection('9. TAGS NAO LOCALIZADAS', ['Tag', 'Animal original', 'Status', 'Acao'], [
-    ...current
-      .filter((record) => record.status === 'tag_not_found')
-      .map((record) => [
-        blank(record.tagNumber),
         blank(record.expectedAnimal),
+        blank(record.observedAnimal),
         statusLabel(record.status),
-        nedapInstruction(record)
+        reviewLabel(record.reviewStatus),
+        `${blank(record.actionNote ?? record.note)} ${nedapInstruction(record)}`.trim()
       ]),
     ...effectiveAssignments
-      .filter((item) => item.status === 'not_found')
+      .filter((item) => ['pending', 'not_found', 'displaced', 'unresolved'].includes(item.status))
       .map((item) => [
+        effectivePriority(item.status),
+        actionForEffectiveStatus(item.status),
+        blank(item.effectiveAnimal ?? item.originalAnimal),
         blank(item.tagNumber),
+        item.status === 'displaced' || item.status === 'not_found' ? blank(item.tagNumber) : '',
+        '',
         blank(item.originalAnimal),
+        blank(item.effectiveAnimal),
         effectiveStatusLabel(item.status),
+        'Pendente',
         actionForEffectiveStatus(item.status)
-      ])
-  ]);
-
-  addSection('10. PROBLEMAS CONHECIDOS', ['Tag', 'Problema', 'Acao sugerida', 'Observacao'], knownIssues.map((issue) => [
-    blank(issue.tagNumber),
-    knownIssueLabel(issue.type),
-    knownIssueActionLabel(issue.type),
-    blank(issue.note)
-  ]));
-
-  addSection('11. ACOES PARA EXECUTAR NO NEDAP', actionRows[0], actionRows.slice(1));
-
-  const knownIssueRows: (string | number)[][] = [
-    ['Tag', 'Problema', 'Acao sugerida', 'Observacao', 'Atualizado em'],
+      ]),
     ...knownIssues.map((issue) => [
-      blank(issue.tagNumber),
-      knownIssueLabel(issue.type),
-      knownIssueActionLabel(issue.type),
-      blank(issue.note),
-      formatDateTime(issue.updatedAt)
-    ])
+        knownIssuePriority(issue),
+        knownIssueActionLabel(issue.type),
+        '',
+        blank(issue.tagNumber),
+        '',
+        '',
+        '',
+        '',
+        knownIssueLabel(issue.type),
+        'Aberta',
+        blank(issue.note)
+      ])
   ];
 
   const preValidationRows: (string | number)[][] = [
@@ -604,13 +518,10 @@ export function exportAuditWorkbook(
   ];
 
   const workbook = XLSX.utils.book_new();
+  appendSheet(workbook, actionRows.length > 1 ? actionRows : [...actionRows, ['Sem acoes', '', '', '', '', '', '', '', '', '', '']], 'Acoes Nedap');
   appendSheet(workbook, summaryRows, 'Resumo');
-  appendSheet(workbook, finalRows.length > 1 ? finalRows : [...finalRows, ['Sem resultados', '', '', '', '']], 'Resultado Final');
-  appendSheet(workbook, auditRows.length > 1 ? auditRows : [...auditRows, ['', '', '', '', '', 'Sem registros', '', '', '', '', '', '']], 'Auditoria');
   appendSheet(workbook, pendingRows.length > 1 ? pendingRows : [...pendingRows, ['Sem pendencias', '', '', '', '', '', '', '', '']], 'Pendencias');
-  appendSheet(workbook, operationalRows, 'Relatorio Operacional');
-  appendSheet(workbook, actionRows.length > 1 ? actionRows : [...actionRows, ['Sem acoes', '', '', '', '', '', '', '', '']], 'Acoes Nedap');
-  appendSheet(workbook, knownIssueRows.length > 1 ? knownIssueRows : [...knownIssueRows, ['Sem problemas conhecidos', '', '', '', '']], 'Problemas Conhecidos');
+  appendSheet(workbook, fieldEvidenceRows.length > 1 ? fieldEvidenceRows : [...fieldEvidenceRows, ['', '', '', '', '', '', '', 'Sem registros', '', '', '']], 'Evidencias Campo');
   appendSheet(workbook, preValidationRows.length > 1 ? preValidationRows : [...preValidationRows, ['Sem inconsistencias', '', '', '']], 'Pre-validacao');
 
   const safeFarm = audit.farmName.replace(/[^a-zA-Z0-9_-]+/g, '_');
