@@ -4,6 +4,8 @@ import { db, newId } from './db/db';
 import { EmptyState } from './components/EmptyState';
 import { StatCard } from './components/StatCard';
 import {
+  ActionIcon,
+  AnimalIcon,
   CheckIcon,
   ChevronRightIcon,
   CloudIcon,
@@ -14,7 +16,8 @@ import {
   PlayIcon,
   ReportIcon,
   ScanIcon,
-  SwapIcon
+  SwapIcon,
+  TagIcon
 } from './icons/Icons';
 import { parseNedapWorkbook, exportAuditWorkbook, validateSmartTag } from './services/excel';
 import { knownIssueActionLabel, knownIssueLabel, operationalActionLabel, statusLabel } from './services/audit-labels';
@@ -100,6 +103,14 @@ type OutcomeState =
       title: string;
       current: AuditRecord;
       other: AuditRecord;
+    }
+  | {
+      kind: 'action';
+      title: string;
+      message: string;
+      actionLabel: string;
+      tagNumber: string | null;
+      animal: string | null;
     };
 
 function BiptagLogo({ className = '' }: { className?: string }) {
@@ -813,13 +824,6 @@ function AuditView({
   const lastRead = useRef<{ tag: string; at: number } | null>(null);
 
   useEffect(() => () => stopReader.current?.(), []);
-  useEffect(() => {
-    if (!outcome || outcome.kind === 'correct') return;
-    const timer = window.setTimeout(() => {
-      resetForNext('Registrado. Aproxime a proxima SmartTag.');
-    }, outcome.kind === 'swap' ? 2100 : 1700);
-    return () => window.clearTimeout(timer);
-  }, [outcome]);
 
   const auditRecords = useLiveQuery(
     () => audit ? db.auditRecords.where('auditId').equals(audit.id).toArray() : Promise.resolve<AuditRecord[]>([]),
@@ -1106,33 +1110,66 @@ function AuditView({
 
   async function keepCorrectTag(recordId: string) {
     await setOperationalAction(recordId, 'keep_tag', 'Manter tag atual.');
-    resetForNext('Leitura salva. Aproxime a proxima SmartTag.');
+    setOutcome({
+      kind: 'action',
+      title: 'Tag mantida',
+      message: 'A conferencia foi salva e nenhuma correcao sera sugerida para esta SmartTag.',
+      actionLabel: 'MANTER TAG ATUAL',
+      tagNumber: scan?.tagNumber ?? null,
+      animal: scan?.assignment?.expectedAnimal ?? (observedAnimal.trim() || null)
+    });
   }
 
   async function removeCorrectTag(recordId: string) {
     await setOperationalAction(recordId, 'remove_tag', 'Remover vinculo desta tag no Nedap apos a auditoria.');
-    setOutcome(null);
-    setScan(null);
-    resetForNext('Acao registrada: remover vinculo. Aproxime a proxima SmartTag.');
+    setOutcome({
+      kind: 'action',
+      title: 'Remocao registrada',
+      message: 'O relatorio final vai listar esta SmartTag para remover o vinculo no Nedap depois da auditoria.',
+      actionLabel: 'REMOVER VINCULO',
+      tagNumber: scan?.tagNumber ?? null,
+      animal: scan?.assignment?.expectedAnimal ?? (observedAnimal.trim() || null)
+    });
   }
 
   async function replaceCorrectTag(recordId: string) {
     await setOperationalAction(recordId, 'replace_tag', 'Substituir esta tag no Nedap apos a auditoria.');
-    resetForNext('Acao registrada: substituir tag. Aproxime a proxima SmartTag.');
+    setOutcome({
+      kind: 'action',
+      title: 'Substituicao registrada',
+      message: 'O relatorio final vai listar esta SmartTag como substituicao operacional para executar no Nedap.',
+      actionLabel: 'SUBSTITUIR TAG',
+      tagNumber: scan?.tagNumber ?? null,
+      animal: scan?.assignment?.expectedAnimal ?? (observedAnimal.trim() || null)
+    });
   }
 
   async function addCorrectObservation(recordId: string) {
     const note = window.prompt('Observacao para o relatorio:');
     if (note === null) return;
     await setOperationalAction(recordId, 'keep_tag', note.trim() || 'Observacao adicionada em campo.');
-    setToast('Observacao adicionada ao relatorio.');
+    setOutcome({
+      kind: 'action',
+      title: 'Observacao salva',
+      message: note.trim() || 'Observacao adicionada em campo.',
+      actionLabel: 'OBSERVACAO',
+      tagNumber: scan?.tagNumber ?? null,
+      animal: scan?.assignment?.expectedAnimal ?? (observedAnimal.trim() || null)
+    });
   }
 
   async function markCorrectTagOutOfUse(recordId: string) {
     const note = window.prompt('Motivo para marcar esta tag fora de uso:');
     if (note === null) return;
     await setOperationalAction(recordId, 'tag_out_of_use', note.trim() || 'Tag marcada como fora de uso em campo.');
-    resetForNext('Acao registrada: tag fora de uso. Aproxime a proxima SmartTag.');
+    setOutcome({
+      kind: 'action',
+      title: 'Tag fora de uso',
+      message: note.trim() || 'Tag marcada como fora de uso em campo.',
+      actionLabel: 'TAG FORA DE USO',
+      tagNumber: scan?.tagNumber ?? null,
+      animal: scan?.assignment?.expectedAnimal ?? (observedAnimal.trim() || null)
+    });
   }
 
   function correctObservedNumber() {
@@ -1141,7 +1178,7 @@ function AuditView({
   }
 
   function cancelCurrentRead() {
-    resetForNext(readerActive ? 'Leitor ativo. Aproxime a proxima SmartTag.' : 'Leitura cancelada. Voce pode simular outra tag.');
+    resetForNext(readerActive ? 'Leitor ativo. Aproxime a proxima SmartTag.' : 'Leitura cancelada. Voce pode digitar outra tag.');
   }
 
   function exitManualMode() {
@@ -1248,13 +1285,13 @@ function AuditView({
 
             {manualPreviewTag && (
               <div className="manual-preview-card">
-                <span>Tag simulada</span>
+                <span>Tag montada</span>
                 <strong>{manualPreviewTag}</strong>
               </div>
             )}
 
             <button className="button button--primary button--full button--field" onClick={() => void manualRead()}>
-              Simular leitura
+              Registrar leitura manual
             </button>
             <button className="button button--ghost button--full" onClick={exitManualMode}>
               Voltar para NFC
@@ -1302,9 +1339,17 @@ function AuditView({
           </div>
         ) : (
         <div className="field-conference">
-          <div className="field-identifiers">
-            <div className="field-id-block field-id-block--tag"><span>TAG LIDA</span><strong>{scan.tagNumber}</strong></div>
-            <div className="field-id-block field-id-block--animal"><span>CADASTRO NEDAP</span><strong>{scan.assignment?.expectedAnimal ?? 'SEM VÍNCULO'}</strong></div>
+            <div className="field-identifiers">
+            <div className="field-id-block field-id-block--tag">
+              <TagIcon className="field-id-block__icon" size={24} />
+              <span>TAG LIDA</span>
+              <strong>{scan.tagNumber}</strong>
+            </div>
+            <div className="field-id-block field-id-block--animal">
+              <AnimalIcon className="field-id-block__icon" size={24} />
+              <span>CADASTRO NEDAP</span>
+              <strong>{scan.assignment?.expectedAnimal ?? 'SEM VÍNCULO'}</strong>
+            </div>
           </div>
 
           {scan.existingRecord && (
@@ -1368,21 +1413,32 @@ function AuditView({
 
       {outcome?.kind === 'correct' && (
         <div className="field-outcome field-outcome--success">
-          <CheckIcon size={58} />
+          <span className="field-outcome__icon"><CheckIcon size={58} /></span>
           <span className="eyebrow">TAG CORRETA</span>
           <h1>{outcome.title}</h1>
           <div className="outcome-summary">
-            <div><span>Animal</span><strong>{outcome.animal}</strong></div>
-            <div><span>Tag</span><strong>{outcome.tagNumber}</strong></div>
+            <div><AnimalIcon size={20} /><span>Animal</span><strong>{outcome.animal}</strong></div>
+            <div><TagIcon size={20} /><span>Tag</span><strong>{outcome.tagNumber}</strong></div>
           </div>
-          <button className="button button--primary button--full button--field" onClick={() => void keepCorrectTag(outcome.recordId)}>Próxima tag</button>
-          <button className="button button--danger button--full" onClick={() => void removeCorrectTag(outcome.recordId)}>Remover vínculo</button>
-          <button className="button button--secondary button--full" onClick={() => void replaceCorrectTag(outcome.recordId)}>Substituir tag</button>
-          <button className="button button--ghost button--full" onClick={() => setShowCorrectOptions((value) => !value)}>Mais opções</button>
+          <div className="outcome-action-grid">
+            <button className="outcome-action-button outcome-action-button--primary" onClick={() => void keepCorrectTag(outcome.recordId)}>
+              <CheckIcon size={24} />
+              <span><strong>Manter tag atual</strong><small>Confirmar decisão de campo</small></span>
+            </button>
+            <button className="outcome-action-button outcome-action-button--danger" onClick={() => void removeCorrectTag(outcome.recordId)}>
+              <TagIcon size={24} />
+              <span><strong>Remover vínculo</strong><small>Registrar ação para o Nedap</small></span>
+            </button>
+            <button className="outcome-action-button outcome-action-button--secondary" onClick={() => void replaceCorrectTag(outcome.recordId)}>
+              <SwapIcon size={24} />
+              <span><strong>Substituir tag</strong><small>Registrar troca operacional</small></span>
+            </button>
+          </div>
+          <button className="button button--ghost button--full" onClick={() => setShowCorrectOptions((value) => !value)}>Mais ações</button>
           {showCorrectOptions && (
             <div className="field-more-options">
-              <button className="button button--ghost button--full" onClick={() => void addCorrectObservation(outcome.recordId)}>Adicionar observação</button>
-              <button className="button button--secondary button--full" onClick={() => void markCorrectTagOutOfUse(outcome.recordId)}>Tag fora de uso</button>
+              <button className="button button--ghost button--full" onClick={() => void addCorrectObservation(outcome.recordId)}><ActionIcon /> Adicionar observação</button>
+              <button className="button button--secondary button--full" onClick={() => void markCorrectTagOutOfUse(outcome.recordId)}><IssuesIcon /> Tag fora de uso</button>
             </div>
           )}
         </div>
@@ -1390,14 +1446,14 @@ function AuditView({
 
       {outcome?.kind === 'issue' && (
         <div className="field-outcome field-outcome--issue">
-          <IssuesIcon size={52} />
+          <span className="field-outcome__icon"><IssuesIcon size={52} /></span>
           <span className="eyebrow">OCORRÊNCIA SALVA</span>
           <h1>{outcome.title}</h1>
           <p>{outcome.message}</p>
           <div className="outcome-summary">
-            <div><span>Tag</span><strong>{outcome.tagNumber}</strong></div>
-            <div><span>Nedap</span><strong>{outcome.expectedAnimal ?? '—'}</strong></div>
-            <div><span>Brinco visto</span><strong>{outcome.observedAnimal ?? '—'}</strong></div>
+            <div><TagIcon size={20} /><span>Tag</span><strong>{outcome.tagNumber}</strong></div>
+            <div><AnimalIcon size={20} /><span>Nedap</span><strong>{outcome.expectedAnimal ?? '—'}</strong></div>
+            <div><AnimalIcon size={20} /><span>Brinco visto</span><strong>{outcome.observedAnimal ?? '—'}</strong></div>
           </div>
           <button className="button button--primary button--full button--field" onClick={() => resetForNext()}>Continuar auditoria</button>
         </div>
@@ -1405,7 +1461,7 @@ function AuditView({
 
       {outcome?.kind === 'swap' && (
         <div className="field-outcome field-outcome--swap">
-          <SwapIcon size={58} />
+          <span className="field-outcome__icon"><SwapIcon size={58} /></span>
           <span className="eyebrow">OCORRÊNCIA RELACIONADA</span>
           <h1>{outcome.title}</h1>
           <p>As duas leituras foram relacionadas. Os detalhes ficam na Revisão.</p>
@@ -1415,6 +1471,23 @@ function AuditView({
             <div><span>Tag {outcome.current.tagNumber}</span><strong>{outcome.current.expectedAnimal} → {outcome.current.observedAnimal}</strong></div>
           </div>
           <button className="button button--primary button--full button--field" onClick={() => resetForNext()}>Continuar auditoria</button>
+        </div>
+      )}
+
+      {outcome?.kind === 'action' && (
+        <div className="field-outcome field-outcome--action">
+          <span className="field-outcome__icon"><ActionIcon size={56} /></span>
+          <span className="eyebrow">AÇÃO REGISTRADA</span>
+          <h1>{outcome.title}</h1>
+          <p>{outcome.message}</p>
+          <div className="action-result">
+            <div><ActionIcon size={22} /><span>Ação</span><strong>{outcome.actionLabel}</strong></div>
+            <div><AnimalIcon size={22} /><span>Animal</span><strong>{outcome.animal ?? '—'}</strong></div>
+            <div><TagIcon size={22} /><span>Tag</span><strong>{outcome.tagNumber ?? '—'}</strong></div>
+          </div>
+          <button className="button button--primary button--full button--field" onClick={() => resetForNext()}>
+            Continuar auditoria
+          </button>
         </div>
       )}
 

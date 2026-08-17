@@ -128,3 +128,34 @@ export function SwapIcon({ size = 22, ...props }: IconProps) {
     </svg>
   );
 }
+
+export function TagIcon({ size = 22, ...props }: IconProps) {
+  return (
+    <svg {...base(size)} {...props}>
+      <path d="M4.5 6.5v7.2L11 20l8.5-8.5L13.2 5H6a1.5 1.5 0 0 0-1.5 1.5Z" />
+      <circle cx="8.5" cy="9" r="1.2" fill="currentColor" stroke="none" />
+      <path d="M12 9.5h3.2M10.2 12.4h5.8" />
+    </svg>
+  );
+}
+
+export function AnimalIcon({ size = 22, ...props }: IconProps) {
+  return (
+    <svg {...base(size)} {...props}>
+      <path d="M6.5 9.5 4 6M17.5 9.5 20 6" />
+      <path d="M6 12c0-3.2 2.4-5.5 6-5.5s6 2.3 6 5.5v2.2c0 2.9-2.4 5.3-6 5.3s-6-2.4-6-5.3Z" />
+      <path d="M9 13h.01M15 13h.01" />
+      <path d="M10 16.2h4" />
+    </svg>
+  );
+}
+
+export function ActionIcon({ size = 22, ...props }: IconProps) {
+  return (
+    <svg {...base(size)} {...props}>
+      <path d="M5 4h14v16H5z" />
+      <path d="M8 8h8M8 12h5" />
+      <path d="m9 16 1.6 1.6L16 12.2" />
+    </svg>
+  );
+}
