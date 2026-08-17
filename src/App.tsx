@@ -355,6 +355,31 @@ function App() {
     pullAuditsFromSupabase().catch((err) => console.warn('Nao foi possivel atualizar auditorias na Home.', err));
   }, [view, online, cloudSession?.user.id]);
 
+  useEffect(() => {
+    if (!['issues', 'knownIssues'].includes(view) || !isSupabaseConfigured || !supabase || !online || !cloudSession) return;
+    pullAuditsFromSupabase()
+      .then((result) => {
+        if (result.records || result.issues || result.knownIssues || result.effectiveAssignments) {
+          setToast('Revisao atualizada com dados do banco.');
+        }
+      })
+      .catch((err) => console.warn('Nao foi possivel atualizar a Revisao pelo Supabase.', err));
+  }, [view, online, cloudSession?.user.id]);
+
+  function syncAuditInBackground(auditId: string) {
+    if (!isSupabaseConfigured || !supabase || !online || !cloudSession) return;
+    if (autoSyncBusy.current) {
+      window.setTimeout(() => syncAuditInBackground(auditId), 1800);
+      return;
+    }
+    autoSyncBusy.current = true;
+    syncAuditToSupabase(auditId)
+      .catch((err) => console.warn('Nao foi possivel sincronizar a auditoria com o Supabase.', err))
+      .finally(() => {
+        autoSyncBusy.current = false;
+      });
+  }
+
   async function chooseAudit(audit: Audit) {
     setSelectedAuditId(audit.id);
     if (audit.status === 'paused') {
@@ -437,10 +462,10 @@ function App() {
           />
         )}
         {view === 'audit' && (
-          <AuditView audit={selectedAudit} onNeedImport={() => setView('import')} setToast={setToast} onPaused={() => setView('home')} />
+          <AuditView audit={selectedAudit} onNeedImport={() => setView('import')} setToast={setToast} onPaused={() => setView('home')} onAuditChanged={(auditId) => syncAuditInBackground(auditId)} />
         )}
         {view === 'issues' && (
-          <IssuesView audit={selectedAudit} onNeedImport={() => setView('import')} />
+          <IssuesView audit={selectedAudit} onNeedImport={() => setView('import')} onAuditChanged={(auditId) => syncAuditInBackground(auditId)} />
         )}
         {view === 'knownIssues' && (
           <KnownIssuesView audit={selectedAudit} onNeedImport={() => setView('import')} setToast={setToast} />
@@ -1255,12 +1280,14 @@ function AuditView({
   audit,
   onNeedImport,
   setToast,
-  onPaused
+  onPaused,
+  onAuditChanged
 }: {
   audit: Audit | null;
   onNeedImport: () => void;
   setToast: (value: string) => void;
   onPaused: () => void;
+  onAuditChanged: (auditId: string) => void;
 }) {
   const [readerActive, setReaderActive] = useState(false);
   const [readerMessage, setReaderMessage] = useState('Leitor NFC desativado');
@@ -1459,6 +1486,7 @@ function AuditView({
       });
       feedbackCorrect();
       setOutcome({ kind: 'correct', recordId: saved.id, title: 'Tag correta', tagNumber: saved.tagNumber, animal: observed });
+      onAuditChanged(activeAudit.id);
       return;
     }
 
@@ -1521,6 +1549,7 @@ function AuditView({
         }
         setDecision(null);
         feedbackWarning();
+        onAuditChanged(activeAudit.id);
         return;
       }
     }
@@ -1536,6 +1565,7 @@ function AuditView({
     });
     setDecision(null);
     feedbackWarning();
+    onAuditChanged(activeAudit.id);
   }
 
   async function couldNotConfirm() {
@@ -1561,6 +1591,7 @@ function AuditView({
       expectedAnimal: scan.assignment?.expectedAnimal ?? null,
       observedAnimal: observedAnimal.trim() || null
     });
+    onAuditChanged(activeAudit.id);
   }
 
   async function setOperationalAction(recordId: string, action: OperationalAction, actionNote: string | null = null) {
@@ -1578,6 +1609,7 @@ function AuditView({
         syncStatus: 'pending'
       });
     }
+    onAuditChanged(activeAudit.id);
   }
 
   async function keepCorrectTag(recordId: string) {
@@ -1712,6 +1744,7 @@ function AuditView({
 
     setShowPatternModal(false);
     setToast(`Padrao SmartTag atualizado: ${prefix || 'sem prefixo'} / ${length} digitos.`);
+    onAuditChanged(activeAudit.id);
   }
 
   function focusObservedInput() {
@@ -1755,6 +1788,7 @@ function AuditView({
     deactivateReader();
     await db.audits.update(activeAudit.id, { status: 'paused', pausedAt: now, updatedAt: now, lastActivityAt: now });
     setToast('Auditoria pausada e salva.');
+    onAuditChanged(activeAudit.id);
     onPaused();
   }
 
@@ -2265,7 +2299,15 @@ function issueSavedMessage(status: RecordStatus, observed: string | null) {
   return 'Ocorrencia salva para revisao posterior.';
 }
 
-function IssuesView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport: () => void }) {
+function IssuesView({
+  audit,
+  onNeedImport,
+  onAuditChanged
+}: {
+  audit: Audit | null;
+  onNeedImport: () => void;
+  onAuditChanged: (auditId: string) => void;
+}) {
   const issues = useLiveQuery(() => audit ? db.importIssues.where('auditId').equals(audit.id).toArray() : Promise.resolve<ImportIssue[]>([]), [audit?.id], [] as ImportIssue[]);
   const records = useLiveQuery(() => audit ? db.auditRecords.where('auditId').equals(audit.id).toArray() : Promise.resolve<AuditRecord[]>([]), [audit?.id], [] as AuditRecord[]);
   const effectiveAssignments = useLiveQuery(() => audit ? db.effectiveTagAssignments.where('auditId').equals(audit.id).toArray() : Promise.resolve<EffectiveTagAssignment[]>([]), [audit?.id], [] as EffectiveTagAssignment[]);
@@ -2294,7 +2336,6 @@ function IssuesView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
     seenConflictPairs.add(key);
     return true;
   });
-  const correctRecords = current.filter((record) => record.status === 'correct' && (!record.operationalAction || record.operationalAction === 'keep_tag'));
   const pendingSwapRecords = nonCorrect.filter((record) => ['reassignment', 'divergence'].includes(record.status) && record.operationalAction !== 'move_tag');
   const movementRecords = nonCorrect.filter((record) => record.operationalAction === 'move_tag');
   const removedRecords = current.filter((record) => record.operationalAction === 'remove_tag');
@@ -2321,6 +2362,30 @@ function IssuesView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
   const pendingTags = effectiveAssignments.filter((item) => item.status === 'pending');
   const displacedTags = effectiveAssignments.filter((item) => item.status === 'displaced');
   const notFoundTags = effectiveAssignments.filter((item) => item.status === 'not_found');
+  const reviewSummaryStats = [
+    { label: 'Trocas', value: swapPairs.length, tone: 'warning' as const },
+    { label: 'Pendentes', value: pendingSwapRecords.length, tone: 'warning' as const },
+    { label: 'Conflitos', value: conflictPairs.length + newTagConflictRecords.length, tone: 'danger' as const },
+    { label: 'Acoes', value: actionRecords.length + displacedTags.length + notFoundTags.length, tone: 'danger' as const }
+  ].filter((item) => item.value > 0);
+  const reviewItemCount =
+    swapPairs.length +
+    pendingSwapRecords.length +
+    movementRecords.length +
+    replacementRecords.length +
+    newTagRecords.length +
+    removedRecords.length +
+    unlinkedRecords.length +
+    displacedTags.length +
+    conflictPairs.length +
+    newTagConflictRecords.length +
+    unconfirmedRecords.length +
+    notFoundRecords.length +
+    notFoundTags.length +
+    knownIssues.length +
+    otherIssues.length +
+    issues.length +
+    pendingTags.length;
 
   async function exportReport() {
     exportAuditWorkbook(activeAudit, records, issues, effectiveAssignments, knownIssues);
@@ -2329,6 +2394,7 @@ function IssuesView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
   async function markMissingTags() {
     const count = await markPendingTagsNotFound(activeAudit.id);
     if (count) {
+      onAuditChanged(activeAudit.id);
       await appDialog.alert({
         title: 'Tags marcadas',
         message: `${count} SmartTags foram marcadas como nao localizadas e entraram nas acoes de revisao.`,
@@ -2344,12 +2410,13 @@ function IssuesView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
         <button className="icon-action" onClick={exportReport} title="Exportar Excel"><ReportIcon /></button>
       </div>
 
-      <div className="stats-grid stats-grid--two">
-        <StatCard label="Trocas" value={swapPairs.length} tone={swapPairs.length ? 'warning' : 'default'} />
-        <StatCard label="Pendentes" value={pendingSwapRecords.length} tone={pendingSwapRecords.length ? 'warning' : 'default'} />
-        <StatCard label="Conflitos" value={conflictPairs.length + newTagConflictRecords.length} tone={conflictPairs.length || newTagConflictRecords.length ? 'danger' : 'default'} />
-        <StatCard label="Acoes" value={actionRecords.length + displacedTags.length + notFoundTags.length} tone={actionRecords.length || displacedTags.length || notFoundTags.length ? 'danger' : 'default'} />
-      </div>
+      {reviewSummaryStats.length > 0 && (
+        <div className="stats-grid stats-grid--two review-summary-grid">
+          {reviewSummaryStats.map((item) => (
+            <StatCard key={item.label} label={item.label} value={item.value} tone={item.tone} />
+          ))}
+        </div>
+      )}
 
       {pendingTags.length > 0 && (
         <div className="review-action-card">
@@ -2362,11 +2429,15 @@ function IssuesView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
         </div>
       )}
 
-      <div className="review-groups">
-        <ReviewSection eyebrow="TAGS CORRETAS" title="Tags corretas mantidas" emptyText="Nenhuma tag correta mantida.">
-          {correctRecords.map((record) => <ReviewRecordCard key={record.id} record={record} />)}
-        </ReviewSection>
+      {reviewItemCount === 0 && (
+        <div className="home-empty-state review-empty-state">
+          <span className="home-empty-state__icon"><CheckIcon size={36} /></span>
+          <h2>Nenhum problema identificado</h2>
+          <p>Quando aparecer troca, conflito, tag nova, tag removida ou pendencia, o BIPTAG mostra somente o grupo necessario aqui.</p>
+        </div>
+      )}
 
+      <div className="review-groups">
         <ReviewSection eyebrow="TROCAS" title="Trocas confirmadas" emptyText="Nenhuma troca identificada.">
           {swapPairs.map((record) => {
             const other = swapRecords.find((candidate) => candidate.id === record.relatedRecordId);
@@ -2457,13 +2528,18 @@ function ReviewSection({
   const content = Children.toArray(children);
   const hasContent = content.length > 0;
 
+  if (!hasContent) {
+    void emptyText;
+    return null;
+  }
+
   return (
     <section className="review-section">
       <div className="section-heading section-heading--compact">
         <div><span className="eyebrow">{eyebrow}</span><h2>{title}</h2></div>
       </div>
       <div className="issue-list">
-        {hasContent ? content : <p className="muted-block">{emptyText}</p>}
+        {content}
       </div>
     </section>
   );
