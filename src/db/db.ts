@@ -165,8 +165,33 @@ class BiptagDB extends Dexie {
         });
       }
     });
+
+    this.version(5).stores({
+      audits: 'id, status, createdAt, updatedAt, lastActivityAt, farmName',
+      tagAssignments:
+        'id, auditId, tagNumber, expectedAnimal, validationStatus, [auditId+tagNumber], [auditId+expectedAnimal]',
+      effectiveTagAssignments:
+        'id, auditId, tagNumber, effectiveAnimal, status, currentRecordId, syncStatus, [auditId+tagNumber], [auditId+effectiveAnimal], [auditId+status]',
+      auditRecords:
+        'id, auditId, sequence, tagNumber, status, operationalAction, isCurrent, reviewStatus, scannedAt, createdAt, updatedAt, syncStatus, expectedAnimal, observedAnimal, effectiveAnimal, pairId, [auditId+tagNumber], [auditId+sequence]',
+      importIssues: 'id, auditId, type, tagNumber, animal'
+    }).upgrade(async (tx) => {
+      const records = tx.table('auditRecords');
+      await records.toCollection().modify((record: Partial<AuditRecord>) => {
+        record.operationalAction = record.operationalAction ?? defaultOperationalAction(record.status);
+        record.actionNote = record.actionNote ?? null;
+      });
+    });
   }
 }
 
 export const db = new BiptagDB();
 export const newId = generateId;
+
+function defaultOperationalAction(status: AuditRecord['status'] | undefined) {
+  if (status === 'correct') return 'keep_tag';
+  if (status === 'possible_swap') return 'swap_tags';
+  if (status === 'new_tag') return 'register_new_tag';
+  if (status === 'linked' || status === 'tag_without_animal') return 'link_tag';
+  return status ? 'investigate' : null;
+}

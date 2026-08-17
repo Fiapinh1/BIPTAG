@@ -103,6 +103,8 @@ function recordRow(record: AuditRecord, userId: string) {
     field_decision: record.fieldDecision,
     review_status: record.reviewStatus,
     note: record.note,
+    operational_action: record.operationalAction ?? null,
+    action_note: record.actionNote ?? null,
     scanned_at: record.scannedAt,
     created_at: record.createdAt,
     updated_at: record.updatedAt,

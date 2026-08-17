@@ -5,6 +5,7 @@ import type {
   EffectiveTagAssignment,
   ImportIssue,
   ImportPreview,
+  OperationalAction,
   RecordStatus,
   SmartTagPattern,
   TagAssignment,
@@ -252,6 +253,17 @@ function countPairs(records: AuditRecord[], status: RecordStatus) {
   return pairIds.size || countStatus(records, status);
 }
 
+function uniquePairLeaders(records: AuditRecord[], status: RecordStatus) {
+  const seenPairs = new Set<string>();
+  return records.filter((record) => {
+    if (record.status !== status) return false;
+    if (!record.pairId) return true;
+    if (seenPairs.has(record.pairId)) return false;
+    seenPairs.add(record.pairId);
+    return true;
+  });
+}
+
 function percent(done: number, total: number) {
   return total ? `${Math.min(Math.round((done / total) * 100), 100)}%` : '0%';
 }
@@ -292,6 +304,57 @@ function actionForEffectiveStatus(status: EffectiveTagAssignment['status']) {
   return actions[status];
 }
 
+function operationalActionLabel(action: OperationalAction | null | undefined) {
+  const labels: Record<OperationalAction, string> = {
+    keep_tag: 'MANTER TAG ATUAL',
+    remove_tag: 'REMOVER TAG',
+    replace_tag: 'SUBSTITUIR TAG',
+    register_new_tag: 'CADASTRAR NOVA TAG',
+    link_tag: 'VINCULAR TAG',
+    swap_tags: 'TROCAR TAGS',
+    move_tag: 'MOVIMENTACAO DE TAG',
+    investigate: 'INVESTIGAR'
+  };
+  return action ? labels[action] : '';
+}
+
+function actionNeeded(record: AuditRecord) {
+  if (record.operationalAction) return operationalActionLabel(record.operationalAction);
+  if (record.status === 'possible_swap') return 'TROCAR TAGS';
+  if (record.status === 'new_tag') return 'CADASTRAR NOVA TAG';
+  if (record.status === 'linked' || record.status === 'tag_without_animal') return 'VINCULAR TAG';
+  if (record.status === 'correct') return 'MANTER TAG ATUAL';
+  return 'INVESTIGAR';
+}
+
+function nedapInstruction(record: AuditRecord) {
+  if (record.operationalAction === 'remove_tag') {
+    return `Remover vinculo da tag ${record.tagNumber} no animal ${record.observedAnimal ?? record.expectedAnimal ?? ''}.`;
+  }
+  if (record.operationalAction === 'replace_tag') {
+    return `Substituir tag do animal ${record.observedAnimal ?? record.expectedAnimal ?? ''}. Tag antiga: ${record.tagNumber}. Tag nova: definir apos revisao.`;
+  }
+  if (record.operationalAction === 'move_tag') {
+    return `Remover vinculo do animal ${record.expectedAnimal ?? ''} e vincular tag ${record.tagNumber} ao animal ${record.observedAnimal ?? ''}.`;
+  }
+  if (record.operationalAction === 'keep_tag') {
+    return `Manter tag atual no animal ${record.observedAnimal ?? record.expectedAnimal ?? ''}.`;
+  }
+  if (record.operationalAction === 'swap_tags' || record.status === 'possible_swap') {
+    return `Trocar vinculos entre animais ${record.expectedAnimal ?? ''} e ${record.observedAnimal ?? ''}.`;
+  }
+  if (record.status === 'new_tag' || record.operationalAction === 'register_new_tag') {
+    return `Cadastrar tag ${record.tagNumber} no animal ${record.observedAnimal ?? ''}.`;
+  }
+  if (record.status === 'linked' || record.operationalAction === 'link_tag') {
+    return `Vincular tag ${record.tagNumber} ao animal ${record.observedAnimal ?? ''}.`;
+  }
+  if (record.status === 'audit_conflict' || record.status === 'new_tag_conflict' || record.operationalAction === 'investigate') {
+    return 'Investigar ocorrencia antes de alterar o Nedap.';
+  }
+  return 'Revisar antes de executar no Nedap.';
+}
+
 export function exportAuditWorkbook(
   audit: Audit,
   records: AuditRecord[],
@@ -300,6 +363,8 @@ export function exportAuditWorkbook(
 ) {
   const ordered = chronological(records);
   const current = records.filter((record) => record.isCurrent !== false);
+  const confirmedSwapRows = uniquePairLeaders(records, 'possible_swap');
+  const auditConflictRows = uniquePairLeaders(records, 'audit_conflict');
   const validEffective = effectiveAssignments.filter((item) => !['suspicious', 'invalid'].includes(item.status));
   const processedEffective = validEffective.filter((item) => item.status !== 'pending');
   const processedCount = validEffective.length ? processedEffective.length : new Set(current.map((record) => record.tagNumber)).size;
@@ -326,6 +391,9 @@ export function exportAuditWorkbook(
     ['Trocas Confirmadas', countPairs(records, 'possible_swap')],
     ['Trocas Pendentes', countStatus(current, 'reassignment') + countStatus(current, 'divergence')],
     ['Conflitos de Auditoria', countPairs(records, 'audit_conflict')],
+    ['Conflitos de Tag Nova', countStatus(current, 'new_tag_conflict')],
+    ['Tags removidas', current.filter((record) => record.operationalAction === 'remove_tag').length],
+    ['Substituicoes de tag', current.filter((record) => record.operationalAction === 'replace_tag').length],
     ['Cadeias', countStatus(current, 'replacement_chain')],
     ['Pendencias', pending + current.filter((record) => record.reviewStatus === 'open').length],
     ['Percentual processado', percent(processedCount, totalValid)]
@@ -343,7 +411,7 @@ export function exportAuditWorkbook(
   ];
 
   const auditRows: (string | number)[][] = [
-    ['Sequencia', 'Tag', 'Animal Original', 'Animal Observado', 'Animal Efetivo', 'Resultado', 'Decisao', 'Data/Hora', 'Origem NFC/Manual', 'Ocorrencia Relacionada'],
+    ['Sequencia', 'Tag', 'Animal Original', 'Animal Observado', 'Animal Efetivo', 'Resultado', 'Decisao', 'Acao Operacional', 'Observacao da Acao', 'Data/Hora', 'Origem NFC/Manual', 'Ocorrencia Relacionada'],
     ...ordered.map((record) => [
       record.sequence ?? '',
       blank(record.tagNumber),
@@ -352,6 +420,8 @@ export function exportAuditWorkbook(
       blank(record.effectiveAnimal),
       statusLabel(record.status),
       fieldDecisionLabel(record.fieldDecision),
+      operationalActionLabel(record.operationalAction),
+      blank(record.actionNote ?? record.note),
       formatDateTime(record.scannedAt),
       record.source === 'nfc' ? 'NFC' : 'Manual',
       blank(record.relatedRecordId ?? record.pairId)
@@ -370,6 +440,8 @@ export function exportAuditWorkbook(
       statusLabel(record.status),
       record.status === 'audit_conflict'
         ? 'Revisar leituras antes de corrigir o cadastro'
+        : record.status === 'new_tag_conflict'
+          ? 'Validar manualmente a SmartTag nova'
         : record.status === 'unconfirmed'
           ? 'Revisar em campo'
           : 'Corrigir cadastro no Nedap quando aplicavel',
@@ -388,6 +460,128 @@ export function exportAuditWorkbook(
     ])
   ];
 
+  const actionRows: (string | number)[][] = [
+    ['Acao', 'Tag', 'Animal original', 'Animal encontrado', 'Tag anterior', 'Tag nova', 'O que aconteceu', 'Decidido em campo', 'Executar no Nedap'],
+    ...current
+      .filter((record) => record.status !== 'correct' || record.operationalAction !== 'keep_tag' || record.actionNote)
+      .map((record) => [
+        actionNeeded(record),
+        blank(record.tagNumber),
+        blank(record.expectedAnimal),
+        blank(record.observedAnimal),
+        record.operationalAction === 'replace_tag' || record.operationalAction === 'remove_tag' ? blank(record.tagNumber) : '',
+        record.operationalAction === 'register_new_tag' ? blank(record.tagNumber) : '',
+        statusLabel(record.status),
+        blank(record.actionNote ?? record.note),
+        nedapInstruction(record)
+      ])
+  ];
+
+  const operationalRows: (string | number)[][] = [
+    ['RELATORIO OPERACIONAL BIPTAG'],
+    ['Fazenda', blank(audit.farmName)],
+    ['Gerado em', formatDateTime(new Date().toISOString())],
+    []
+  ];
+
+  const addSection = (title: string, header: (string | number)[], rows: (string | number)[][]) => {
+    operationalRows.push([title]);
+    operationalRows.push(header);
+    operationalRows.push(...(rows.length ? rows : [['Sem registros']]));
+    operationalRows.push([]);
+  };
+
+  addSection('1. TAGS CORRETAS', ['Animal', 'Tag', 'Decisao de campo', 'Observacao'], current
+    .filter((record) => record.status === 'correct')
+    .map((record) => [
+      blank(record.observedAnimal ?? record.expectedAnimal),
+      blank(record.tagNumber),
+      operationalActionLabel(record.operationalAction),
+      blank(record.actionNote ?? record.note)
+    ]));
+
+  addSection('2. TROCAS CONFIRMADAS', ['Troca', 'Tag lida', 'Tag relacionada', 'Executar no Nedap'], confirmedSwapRows.map((record) => {
+    const related = records.find((candidate) => candidate.pairId === record.pairId && candidate.id !== record.id);
+    return [
+      `${record.expectedAnimal ?? ''} <-> ${record.observedAnimal ?? ''}`,
+      blank(record.tagNumber),
+      blank(related?.tagNumber),
+      nedapInstruction(record)
+    ];
+  }));
+
+  addSection('3. TROCAS PENDENTES', ['Tag', 'Animal original', 'Animal visto', 'Status', 'Acao'], current
+    .filter((record) => ['reassignment', 'divergence'].includes(record.status))
+    .map((record) => [
+      blank(record.tagNumber),
+      blank(record.expectedAnimal),
+      blank(record.observedAnimal),
+      statusLabel(record.status),
+      nedapInstruction(record)
+    ]));
+
+  addSection('4. TAGS NOVAS PARA CADASTRO', ['Tag', 'Animal', 'Acao'], current
+    .filter((record) => record.status === 'new_tag' || record.operationalAction === 'register_new_tag')
+    .map((record) => [
+      blank(record.tagNumber),
+      blank(record.observedAnimal),
+      nedapInstruction(record)
+    ]));
+
+  addSection('5. TAGS REMOVIDAS', ['Animal', 'Tag', 'Acao'], current
+    .filter((record) => record.operationalAction === 'remove_tag')
+    .map((record) => [
+      blank(record.observedAnimal ?? record.expectedAnimal),
+      blank(record.tagNumber),
+      nedapInstruction(record)
+    ]));
+
+  addSection('6. SUBSTITUICOES DE TAG', ['Animal', 'Tag antiga', 'Tag nova', 'Acao'], current
+    .filter((record) => record.operationalAction === 'replace_tag')
+    .map((record) => [
+      blank(record.observedAnimal ?? record.expectedAnimal),
+      blank(record.tagNumber),
+      '',
+      nedapInstruction(record)
+    ]));
+
+  addSection('7. CONFLITOS DE AUDITORIA', ['Tag', 'Animal original', 'Animal visto', 'Mensagem'], auditConflictRows.map((record) => [
+    blank(record.tagNumber),
+    blank(record.expectedAnimal),
+    blank(record.observedAnimal),
+    blank(record.note ?? record.actionNote)
+  ]));
+
+  addSection('8. CONFLITOS DE TAG NOVA', ['Tag', 'Primeiro animal', 'Novo animal', 'Mensagem'], current
+    .filter((record) => record.status === 'new_tag_conflict')
+    .map((record) => [
+      blank(record.tagNumber),
+      blank(record.expectedAnimal),
+      blank(record.observedAnimal),
+      blank(record.note ?? record.actionNote)
+    ]));
+
+  addSection('9. TAGS NAO LOCALIZADAS', ['Tag', 'Animal original', 'Status', 'Acao'], [
+    ...current
+      .filter((record) => record.status === 'tag_not_found')
+      .map((record) => [
+        blank(record.tagNumber),
+        blank(record.expectedAnimal),
+        statusLabel(record.status),
+        nedapInstruction(record)
+      ]),
+    ...effectiveAssignments
+      .filter((item) => item.status === 'not_found')
+      .map((item) => [
+        blank(item.tagNumber),
+        blank(item.originalAnimal),
+        effectiveStatusLabel(item.status),
+        actionForEffectiveStatus(item.status)
+      ])
+  ]);
+
+  addSection('10. ACOES PARA EXECUTAR NO NEDAP', actionRows[0], actionRows.slice(1));
+
   const preValidationRows: (string | number)[][] = [
     ['Tipo', 'Tag', 'Animal', 'Detalhe'],
     ...issues.map((issue) => [
@@ -401,8 +595,10 @@ export function exportAuditWorkbook(
   const workbook = XLSX.utils.book_new();
   appendSheet(workbook, summaryRows, 'Resumo');
   appendSheet(workbook, finalRows.length > 1 ? finalRows : [...finalRows, ['Sem resultados', '', '', '', '']], 'Resultado Final');
-  appendSheet(workbook, auditRows.length > 1 ? auditRows : [...auditRows, ['', '', '', '', '', 'Sem registros', '', '', '', '']], 'Auditoria');
+  appendSheet(workbook, auditRows.length > 1 ? auditRows : [...auditRows, ['', '', '', '', '', 'Sem registros', '', '', '', '', '', '']], 'Auditoria');
   appendSheet(workbook, pendingRows.length > 1 ? pendingRows : [...pendingRows, ['Sem pendencias', '', '', '', '', '', '', '', '']], 'Pendencias');
+  appendSheet(workbook, operationalRows, 'Relatorio Operacional');
+  appendSheet(workbook, actionRows.length > 1 ? actionRows : [...actionRows, ['Sem acoes', '', '', '', '', '', '', '', '']], 'Acoes Nedap');
   appendSheet(workbook, preValidationRows.length > 1 ? preValidationRows : [...preValidationRows, ['Sem inconsistencias', '', '', '']], 'Pre-validacao');
 
   const safeFarm = audit.farmName.replace(/[^a-zA-Z0-9_-]+/g, '_');
@@ -416,6 +612,7 @@ export function statusLabel(status: AuditRecord['status']) {
     reassignment: 'Tag reatribuida',
     linked: 'Tag vinculada em campo',
     new_tag: 'Nova tag cadastrada em campo',
+    new_tag_conflict: 'Conflito de tag nova',
     possible_swap: 'Possivel troca de tags',
     audit_conflict: 'Conflito de auditoria',
     replacement_chain: 'Cadeia de substituicoes',

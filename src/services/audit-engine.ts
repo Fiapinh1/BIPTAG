@@ -1,5 +1,5 @@
 import { db, newId } from '../db/db';
-import type { AuditRecord, EffectiveTagAssignment, EffectiveTagStatus, RecordStatus, TagAssignment } from '../types/domain';
+import type { AuditRecord, EffectiveTagAssignment, EffectiveTagStatus, OperationalAction, RecordStatus, TagAssignment } from '../types/domain';
 
 export type RelatedContext = {
   records: AuditRecord[];
@@ -105,12 +105,20 @@ function statusForEffectiveRecord(status: RecordStatus): EffectiveTagStatus {
   if (status === 'new_tag') return 'new_tag';
   if (status === 'tag_not_found') return 'not_found';
   if (status === 'suspicious_tag' || status === 'possible_typo') return 'suspicious';
-  if (status === 'unconfirmed' || status === 'audit_conflict') return 'unresolved';
+  if (status === 'unconfirmed' || status === 'audit_conflict' || status === 'new_tag_conflict') return 'unresolved';
   return 'unresolved';
 }
 
 function reviewForStatus(status: RecordStatus): AuditRecord['reviewStatus'] {
   return status === 'correct' ? 'not_required' : 'open';
+}
+
+export function defaultOperationalAction(status: RecordStatus): OperationalAction {
+  if (status === 'correct') return 'keep_tag';
+  if (status === 'possible_swap') return 'swap_tags';
+  if (status === 'new_tag') return 'register_new_tag';
+  if (status === 'linked' || status === 'tag_without_animal') return 'link_tag';
+  return 'investigate';
 }
 
 async function upsertEffective(input: {
@@ -163,6 +171,10 @@ export async function saveReading(input: {
   source: AuditRecord['source'];
   existingRecord: AuditRecord | null;
   note?: string | null;
+  operationalAction?: OperationalAction | null;
+  actionNote?: string | null;
+  preserveEffective?: boolean;
+  keepExistingCurrent?: boolean;
 }) {
   const now = new Date().toISOString();
   const id = newId('record');
@@ -170,11 +182,11 @@ export async function saveReading(input: {
   let relatedRecordId: string | null = null;
 
   await db.transaction('rw', db.auditRecords, db.effectiveTagAssignments, db.audits, async () => {
-    if (input.existingRecord?.isCurrent) {
+    if (input.existingRecord?.isCurrent && !input.keepExistingCurrent) {
       await db.auditRecords.update(input.existingRecord.id, { isCurrent: false, updatedAt: now, syncStatus: 'pending' });
     }
 
-    if (input.observedAnimal && input.status !== 'unconfirmed') {
+    if (input.observedAnimal && !['unconfirmed', 'audit_conflict', 'new_tag_conflict'].includes(input.status)) {
       const occupied = (await db.effectiveTagAssignments.where('[auditId+effectiveAnimal]').equals([input.auditId, input.observedAnimal]).toArray())
         .find((item) => item.tagNumber !== input.tagNumber && !['displaced', 'not_found', 'suspicious', 'invalid'].includes(item.status));
 
@@ -204,6 +216,8 @@ export async function saveReading(input: {
       fieldDecision: input.fieldDecision,
       reviewStatus: reviewForStatus(input.status),
       note: input.note ?? null,
+      operationalAction: input.operationalAction ?? defaultOperationalAction(input.status),
+      actionNote: input.actionNote ?? null,
       scannedAt: now,
       createdAt: now,
       updatedAt: now,
@@ -216,17 +230,19 @@ export async function saveReading(input: {
       relatedRecordId
     });
 
-    await upsertEffective({
-      auditId: input.auditId,
-      tagNumber: input.tagNumber,
-      originalAnimal: input.expectedAnimal,
-      effectiveAnimal,
-      status: statusForEffectiveRecord(input.status),
-      sourceAssignmentId: input.assignment?.id ?? null,
-      currentRecordId: id,
-      relatedRecordId,
-      now
-    });
+    if (!input.preserveEffective) {
+      await upsertEffective({
+        auditId: input.auditId,
+        tagNumber: input.tagNumber,
+        originalAnimal: input.expectedAnimal,
+        effectiveAnimal,
+        status: statusForEffectiveRecord(input.status),
+        sourceAssignmentId: input.assignment?.id ?? null,
+        currentRecordId: id,
+        relatedRecordId,
+        now
+      });
+    }
 
     await db.audits.update(input.auditId, {
       updatedAt: now,
@@ -276,6 +292,8 @@ export async function detectReciprocalSwap(record: AuditRecord) {
         relatedRecordId: conflict.record.id,
         reviewStatus: 'open',
         note,
+        operationalAction: 'investigate',
+        actionNote: note,
         updatedAt: now,
         syncStatus: 'pending'
       });
@@ -285,6 +303,8 @@ export async function detectReciprocalSwap(record: AuditRecord) {
         relatedRecordId: conflict.record.id,
         reviewStatus: 'open',
         note,
+        operationalAction: 'investigate',
+        actionNote: note,
         updatedAt: now,
         syncStatus: 'pending'
       });
@@ -316,6 +336,8 @@ export async function detectReciprocalSwap(record: AuditRecord) {
       pairId,
       relatedRecordId: pair.id,
       reviewStatus: 'open',
+      operationalAction: 'swap_tags',
+      actionNote: 'Troca confirmada pela auditoria. Executar ajuste no Nedap depois.',
       updatedAt: now,
       syncStatus: 'pending'
     });
@@ -324,6 +346,8 @@ export async function detectReciprocalSwap(record: AuditRecord) {
       pairId,
       relatedRecordId: record.id,
       reviewStatus: 'open',
+      operationalAction: 'swap_tags',
+      actionNote: 'Troca confirmada pela auditoria. Executar ajuste no Nedap depois.',
       updatedAt: now,
       syncStatus: 'pending'
     });
@@ -412,6 +436,8 @@ export async function markPendingTagsNotFound(auditId: string) {
         fieldDecision: 'review_later',
         reviewStatus: 'open',
         note: 'SmartTag valida da base nao localizada durante a auditoria.',
+        operationalAction: 'investigate',
+        actionNote: 'Investigar tag nao localizada antes de corrigir o Nedap.',
         scannedAt: now,
         createdAt: now,
         updatedAt: now,

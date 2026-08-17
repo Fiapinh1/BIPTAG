@@ -6,6 +6,7 @@ export type RecordStatus =
   | 'reassignment'
   | 'linked'
   | 'new_tag'
+  | 'new_tag_conflict'
   | 'possible_swap'
   | 'audit_conflict'
   | 'replacement_chain'
@@ -25,6 +26,15 @@ export type FieldDecision =
 
 export type ReviewStatus = 'open' | 'resolved' | 'not_required';
 export type SyncStatus = 'pending' | 'synced' | 'error';
+export type OperationalAction =
+  | 'keep_tag'
+  | 'remove_tag'
+  | 'replace_tag'
+  | 'register_new_tag'
+  | 'link_tag'
+  | 'swap_tags'
+  | 'move_tag'
+  | 'investigate';
 export type TagValidationStatus = 'valid_tag' | 'suspicious_tag' | 'invalid_tag';
 export type EffectiveTagStatus =
   | 'pending'
@@ -99,6 +109,8 @@ export interface AuditRecord {
   fieldDecision: FieldDecision;
   reviewStatus: ReviewStatus;
   note: string | null;
+  operationalAction?: OperationalAction | null;
+  actionNote?: string | null;
   scannedAt: string;
   createdAt: string;
   updatedAt: string;
