@@ -3176,3 +3176,112 @@ body {
     font-size: 14px;
   }
 }
+
+/* Fase 12 - Home limpa com modais de tarefa */
+.app-modal {
+  position: fixed;
+  z-index: 95;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: calc(16px + env(safe-area-inset-top)) 14px calc(16px + env(safe-area-inset-bottom));
+  background: rgba(7, 18, 15, .72);
+  backdrop-filter: blur(14px);
+}
+
+.app-modal__panel {
+  width: min(560px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(50, 213, 159, .24);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top right, rgba(50, 213, 159, .1), transparent 260px),
+    #fbfffd;
+  box-shadow: 0 26px 80px rgba(0, 0, 0, .34);
+  animation: attentionOverlayIn .2s ease-out both;
+}
+
+.app-modal__panel--wide {
+  width: min(760px, 100%);
+}
+
+.app-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.app-modal__header h2 {
+  margin: 3px 0 0;
+  color: var(--field-ink);
+  font-size: clamp(24px, 7vw, 34px);
+  letter-spacing: 0;
+}
+
+.app-modal__close {
+  width: 44px;
+  height: 44px;
+  border: 1px solid #d5e3dd;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: var(--field-ink);
+  background: #ffffff;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.app-modal .embedded-import {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.app-modal .embedded-import > .section-heading {
+  display: none;
+}
+
+.app-modal .embedded-import .form-card,
+.app-modal .embedded-import .pattern-card,
+.app-modal .embedded-import .technical-note {
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.animal-lookup-card--modal {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.secondary-row--compact {
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.9), rgba(247,251,249,.9));
+}
+
+@media (max-width: 430px) {
+  .app-modal {
+    align-items: stretch;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .app-modal__panel {
+    align-self: center;
+    padding: 13px;
+    border-radius: 16px;
+  }
+
+  .app-modal__close {
+    width: 40px;
+    height: 40px;
+  }
+}

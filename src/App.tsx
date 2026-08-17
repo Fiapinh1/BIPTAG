@@ -226,7 +226,6 @@ function App() {
             audits={audits}
             activeAudit={selectedAudit}
             onSelectAudit={(audit) => void chooseAudit(audit)}
-            onNewAudit={() => setView('import')}
             onImportCreated={(auditId) => {
               setSelectedAuditId(auditId);
               setToast('Fazenda criada e base salva neste aparelho.');
@@ -286,7 +285,6 @@ function HomeView({
   audits,
   activeAudit,
   onSelectAudit,
-  onNewAudit,
   onImportCreated,
   onAudit,
   onIssues,
@@ -296,14 +294,14 @@ function HomeView({
   audits: Audit[];
   activeAudit: Audit | null;
   onSelectAudit: (audit: Audit) => void;
-  onNewAudit: () => void;
   onImportCreated: (auditId: string) => void;
   onAudit: () => void;
   onIssues: () => void;
   onKnownIssues: () => void;
   setToast: (value: string) => void;
 }) {
-  const [showImportPanel, setShowImportPanel] = useState(false);
+  const [showCreateFarmModal, setShowCreateFarmModal] = useState(false);
+  const [showLookupModal, setShowLookupModal] = useState(false);
   const [animalSearch, setAnimalSearch] = useState('');
   const records = useLiveQuery(
     () => activeAudit ? db.auditRecords.where('auditId').equals(activeAudit.id).toArray() : Promise.resolve<AuditRecord[]>([]),
@@ -395,6 +393,82 @@ function HomeView({
     setToast('Auditoria finalizada e mantida no histórico.');
   }
 
+  function handleImportCreated(auditId: string) {
+    setShowCreateFarmModal(false);
+    onImportCreated(auditId);
+  }
+
+  const createFarmModal = showCreateFarmModal ? (
+    <div className="app-modal" role="dialog" aria-modal="true" aria-labelledby="create-farm-title">
+      <div className="app-modal__panel app-modal__panel--wide">
+        <div className="app-modal__header">
+          <div>
+            <span className="eyebrow">NOVA FAZENDA</span>
+            <h2 id="create-farm-title">Criar fazenda</h2>
+          </div>
+          <button className="app-modal__close" onClick={() => setShowCreateFarmModal(false)} aria-label="Fechar">×</button>
+        </div>
+        <ImportView onCreated={handleImportCreated} embedded />
+      </div>
+    </div>
+  ) : null;
+
+  const lookupModal = showLookupModal ? (
+    <div className="app-modal" role="dialog" aria-modal="true" aria-labelledby="lookup-title">
+      <div className="app-modal__panel">
+        <div className="app-modal__header">
+          <div>
+            <span className="eyebrow">CONSULTA RAPIDA</span>
+            <h2 id="lookup-title">Buscar tag pelo brinco</h2>
+          </div>
+          <button className="app-modal__close" onClick={() => setShowLookupModal(false)} aria-label="Fechar">×</button>
+        </div>
+        <div className="animal-lookup-card animal-lookup-card--modal">
+          <div className="animal-lookup-card__search">
+            <input
+              className="text-input"
+              inputMode="numeric"
+              placeholder="Digite o numero do brinco"
+              value={animalSearch}
+              onChange={(event) => setAnimalSearch(event.target.value.replace(/[^0-9A-Za-z_-]/g, ''))}
+            />
+            {animalSearch && <button className="button button--ghost" onClick={() => setAnimalSearch('')}>Limpar</button>}
+          </div>
+          {animalLookup && (
+            animalLookup.tags.length ? (
+              <div className="animal-lookup-results">
+                {animalLookup.tags.map(({ tagNumber, assignment, effective, record }) => {
+                  const action = operationalActionLabel(record?.operationalAction) || (record ? statusLabel(record.status) : '');
+                  const status = action || (effective && effective.status !== 'pending' ? 'Alterado na auditoria' : 'Cadastro Nedap');
+                  const detail = record
+                    ? `Nedap ${record.expectedAnimal ?? 'sem vinculo'} | campo ${record.observedAnimal ?? 'nao informado'}`
+                    : effective?.effectiveAnimal && effective.effectiveAnimal !== assignment?.expectedAnimal
+                      ? `Cadastro ${effective.originalAnimal ?? 'sem vinculo'} | atual ${effective.effectiveAnimal}`
+                      : `Animal ${assignment?.expectedAnimal ?? effective?.originalAnimal ?? animalLookup.animal}`;
+                  return (
+                    <div className="animal-lookup-result" key={tagNumber}>
+                      <TagIcon size={22} />
+                      <div>
+                        <span>{status}</span>
+                        <strong>{tagNumber}</strong>
+                        <small>{detail}</small>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="animal-lookup-empty">
+                <IssuesIcon size={20} />
+                <span>Nenhuma tag encontrada para o brinco {animalLookup.animal} nesta base.</span>
+              </div>
+            )
+          )}
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   if (!activeAudit) {
     return (
       <section className="page home-page">
@@ -406,7 +480,15 @@ function HomeView({
           </div>
           <BiptagLogo className="home-hero__logo" />
         </div>
-        <ImportView onCreated={onImportCreated} embedded />
+        <button className="field-action field-action--primary" onClick={() => setShowCreateFarmModal(true)}>
+          <span className="field-action__icon"><ImportIcon size={30} /></span>
+          <span>
+            <strong>Criar fazenda</strong>
+            <small>Importar Tags.xlsx do Nedap</small>
+          </span>
+          <ChevronRightIcon />
+        </button>
+        {createFarmModal}
       </section>
     );
   }
@@ -457,68 +539,20 @@ function HomeView({
         </div>
       )}
 
-      <div className="animal-lookup-card">
-        <div className="animal-lookup-card__header">
-          <div>
-            <span className="eyebrow">CONSULTA RAPIDA</span>
-            <h2>Buscar tag pelo brinco</h2>
-          </div>
-          <AnimalIcon size={26} />
-        </div>
-        <div className="animal-lookup-card__search">
-          <input
-            className="text-input"
-            inputMode="numeric"
-            placeholder="Digite o numero do brinco"
-            value={animalSearch}
-            onChange={(event) => setAnimalSearch(event.target.value.replace(/[^0-9A-Za-z_-]/g, ''))}
-          />
-          {animalSearch && <button className="button button--ghost" onClick={() => setAnimalSearch('')}>Limpar</button>}
-        </div>
-
-        {animalLookup && (
-          animalLookup.tags.length ? (
-            <div className="animal-lookup-results">
-              {animalLookup.tags.map(({ tagNumber, assignment, effective, record }) => {
-                const action = operationalActionLabel(record?.operationalAction) || (record ? statusLabel(record.status) : '');
-                const status = action || (effective && effective.status !== 'pending' ? 'Alterado na auditoria' : 'Cadastro Nedap');
-                const detail = record
-                  ? `Nedap ${record.expectedAnimal ?? 'sem vinculo'} | campo ${record.observedAnimal ?? 'nao informado'}`
-                  : effective?.effectiveAnimal && effective.effectiveAnimal !== assignment?.expectedAnimal
-                    ? `Cadastro ${effective.originalAnimal ?? 'sem vinculo'} | atual ${effective.effectiveAnimal}`
-                    : `Animal ${assignment?.expectedAnimal ?? effective?.originalAnimal ?? animalLookup.animal}`;
-                return (
-                  <div className="animal-lookup-result" key={tagNumber}>
-                    <TagIcon size={22} />
-                    <div>
-                      <span>{status}</span>
-                      <strong>{tagNumber}</strong>
-                      <small>{detail}</small>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="animal-lookup-empty">
-              <IssuesIcon size={20} />
-              <span>Nenhuma tag encontrada para o brinco {animalLookup.animal} nesta base.</span>
-            </div>
-          )
-        )}
-      </div>
+      <button className="secondary-row secondary-row--compact" onClick={() => setShowLookupModal(true)}>
+        <span><AnimalIcon /> Consultar tag por brinco</span>
+        <ChevronRightIcon />
+      </button>
 
       <button className="secondary-row" onClick={onKnownIssues}>
         <span><IssuesIcon /> Problemas conhecidos antes da ordenha</span>
         <ChevronRightIcon />
       </button>
 
-      <button className="secondary-row" onClick={() => setShowImportPanel((value) => !value)}>
+      <button className="secondary-row" onClick={() => setShowCreateFarmModal(true)}>
         <span><ImportIcon /> Criar outra fazenda / importar Tags.xlsx</span>
         <ChevronRightIcon />
       </button>
-
-      {showImportPanel && <ImportView onCreated={onImportCreated} embedded />}
 
       {activeAudit.status !== 'finished' && (
         <div className="session-actions">
@@ -541,7 +575,8 @@ function HomeView({
         </>
       )}
 
-      <button className="link-button" onClick={onNewAudit}>Abrir tela de importação antiga</button>
+      {createFarmModal}
+      {lookupModal}
     </section>
   );
 }
