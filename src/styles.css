@@ -3589,3 +3589,157 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Fase 15 - Home com identidade visual e sincronizacao alinhada */
+.home-page {
+  position: relative;
+  isolation: isolate;
+  min-height: calc(100vh - 70px - 86px);
+}
+
+.home-page::before {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  width: min(360px, 86vw);
+  height: min(360px, 86vw);
+  right: max(-90px, calc((100vw - 820px) / 2 - 90px));
+  bottom: 106px;
+  background: url('/icons/biptag-logo-192.png') center / contain no-repeat;
+  opacity: .045;
+  filter: grayscale(.2);
+  pointer-events: none;
+}
+
+.home-page::after {
+  content: "";
+  position: fixed;
+  z-index: -2;
+  inset: 70px 0 86px;
+  background:
+    radial-gradient(circle at 82% 14%, rgba(50, 213, 159, .14), transparent 260px),
+    radial-gradient(circle at 18% 0%, rgba(184, 97, 53, .12), transparent 230px),
+    linear-gradient(180deg, rgba(255,255,255,.56), rgba(244,239,231,.1) 45%, rgba(22,117,92,.06));
+  pointer-events: none;
+}
+
+.home-toolbar {
+  position: relative;
+  padding: 16px;
+  border: 1px solid rgba(22, 117, 92, .16);
+  border-radius: 22px;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.88), rgba(255,255,255,.58)),
+    radial-gradient(circle at top right, rgba(50, 213, 159, .18), transparent 190px);
+  box-shadow: 0 18px 48px rgba(16, 33, 28, .08);
+  backdrop-filter: blur(8px);
+}
+
+.home-toolbar::before {
+  content: "";
+  position: absolute;
+  inset: 9px 74px auto 16px;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(22,117,92,.8), rgba(50,213,159,.16), transparent);
+}
+
+.home-toolbar .eyebrow {
+  color: #0f6e55;
+}
+
+.home-add-button {
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255,255,255,.32), transparent 34px),
+    linear-gradient(145deg, #13906d 0%, #075241 100%);
+  box-shadow:
+    0 16px 30px rgba(13, 75, 61, .24),
+    0 7px 0 rgba(7, 44, 35, .26),
+    inset 0 0 0 1px rgba(255,255,255,.16);
+}
+
+.audit-picker,
+.audit-history {
+  gap: 12px;
+}
+
+.audit-history__item,
+.audit-history__item--picker {
+  min-height: 82px;
+  border: 1px solid rgba(22, 117, 92, .16);
+  border-radius: 18px;
+  background:
+    linear-gradient(90deg, #ffffff 0%, rgba(255,255,255,.96) 72%, rgba(50, 213, 159, .06) 100%);
+  box-shadow:
+    0 16px 34px rgba(16, 33, 28, .08),
+    inset 0 1px 0 rgba(255,255,255,.85);
+}
+
+.audit-history__item.is-selected {
+  border-color: rgba(22, 117, 92, .38);
+  background:
+    linear-gradient(90deg, rgba(255,255,255,.98), rgba(232, 251, 244, .76));
+}
+
+.audit-history__open {
+  padding: 16px 16px;
+}
+
+.audit-history__open strong {
+  color: #14221e;
+  letter-spacing: 0;
+}
+
+.audit-history__open small {
+  color: #69736f;
+  font-weight: 750;
+}
+
+.audit-history__open svg {
+  color: #0f6e55;
+}
+
+.audit-history__delete {
+  width: 58px;
+  color: #9a433c;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.42), rgba(165, 74, 66, .08));
+}
+
+.home-empty-state {
+  border-radius: 24px;
+}
+
+@media (max-width: 430px) {
+  .home-page::before {
+    width: 280px;
+    height: 280px;
+    right: -86px;
+    bottom: 118px;
+    opacity: .05;
+  }
+
+  .home-toolbar {
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .home-toolbar::before {
+    inset-right: 66px;
+  }
+
+  .audit-history__item,
+  .audit-history__item--picker {
+    min-height: 72px;
+    border-radius: 14px;
+  }
+
+  .audit-history__open {
+    padding: 13px 12px;
+  }
+
+  .audit-history__delete {
+    width: 52px;
+  }
+}

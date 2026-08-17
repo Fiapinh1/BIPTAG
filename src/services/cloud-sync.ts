@@ -409,7 +409,35 @@ export async function pullAuditsFromSupabase(): Promise<PullResult> {
     syncStatus: 'synced'
   })) as KnownIssue[];
 
+  const remoteAuditIds = new Set(audits.map((audit) => audit.id));
+  const localAudits = await db.audits.toArray();
+  const localAuditIdsToDelete: string[] = [];
+
+  for (const localAudit of localAudits) {
+    if (remoteAuditIds.has(localAudit.id)) continue;
+
+    const [pendingRecords, pendingEffective, pendingKnownIssues] = await Promise.all([
+      db.auditRecords.where('auditId').equals(localAudit.id).and((record) => record.syncStatus === 'pending').count(),
+      db.effectiveTagAssignments.where('auditId').equals(localAudit.id).and((item) => item.syncStatus === 'pending').count(),
+      db.knownIssues.where('auditId').equals(localAudit.id).and((issue) => issue.syncStatus === 'pending').count()
+    ]);
+
+    if (pendingRecords + pendingEffective + pendingKnownIssues === 0) {
+      localAuditIdsToDelete.push(localAudit.id);
+    }
+  }
+
   await db.transaction('rw', [db.audits, db.tagAssignments, db.effectiveTagAssignments, db.auditRecords, db.importIssues, db.knownIssues], async () => {
+    for (const auditId of localAuditIdsToDelete) {
+      await Promise.all([
+        db.tagAssignments.where('auditId').equals(auditId).delete(),
+        db.effectiveTagAssignments.where('auditId').equals(auditId).delete(),
+        db.auditRecords.where('auditId').equals(auditId).delete(),
+        db.importIssues.where('auditId').equals(auditId).delete(),
+        db.knownIssues.where('auditId').equals(auditId).delete()
+      ]);
+      await db.audits.delete(auditId);
+    }
     if (audits.length) await db.audits.bulkPut(audits);
     if (assignments.length) await db.tagAssignments.bulkPut(assignments);
     if (effectiveAssignments.length) await db.effectiveTagAssignments.bulkPut(effectiveAssignments);
