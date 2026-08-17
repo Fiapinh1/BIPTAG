@@ -76,6 +76,8 @@ const KNOWN_ISSUE_OPTIONS: { value: KnownIssueType; label: string }[] = [
   { value: 'other', label: 'OUTRO' }
 ];
 
+const MAX_SMARTTAG_DIGITS = 15;
+
 type DecisionState = {
   status: Exclude<RecordStatus, 'correct'>;
   observedAnimal: string | null;
@@ -111,6 +113,7 @@ type OutcomeState =
       actionLabel: string;
       tagNumber: string | null;
       animal: string | null;
+      autoAdvance?: boolean;
     };
 
 function BiptagLogo({ className = '' }: { className?: string }) {
@@ -824,6 +827,13 @@ function AuditView({
   const lastRead = useRef<{ tag: string; at: number } | null>(null);
 
   useEffect(() => () => stopReader.current?.(), []);
+  useEffect(() => {
+    if (outcome?.kind !== 'action' || !outcome.autoAdvance) return;
+    const timer = window.setTimeout(() => {
+      resetForNext('Tag mantida. Aproxime a proxima SmartTag.');
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [outcome]);
 
   const auditRecords = useLiveQuery(
     () => audit ? db.auditRecords.where('auditId').equals(audit.id).toArray() : Promise.resolve<AuditRecord[]>([]),
@@ -1116,7 +1126,8 @@ function AuditView({
       message: 'A conferencia foi salva e nenhuma correcao sera sugerida para esta SmartTag.',
       actionLabel: 'MANTER TAG ATUAL',
       tagNumber: scan?.tagNumber ?? null,
-      animal: scan?.assignment?.expectedAnimal ?? (observedAnimal.trim() || null)
+      animal: scan?.assignment?.expectedAnimal ?? (observedAnimal.trim() || null),
+      autoAdvance: true
     });
   }
 
@@ -1206,11 +1217,15 @@ function AuditView({
     primeFeedbackAudio();
     const typed = manualTag.replace(/[^0-9]/g, '').trim();
     const prefix = activeAudit.tagPattern?.prefix ?? '';
-    const expectedLength = activeAudit.tagPattern?.length ?? 0;
-    const tag = prefix && expectedLength && typed.length < expectedLength && !typed.startsWith(prefix)
-      ? `${prefix}${typed}`.slice(0, expectedLength)
+    const tag = prefix && typed && !typed.startsWith(prefix)
+      ? `${prefix}${typed}`
       : typed;
     if (!tag) return;
+    if (tag.length > MAX_SMARTTAG_DIGITS) {
+      feedbackWarning();
+      setToast(`SmartTag com ${tag.length} digitos. O limite esperado e ${MAX_SMARTTAG_DIGITS}.`);
+      return;
+    }
     await processRead(tag, tag, 'manual');
     setManualMode(true);
     setManualTag('');
@@ -1235,8 +1250,9 @@ function AuditView({
   const manualRestLength = Math.max((activeAudit.tagPattern?.length ?? 0) - manualPrefix.length, 0);
   const manualDigits = manualTag.replace(/[^0-9]/g, '');
   const manualPreviewTag = manualPrefix && manualDigits && !manualDigits.startsWith(manualPrefix)
-    ? `${manualPrefix}${manualDigits}`.slice(0, activeAudit.tagPattern?.length ?? undefined)
+    ? `${manualPrefix}${manualDigits}`
     : manualDigits;
+  const manualTooLong = manualPreviewTag.length > MAX_SMARTTAG_DIGITS;
 
   return (
     <section className={fieldPageClass}>
@@ -1272,7 +1288,7 @@ function AuditView({
             <label className="field-label" htmlFor="manual-tag">Digitos da tag</label>
             <input
               id="manual-tag"
-              className="text-input manual-field-input"
+              className={`text-input manual-field-input ${manualTooLong ? 'is-invalid' : ''}`}
               inputMode="numeric"
               enterKeyHint="done"
               pattern="[0-9]*"
@@ -1284,13 +1300,21 @@ function AuditView({
             />
 
             {manualPreviewTag && (
-              <div className="manual-preview-card">
+              <div className={`manual-preview-card ${manualTooLong ? 'is-invalid' : ''}`}>
                 <span>Tag montada</span>
                 <strong>{manualPreviewTag}</strong>
+                <small>{manualPreviewTag.length}/{MAX_SMARTTAG_DIGITS} digitos</small>
               </div>
             )}
 
-            <button className="button button--primary button--full button--field" onClick={() => void manualRead()}>
+            {manualTooLong && (
+              <div className="manual-length-alert">
+                <IssuesIcon />
+                <span>SmartTag acima de {MAX_SMARTTAG_DIGITS} digitos contando com o prefixo. Confira o numero antes de registrar.</span>
+              </div>
+            )}
+
+            <button className="button button--primary button--full button--field" disabled={manualTooLong} onClick={() => void manualRead()}>
               Registrar leitura manual
             </button>
             <button className="button button--ghost button--full" onClick={exitManualMode}>
@@ -1382,6 +1406,35 @@ function AuditView({
 
           {!scan.assignment && <div className="context-alert context-alert--danger"><IssuesIcon /><div><strong>Tag não cadastrada</strong><span>Ela não aparece no arquivo Nedap importado. Confirme apenas o brinco que está vendo.</span></div></div>}
           {scan.assignment && !scan.assignment.expectedAnimal && <div className="context-alert context-alert--warning"><IssuesIcon /><div><strong>Tag sem vínculo</strong><span>A tag existe, mas não possui animal cadastrado. Informe somente o brinco físico.</span></div></div>}
+
+          {!decision && (scan.knownIssue || scan.related.message || scan.existingRecord || scan.possibleTypo) && (
+            <div className="field-alert-stage" role="status" aria-live="polite">
+              <div className="field-alert-stage__icon">
+                {scan.knownIssue ? <IssuesIcon size={34} /> : scan.related.message ? <SwapIcon size={34} /> : <IssuesIcon size={34} />}
+              </div>
+              <div>
+                <span className="eyebrow">ATENÇÃO NA LEITURA</span>
+                <h3>
+                  {scan.knownIssue
+                    ? `Problema conhecido: ${knownIssueLabel(scan.knownIssue.type)}`
+                    : scan.related.message
+                      ? 'Ocorrência relacionada encontrada'
+                      : scan.existingRecord
+                        ? 'Tag já conferida nesta auditoria'
+                        : 'Possível erro no cadastro'}
+                </h3>
+                <p>
+                  {scan.knownIssue
+                    ? `Ação sugerida: ${knownIssueActionLabel(scan.knownIssue.type)}. ${scan.knownIssue.note ?? 'Continue a auditoria com atenção.'}${scan.related.message ? ` Ocorrência relacionada: ${scan.related.message}` : ''}`
+                    : scan.related.message
+                      ? `${scan.related.message} Confira o brinco físico antes de confirmar.`
+                      : scan.existingRecord
+                        ? `Resultado anterior: ${statusLabel(scan.existingRecord.status)}. A nova leitura ficará no histórico.`
+                        : `Registro suspeito: ${scan.possibleTypo?.tagNumber ?? 'nao informado'}. Confira antes de confirmar.`}
+                </p>
+              </div>
+            </div>
+          )}
 
           {!decision ? (
             <div className="field-question">
@@ -1485,9 +1538,16 @@ function AuditView({
             <div><AnimalIcon size={22} /><span>Animal</span><strong>{outcome.animal ?? '—'}</strong></div>
             <div><TagIcon size={22} /><span>Tag</span><strong>{outcome.tagNumber ?? '—'}</strong></div>
           </div>
-          <button className="button button--primary button--full button--field" onClick={() => resetForNext()}>
-            Continuar auditoria
-          </button>
+          {outcome.autoAdvance ? (
+            <div className="auto-advance-note">
+              <span />
+              Voltando para a proxima leitura...
+            </div>
+          ) : (
+            <button className="button button--primary button--full button--field" onClick={() => resetForNext()}>
+              Continuar auditoria
+            </button>
+          )}
         </div>
       )}
 
