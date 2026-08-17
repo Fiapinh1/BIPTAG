@@ -822,6 +822,7 @@ function AuditView({
   const [decision, setDecision] = useState<DecisionState | null>(null);
   const [outcome, setOutcome] = useState<OutcomeState | null>(null);
   const [showCorrectOptions, setShowCorrectOptions] = useState(false);
+  const [dismissedAttentionKey, setDismissedAttentionKey] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const stopReader = useRef<null | (() => void)>(null);
   const lastRead = useRef<{ tag: string; at: number } | null>(null);
@@ -917,6 +918,7 @@ function AuditView({
     setDecision(null);
     setOutcome(null);
     setShowCorrectOptions(false);
+    setDismissedAttentionKey(null);
     setScan({
       tagNumber: normalized,
       rawValue,
@@ -931,7 +933,9 @@ function AuditView({
     });
     setReaderMessage(`Tag lida: ${normalized}`);
     feedbackCorrect();
-    window.setTimeout(() => inputRef.current?.focus(), 650);
+    if (!knownIssue && !related.message && !existingRecord && !possibleTypo) {
+      window.setTimeout(() => inputRef.current?.focus(), 650);
+    }
   }
 
   async function findPreviousNewTagRecord(tagNumber: string, observed: string | null) {
@@ -1048,6 +1052,7 @@ function AuditView({
       const swap = await detectReciprocalSwap(saved);
       if (swap) {
         if (swap.kind === 'conflict') {
+          setScan((currentScan) => currentScan ? { ...currentScan, existingRecord: swap.current } : currentScan);
           setOutcome({
             kind: 'issue',
             title: 'Ocorrencia relacionada',
@@ -1057,6 +1062,7 @@ function AuditView({
             observedAnimal: swap.current.observedAnimal
           });
         } else {
+          setScan((currentScan) => currentScan ? { ...currentScan, existingRecord: swap.current } : currentScan);
           setOutcome({ kind: 'swap', title: 'Troca relacionada identificada', current: swap.current, other: swap.other });
         }
         setDecision(null);
@@ -1065,6 +1071,7 @@ function AuditView({
       }
     }
 
+    setScan((currentScan) => currentScan ? { ...currentScan, existingRecord: saved } : currentScan);
     setOutcome({
       kind: 'issue',
       title: issueSavedTitle(saved.status),
@@ -1079,7 +1086,7 @@ function AuditView({
 
   async function couldNotConfirm() {
     if (!scan) return;
-    await saveReading({
+    const saved = await saveReading({
       auditId: activeAudit.id,
       tagNumber: scan.tagNumber,
       assignment: scan.assignment,
@@ -1091,6 +1098,7 @@ function AuditView({
       existingRecord: scan.existingRecord
     });
     setDecision(null);
+    setScan({ ...scan, existingRecord: saved });
     setOutcome({
       kind: 'issue',
       title: 'Separado para revisão',
@@ -1188,6 +1196,17 @@ function AuditView({
     focusObservedInput();
   }
 
+  function returnToConference(observed: string | null = null) {
+    if (scan?.existingRecord && !scan.knownIssue && !scan.related.message && !scan.possibleTypo) {
+      setDismissedAttentionKey(`existing-${scan.tagNumber}-${scan.existingRecord.id}`);
+    }
+    setOutcome(null);
+    setDecision(null);
+    setShowCorrectOptions(false);
+    if (observed) setObservedAnimal(observed);
+    focusObservedInput();
+  }
+
   function cancelCurrentRead() {
     resetForNext(readerActive ? 'Leitor ativo. Aproxime a proxima SmartTag.' : 'Leitura cancelada. Voce pode digitar outra tag.');
   }
@@ -1209,6 +1228,7 @@ function AuditView({
     setDecision(null);
     setOutcome(null);
     setShowCorrectOptions(false);
+    setDismissedAttentionKey(null);
     setObservedAnimal('');
     setReaderMessage(readerActive ? 'Leitor ativo. Aproxime a próxima SmartTag.' : message);
   }
@@ -1253,6 +1273,42 @@ function AuditView({
     ? `${manualPrefix}${manualDigits}`
     : manualDigits;
   const manualTooLong = manualPreviewTag.length > MAX_SMARTTAG_DIGITS;
+  const attentionAlert = scan && !decision && !outcome && !scan.patternWarning
+    ? scan.knownIssue
+      ? {
+          key: `known-${scan.tagNumber}-${scan.knownIssue.id}-${scan.related.message ?? ''}`,
+          icon: <IssuesIcon size={42} />,
+          eyebrow: 'PROBLEMA CONHECIDO',
+          title: knownIssueLabel(scan.knownIssue.type),
+          message: `Ação sugerida: ${knownIssueActionLabel(scan.knownIssue.type)}. ${scan.knownIssue.note ?? 'Continue a auditoria com atenção.'}${scan.related.message ? ` Ocorrência relacionada: ${scan.related.message}` : ''}`
+        }
+      : scan.related.message
+        ? {
+            key: `related-${scan.tagNumber}-${scan.related.message}`,
+            icon: <SwapIcon size={42} />,
+            eyebrow: 'OCORRÊNCIA RELACIONADA',
+            title: 'Existe uma leitura relacionada',
+            message: `${scan.related.message} Confira o brinco físico antes de confirmar.`
+          }
+        : scan.existingRecord
+          ? {
+              key: `existing-${scan.tagNumber}-${scan.existingRecord.id}`,
+              icon: <IssuesIcon size={42} />,
+              eyebrow: 'TAG JÁ CONFERIDA',
+              title: 'Esta tag já teve leitura',
+              message: `Resultado anterior: ${statusLabel(scan.existingRecord.status)}. Se continuar, a nova confirmação ficará registrada no histórico.`
+            }
+          : scan.possibleTypo
+            ? {
+                key: `typo-${scan.tagNumber}-${scan.possibleTypo.tagNumber}`,
+                icon: <IssuesIcon size={42} />,
+                eyebrow: 'ATENÇÃO NO CADASTRO',
+                title: 'Possível erro de digitação',
+                message: `Registro suspeito: ${scan.possibleTypo.tagNumber}. Confira o brinco físico antes de confirmar.`
+              }
+            : null
+    : null;
+  const showAttentionOverlay = Boolean(attentionAlert && dismissedAttentionKey !== attentionAlert.key);
 
   return (
     <section className={fieldPageClass}>
@@ -1268,6 +1324,27 @@ function AuditView({
         <div><span>Total</span><strong>{activeAudit.validTags ?? activeAudit.totalTags}</strong></div>
       </div>
       <div className="field-progress-bar"><span style={{ width: `${fieldMetrics.percent}%` }} /></div>
+
+      {attentionAlert && showAttentionOverlay && (
+        <div className="attention-overlay" role="dialog" aria-modal="true" aria-labelledby="attention-title">
+          <div className="attention-overlay__panel">
+            <div className="attention-overlay__icon">{attentionAlert.icon}</div>
+            <span className="eyebrow">{attentionAlert.eyebrow}</span>
+            <h1 id="attention-title">{attentionAlert.title}</h1>
+            <p>{attentionAlert.message}</p>
+            <div className="attention-overlay__data">
+              <div><TagIcon size={20} /><span>Tag lida</span><strong>{scan?.tagNumber}</strong></div>
+              <div><AnimalIcon size={20} /><span>Cadastro Nedap</span><strong>{scan?.assignment?.expectedAnimal ?? 'Sem vínculo'}</strong></div>
+            </div>
+            <button className="button button--primary button--full button--field" onClick={() => { setDismissedAttentionKey(attentionAlert.key); focusObservedInput(); }}>
+              Entendi, conferir brinco
+            </button>
+            <button className="button button--ghost button--full" onClick={cancelCurrentRead}>
+              Ler outra tag
+            </button>
+          </div>
+        </div>
+      )}
 
       {manualMode && !scan && !outcome && (
         <div className="manual-field-screen">
@@ -1376,65 +1453,8 @@ function AuditView({
             </div>
           </div>
 
-          {scan.existingRecord && (
-            <div className="context-alert context-alert--warning"><IssuesIcon /><div><strong>Esta tag já foi conferida</strong><span>Resultado anterior: {statusLabel(scan.existingRecord.status)}. A nova confirmação ficará registrada no histórico.</span></div></div>
-          )}
-
-          {scan.knownIssue && (
-            <div className="context-alert context-alert--known">
-              <IssuesIcon />
-              <div>
-                <strong>Problema conhecido: {knownIssueLabel(scan.knownIssue.type)}</strong>
-                <span>Acao sugerida: {knownIssueActionLabel(scan.knownIssue.type)}. {scan.knownIssue.note ?? 'Continue a auditoria normalmente.'}</span>
-              </div>
-            </div>
-          )}
-
-          {scan.related.message && (
-            <div className="context-alert context-alert--relation"><SwapIcon /><div><strong>Existe uma ocorrência relacionada</strong><span>{scan.related.message} O BIPTAG vai cruzar esta leitura automaticamente.</span></div></div>
-          )}
-
-          {scan.possibleTypo && (
-            <div className="context-alert context-alert--warning">
-              <IssuesIcon />
-              <div>
-                <strong>Possivel erro de digitacao no cadastro</strong>
-                <span>Tag fisica {scan.tagNumber}. Registro suspeito {scan.possibleTypo.tagNumber} no animal {scan.possibleTypo.expectedAnimal ?? 'sem vinculo'}.</span>
-              </div>
-            </div>
-          )}
-
           {!scan.assignment && <div className="context-alert context-alert--danger"><IssuesIcon /><div><strong>Tag não cadastrada</strong><span>Ela não aparece no arquivo Nedap importado. Confirme apenas o brinco que está vendo.</span></div></div>}
           {scan.assignment && !scan.assignment.expectedAnimal && <div className="context-alert context-alert--warning"><IssuesIcon /><div><strong>Tag sem vínculo</strong><span>A tag existe, mas não possui animal cadastrado. Informe somente o brinco físico.</span></div></div>}
-
-          {!decision && (scan.knownIssue || scan.related.message || scan.existingRecord || scan.possibleTypo) && (
-            <div className="field-alert-stage" role="status" aria-live="polite">
-              <div className="field-alert-stage__icon">
-                {scan.knownIssue ? <IssuesIcon size={34} /> : scan.related.message ? <SwapIcon size={34} /> : <IssuesIcon size={34} />}
-              </div>
-              <div>
-                <span className="eyebrow">ATENÇÃO NA LEITURA</span>
-                <h3>
-                  {scan.knownIssue
-                    ? `Problema conhecido: ${knownIssueLabel(scan.knownIssue.type)}`
-                    : scan.related.message
-                      ? 'Ocorrência relacionada encontrada'
-                      : scan.existingRecord
-                        ? 'Tag já conferida nesta auditoria'
-                        : 'Possível erro no cadastro'}
-                </h3>
-                <p>
-                  {scan.knownIssue
-                    ? `Ação sugerida: ${knownIssueActionLabel(scan.knownIssue.type)}. ${scan.knownIssue.note ?? 'Continue a auditoria com atenção.'}${scan.related.message ? ` Ocorrência relacionada: ${scan.related.message}` : ''}`
-                    : scan.related.message
-                      ? `${scan.related.message} Confira o brinco físico antes de confirmar.`
-                      : scan.existingRecord
-                        ? `Resultado anterior: ${statusLabel(scan.existingRecord.status)}. A nova leitura ficará no histórico.`
-                        : `Registro suspeito: ${scan.possibleTypo?.tagNumber ?? 'nao informado'}. Confira antes de confirmar.`}
-                </p>
-              </div>
-            </div>
-          )}
 
           {!decision ? (
             <div className="field-question">
@@ -1509,6 +1529,12 @@ function AuditView({
             <div><AnimalIcon size={20} /><span>Brinco visto</span><strong>{outcome.observedAnimal ?? '—'}</strong></div>
           </div>
           <button className="button button--primary button--full button--field" onClick={() => resetForNext()}>Continuar auditoria</button>
+          {scan && (
+            <button className="button button--secondary button--full" onClick={() => returnToConference(outcome.observedAnimal)}>
+              Voltar e corrigir brinco
+            </button>
+          )}
+          <button className="button button--ghost button--full" onClick={cancelCurrentRead}>Ler outra tag</button>
         </div>
       )}
 
