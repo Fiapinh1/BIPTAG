@@ -463,35 +463,35 @@ p { color: var(--muted); line-height: 1.55; font-size: 14px; }
 
 /* BIPTAG V0.3 - mobile field interface */
 :root {
-  color: #18231f;
-  background: #eef3ee;
-  --bg: #eef3ee;
-  --surface: #ffffff;
-  --surface-2: #e3ebe5;
-  --graphite: #16231f;
-  --graphite-2: #263832;
-  --muted: #586862;
-  --line: #c8d5ce;
-  --copper: #1f755f;
-  --copper-dark: #145342;
-  --sand: #e7eee8;
+  color: #24211f;
+  background: #f3efe8;
+  --bg: #f3efe8;
+  --surface: #fffdf9;
+  --surface-2: #ebe4da;
+  --graphite: #24211f;
+  --graphite-2: #36312d;
+  --muted: #746c64;
+  --line: #d9cfc4;
+  --copper: #b86135;
+  --copper-dark: #8f4526;
+  --sand: #e7ded4;
   --success: #147a49;
   --warning: #b56b13;
   --danger: #b42318;
-  --field-yellow: #f2c94c;
-  --field-blue: #226d9b;
+  --field-yellow: #d9a037;
+  --field-blue: #8f6a3d;
   --shadow: 0 4px 14px rgba(22, 35, 31, 0.08);
 }
 
 * { letter-spacing: 0 !important; }
 body {
-  background: #eef3ee;
+  background: var(--bg);
   color: var(--graphite);
   overflow-x: hidden;
 }
 
 .app-shell {
-  background: #eef3ee;
+  background: var(--bg);
   max-width: 100vw;
   overflow-x: hidden;
   padding-bottom: calc(92px + env(safe-area-inset-bottom));
@@ -500,9 +500,9 @@ body {
 .topbar {
   min-height: 62px;
   padding: 10px 14px;
-  background: #12201b;
+  background: #24211f;
   color: #f8fbf7;
-  border-bottom: 2px solid #2b7a62;
+  border-bottom: 2px solid var(--copper-dark);
 }
 
 .brand__mark {
@@ -536,8 +536,8 @@ body {
   padding: 8px 11px;
   border-radius: 8px;
   color: #eaf4ee;
-  background: #213a31;
-  border-color: #315548;
+  background: #36312d;
+  border-color: #51463f;
   font-weight: 800;
 }
 
@@ -679,8 +679,14 @@ p {
 
 .button--primary {
   color: #ffffff;
-  background: #19705a;
-  box-shadow: 0 3px 0 #0e4436;
+  background: var(--copper);
+  box-shadow: 0 3px 0 var(--copper-dark);
+}
+
+.button--danger {
+  color: #ffffff;
+  background: var(--danger);
+  box-shadow: 0 3px 0 #7b1e18;
 }
 
 .button--secondary {
@@ -763,8 +769,8 @@ p {
 
 .text-input:focus,
 .animal-input:focus {
-  border-color: #19705a;
-  box-shadow: 0 0 0 4px rgba(25, 112, 90, .16);
+  border-color: var(--copper);
+  box-shadow: 0 0 0 4px rgba(184, 97, 53, .16);
 }
 
 .file-drop {
@@ -826,7 +832,7 @@ p {
 
 .nav-button.is-active {
   color: #ffffff;
-  background: #19705a;
+  background: var(--copper);
 }
 
 .toast {
@@ -856,7 +862,7 @@ p {
   z-index: 12;
   margin: -10px -12px 10px;
   padding: 10px 12px;
-  background: #eef3ee;
+  background: var(--bg);
   border-bottom: 1px solid #d0ddd5;
 }
 
@@ -922,7 +928,7 @@ p {
 .field-progress-bar span {
   display: block;
   height: 100%;
-  background: #19705a;
+  background: var(--copper);
 }
 
 .nfc-panel {
@@ -933,8 +939,8 @@ p {
 }
 
 .nfc-panel.is-active {
-  border-color: #19705a;
-  box-shadow: 0 0 0 4px rgba(25,112,90,.12);
+  border-color: var(--copper);
+  box-shadow: 0 0 0 4px rgba(184,97,53,.12);
 }
 
 .nfc-panel__visual {
@@ -943,11 +949,11 @@ p {
   margin-bottom: 14px;
   border-radius: 8px;
   color: #ffffff;
-  background: #19705a;
+  background: var(--copper);
 }
 
 .nfc-panel.is-active .nfc-panel__visual::after {
-  border-color: rgba(25,112,90,.45);
+  border-color: rgba(184,97,53,.45);
   border-radius: 8px;
 }
 
@@ -1061,8 +1067,8 @@ p {
 }
 
 .field-outcome--swap {
-  border-color: #226d9b;
-  background: #eef7fb;
+  border-color: var(--warning);
+  background: #fff7ea;
 }
 
 .outcome-animal {
@@ -1097,7 +1103,7 @@ p {
 .issue-row__icon {
   border-radius: 8px;
   color: #ffffff;
-  background: #226d9b;
+  background: var(--copper);
 }
 
 .issue-row--field {
@@ -1123,7 +1129,7 @@ p {
 .settings-row__icon {
   border-radius: 8px;
   color: #ffffff;
-  background: #19705a;
+  background: var(--copper);
 }
 
 @media (max-width: 430px) {
@@ -1209,7 +1215,7 @@ p {
 /* Ajustes V0.3.1: modo campo mais limpo em celulares */
 .app-shell--audit {
   padding-bottom: env(safe-area-inset-bottom);
-  background: #eef3ee;
+  background: var(--bg);
 }
 
 .app-shell--audit .bottom-nav {

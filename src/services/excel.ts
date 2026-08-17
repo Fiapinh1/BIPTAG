@@ -5,12 +5,12 @@ import type {
   EffectiveTagAssignment,
   ImportIssue,
   ImportPreview,
-  OperationalAction,
   RecordStatus,
   SmartTagPattern,
   TagAssignment,
   TagValidationStatus
 } from '../types/domain';
+import { fieldDecisionLabel, operationalActionLabel, statusLabel } from './audit-labels';
 
 const REQUIRED_HEADERS = ['Numero de tag', 'Animal'];
 const DEFAULT_PATTERN: SmartTagPattern = { prefix: '9840000', length: 15, numericOnly: true };
@@ -291,39 +291,25 @@ function effectiveStatusLabel(status: EffectiveTagAssignment['status']) {
 function actionForEffectiveStatus(status: EffectiveTagAssignment['status']) {
   const actions: Record<EffectiveTagAssignment['status'], string> = {
     pending: 'Localizar SmartTag ou marcar como nao localizada',
-    confirmed: 'Nenhuma',
-    reassigned: 'Alterar vinculo no Nedap',
-    linked: 'Criar vinculo no Nedap',
-    new_tag: 'Cadastrar nova SmartTag no Nedap',
-    displaced: 'Localizar tag deslocada ou remover vinculo antigo',
-    not_found: 'Investigar colar perdido, animal fora do lote ou cadastro antigo',
-    suspicious: 'Corrigir cadastro da base',
-    invalid: 'Corrigir formato da tag na base',
-    unresolved: 'Revisar em campo'
+    confirmed: 'MANTER TAG',
+    reassigned: 'MOVER TAG',
+    linked: 'VINCULAR TAG',
+    new_tag: 'CADASTRAR TAG',
+    displaced: 'INVESTIGAR',
+    not_found: 'INVESTIGAR',
+    suspicious: 'INVESTIGAR',
+    invalid: 'INVESTIGAR',
+    unresolved: 'INVESTIGAR'
   };
   return actions[status];
-}
-
-function operationalActionLabel(action: OperationalAction | null | undefined) {
-  const labels: Record<OperationalAction, string> = {
-    keep_tag: 'MANTER TAG ATUAL',
-    remove_tag: 'REMOVER TAG',
-    replace_tag: 'SUBSTITUIR TAG',
-    register_new_tag: 'CADASTRAR NOVA TAG',
-    link_tag: 'VINCULAR TAG',
-    swap_tags: 'TROCAR TAGS',
-    move_tag: 'MOVIMENTACAO DE TAG',
-    investigate: 'INVESTIGAR'
-  };
-  return action ? labels[action] : '';
 }
 
 function actionNeeded(record: AuditRecord) {
   if (record.operationalAction) return operationalActionLabel(record.operationalAction);
   if (record.status === 'possible_swap') return 'TROCAR TAGS';
-  if (record.status === 'new_tag') return 'CADASTRAR NOVA TAG';
+  if (record.status === 'new_tag') return 'CADASTRAR TAG';
   if (record.status === 'linked' || record.status === 'tag_without_animal') return 'VINCULAR TAG';
-  if (record.status === 'correct') return 'MANTER TAG ATUAL';
+  if (record.status === 'correct') return 'MANTER TAG';
   return 'INVESTIGAR';
 }
 
@@ -603,38 +589,6 @@ export function exportAuditWorkbook(
 
   const safeFarm = audit.farmName.replace(/[^a-zA-Z0-9_-]+/g, '_');
   XLSX.writeFile(workbook, `BIPTAG_${safeFarm}_${new Date().toISOString().slice(0, 10)}.xlsx`);
-}
-
-export function statusLabel(status: AuditRecord['status']) {
-  const labels: Record<AuditRecord['status'], string> = {
-    correct: 'Conferido',
-    divergence: 'Tag encontrada em outro animal',
-    reassignment: 'Tag reatribuida',
-    linked: 'Tag vinculada em campo',
-    new_tag: 'Nova tag cadastrada em campo',
-    new_tag_conflict: 'Conflito de tag nova',
-    possible_swap: 'Possivel troca de tags',
-    audit_conflict: 'Conflito de auditoria',
-    replacement_chain: 'Cadeia de substituicoes',
-    tag_not_registered: 'Tag nao cadastrada',
-    tag_not_found: 'Tag nao localizada',
-    tag_without_animal: 'Tag sem animal vinculado',
-    animal_not_in_base: 'Animal fora da base',
-    unconfirmed: 'Nao confirmado em campo',
-    suspicious_tag: 'Tag suspeita',
-    possible_typo: 'Possivel erro de digitacao'
-  };
-  return labels[status];
-}
-
-export function fieldDecisionLabel(decision: AuditRecord['fieldDecision']) {
-  const labels: Record<AuditRecord['fieldDecision'], string> = {
-    confirmed_match: 'Brinco e cadastro conferem',
-    confirmed_physical_animal: 'Tecnico confirmou o brinco fisico',
-    could_not_confirm: 'Tecnico nao conseguiu confirmar',
-    review_later: 'Revisar depois'
-  };
-  return labels[decision];
 }
 
 export function reviewLabel(reviewStatus: AuditRecord['reviewStatus']) {

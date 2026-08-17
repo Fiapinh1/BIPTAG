@@ -16,7 +16,8 @@ import {
   ScanIcon,
   SwapIcon
 } from './icons/Icons';
-import { parseNedapWorkbook, exportAuditWorkbook, statusLabel, validateSmartTag } from './services/excel';
+import { parseNedapWorkbook, exportAuditWorkbook, validateSmartTag } from './services/excel';
+import { statusLabel } from './services/audit-labels';
 import { feedbackCorrect, feedbackWarning, primeFeedbackAudio } from './services/feedback';
 import { isWebNfcSupported, startNfcReader } from './services/nfc';
 import { isSupabaseConfigured, supabase } from './services/supabase';
@@ -230,7 +231,7 @@ function App() {
         <NavButton active={view === 'home'} label="Início" icon={<HomeIcon />} onClick={() => setView('home')} />
         <NavButton active={view === 'import'} label="Importar" icon={<ImportIcon />} onClick={() => setView('import')} />
         <NavButton active={view === 'audit'} label="Auditar" icon={<ScanIcon />} onClick={() => setView('audit')} />
-        <NavButton active={view === 'issues'} label="Pendências" icon={<IssuesIcon />} onClick={() => setView('issues')} />
+        <NavButton active={view === 'issues'} label="Revisão" icon={<IssuesIcon />} onClick={() => setView('issues')} />
       </nav>
 
       {toast ? <div className="toast">{toast}</div> : null}
@@ -625,7 +626,7 @@ function AuditView({
   if (audit.status === 'finished') {
     return (
       <section className="page page--centered">
-        <EmptyState icon={<CheckIcon size={42} />} title="Auditoria finalizada" text="Esta auditoria está bloqueada para novas leituras. Os resultados continuam disponíveis em Pendências e no relatório." action={<button className="button button--primary" onClick={onNeedImport}>Criar nova auditoria</button>} />
+        <EmptyState icon={<CheckIcon size={42} />} title="Auditoria finalizada" text="Esta auditoria está bloqueada para novas leituras. Os resultados continuam disponíveis em Revisão e no relatório." action={<button className="button button--primary" onClick={onNeedImport}>Criar nova auditoria</button>} />
       </section>
     );
   }
@@ -805,7 +806,7 @@ function AuditView({
             observedAnimal: swap.current.observedAnimal
           });
         } else {
-          setOutcome({ kind: 'swap', title: 'Possível troca identificada', current: swap.current, other: swap.other });
+          setOutcome({ kind: 'swap', title: 'Troca relacionada identificada', current: swap.current, other: swap.other });
         }
         setDecision(null);
         feedbackWarning();
@@ -875,7 +876,7 @@ function AuditView({
     await setOperationalAction(recordId, 'remove_tag', 'Remover vinculo desta tag no Nedap apos a auditoria.');
     setOutcome(null);
     setScan(null);
-    resetForNext('Acao registrada: remover tag. Aproxime a proxima SmartTag.');
+    resetForNext('Acao registrada: remover vinculo. Aproxime a proxima SmartTag.');
   }
 
   async function replaceCorrectTag(recordId: string) {
@@ -1069,7 +1070,7 @@ function AuditView({
             <div><span>Tag</span><strong>{outcome.tagNumber}</strong></div>
           </div>
           <button className="button button--primary button--full button--field" onClick={() => void keepCorrectTag(outcome.recordId)}>Próxima tag</button>
-          <button className="button button--secondary button--full" onClick={() => void removeCorrectTag(outcome.recordId)}>Remover tag</button>
+          <button className="button button--danger button--full" onClick={() => void removeCorrectTag(outcome.recordId)}>Remover vínculo</button>
           <button className="button button--secondary button--full" onClick={() => void replaceCorrectTag(outcome.recordId)}>Substituir tag</button>
           <button className="button button--ghost button--full" onClick={() => void addCorrectObservation(outcome.recordId)}>Adicionar observação</button>
         </div>
@@ -1209,7 +1210,7 @@ function decisionCopy(status: Exclude<RecordStatus, 'correct'>, expected: string
   }
   if (status === 'new_tag_conflict') {
     return {
-      title: 'Conflito de tag nova',
+      title: 'Conflito para revisao',
       subtitle: `A mesma SmartTag nao cadastrada ja foi registrada anteriormente em outro animal. Novo animal informado: ${observed}.`,
       confirmLabel: 'Registrar conflito para revisao'
     };
@@ -1231,8 +1232,7 @@ function decisionCopy(status: Exclude<RecordStatus, 'correct'>, expected: string
 function issueSavedTitle(status: RecordStatus) {
   if (status === 'tag_not_registered') return 'Tag nao cadastrada confirmada';
   if (status === 'divergence' || status === 'reassignment') return 'Tag encontrada em outro animal';
-  if (status === 'audit_conflict') return 'Conflito de auditoria';
-  if (status === 'new_tag_conflict') return 'Conflito de tag nova';
+  if (status === 'audit_conflict' || status === 'new_tag_conflict') return 'Conflito para revisao';
   if (status === 'linked') return 'Tag vinculada em campo';
   if (status === 'new_tag') return 'Nova tag registrada';
   if (status === 'animal_not_in_base') return 'Animal fora da base';
@@ -1300,7 +1300,7 @@ function IssuesView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
   return (
     <section className="page">
       <div className="section-heading section-heading--with-action">
-        <div><span className="eyebrow">REVISÃO</span><h1>Pendências</h1><p>O campo registra fatos. Aqui o BIPTAG organiza o que precisa ser corrigido depois.</p></div>
+        <div><span className="eyebrow">REVISÃO</span><h1>Revisão da auditoria</h1><p>O campo registra fatos. Aqui o BIPTAG organiza o que precisa ser corrigido depois.</p></div>
         <button className="icon-action" onClick={exportReport} title="Exportar Excel"><ReportIcon /></button>
       </div>
 
@@ -1373,7 +1373,7 @@ function SwapRow({ record, other }: { record: AuditRecord; other: AuditRecord | 
     <div className="issue-row issue-row--swap">
       <span className="issue-row__icon"><SwapIcon /></span>
       <div>
-        <strong>Possível troca entre animais</strong>
+        <strong>Troca identificada</strong>
         <span>{record.expectedAnimal} ↔ {record.observedAnimal}</span>
         <small>Tag {record.tagNumber}{other ? ` · Tag ${other.tagNumber}` : ''}</small>
       </div>
