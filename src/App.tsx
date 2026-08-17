@@ -213,6 +213,11 @@ function App() {
             activeAudit={selectedAudit}
             onSelectAudit={(audit) => void chooseAudit(audit)}
             onNewAudit={() => setView('import')}
+            onImportCreated={(auditId) => {
+              setSelectedAuditId(auditId);
+              setToast('Fazenda criada e base salva neste aparelho.');
+              setView('audit');
+            }}
             onAudit={async () => {
               if (selectedAudit) await chooseAudit(selectedAudit);
               setView('audit');
@@ -245,7 +250,6 @@ function App() {
 
       <nav className="bottom-nav" aria-label="Navegação principal">
         <NavButton active={view === 'home'} label="Início" icon={<HomeIcon />} onClick={() => setView('home')} />
-        <NavButton active={view === 'import'} label="Importar" icon={<ImportIcon />} onClick={() => setView('import')} />
         <NavButton active={view === 'audit'} label="Auditar" icon={<ScanIcon />} onClick={() => setView('audit')} />
         <NavButton active={view === 'issues' || view === 'knownIssues'} label="Revisão" icon={<IssuesIcon />} onClick={() => setView('issues')} />
       </nav>
@@ -269,6 +273,7 @@ function HomeView({
   activeAudit,
   onSelectAudit,
   onNewAudit,
+  onImportCreated,
   onAudit,
   onIssues,
   onKnownIssues,
@@ -278,11 +283,13 @@ function HomeView({
   activeAudit: Audit | null;
   onSelectAudit: (audit: Audit) => void;
   onNewAudit: () => void;
+  onImportCreated: (auditId: string) => void;
   onAudit: () => void;
   onIssues: () => void;
   onKnownIssues: () => void;
   setToast: (value: string) => void;
 }) {
+  const [showImportPanel, setShowImportPanel] = useState(false);
   const records = useLiveQuery(
     () => activeAudit ? db.auditRecords.where('auditId').equals(activeAudit.id).toArray() : Promise.resolve<AuditRecord[]>([]),
     [activeAudit?.id],
@@ -336,19 +343,23 @@ function HomeView({
 
   if (!activeAudit) {
     return (
-      <section className="page page--centered">
-        <EmptyState
-          icon={<BiptagLogo className="empty-logo" />}
-          title="BIPTAG pronto para começar"
-          text="Importe o Tags.xlsx original do Nedap. A auditoria ficará salva no aparelho e pode continuar em outro dia."
-          action={<button className="button button--primary" onClick={onNewAudit}><ImportIcon /> Nova auditoria</button>}
-        />
+      <section className="page home-page">
+        <div className="home-hero">
+          <div>
+            <span className="eyebrow">BIPTAG</span>
+            <h1>Auditoria de SmartTags no campo</h1>
+            <p>Crie a fazenda, importe o Tags.xlsx do Nedap e comece a conferência pelo celular.</p>
+          </div>
+          <BiptagLogo className="home-hero__logo" />
+        </div>
+        <ImportView onCreated={onImportCreated} embedded />
       </section>
     );
   }
 
   return (
-    <section className="page">
+    <section className="page home-page">
+      <div className="home-dashboard">
       <div className="hero-card field-hero">
         <div>
           <span className="eyebrow">{activeAudit.status === 'finished' ? 'AUDITORIA FINALIZADA' : activeAudit.status === 'paused' ? 'AUDITORIA PAUSADA' : 'AUDITORIA EM ANDAMENTO'}</span>
@@ -362,6 +373,7 @@ function HomeView({
           </div>
         </div>
       </div>
+      </div>
 
       <div className="stats-grid field-stats">
         <StatCard label="Processadas" value={metrics.auditedUnique} hint={`${metrics.pending} pendentes`} icon={<CheckIcon />} />
@@ -371,25 +383,37 @@ function HomeView({
       </div>
 
       {activeAudit.status !== 'finished' && (
-        <button className="field-action field-action--primary" onClick={onAudit}>
-          <span className="field-action__icon"><PlayIcon size={30} /></span>
-          <span>
-            <strong>{activeAudit.status === 'paused' ? 'Retomar auditoria' : 'Continuar auditoria'}</strong>
-            <small>Voltar exatamente de onde parou</small>
-          </span>
-          <ChevronRightIcon />
-        </button>
+        <div className="home-action-grid">
+          <button className="field-action field-action--primary" onClick={onAudit}>
+            <span className="field-action__icon"><PlayIcon size={30} /></span>
+            <span>
+              <strong>{activeAudit.status === 'paused' ? 'Retomar auditoria' : 'Auditar'}</strong>
+              <small>Leitura NFC ou digitação manual</small>
+            </span>
+            <ChevronRightIcon />
+          </button>
+          <button className="field-action field-action--review" onClick={onIssues}>
+            <span className="field-action__icon"><IssuesIcon size={30} /></span>
+            <span>
+              <strong>Revisão</strong>
+              <small>Ocorrências e ações Nedap</small>
+            </span>
+            <ChevronRightIcon />
+          </button>
+        </div>
       )}
-
-      <button className="secondary-row" onClick={onIssues}>
-        <span><IssuesIcon /> Revisar ocorrências e possíveis trocas</span>
-        <strong>{metrics.problems + activeAudit.issueCount}</strong>
-      </button>
 
       <button className="secondary-row" onClick={onKnownIssues}>
         <span><IssuesIcon /> Problemas conhecidos antes da ordenha</span>
         <ChevronRightIcon />
       </button>
+
+      <button className="secondary-row" onClick={() => setShowImportPanel((value) => !value)}>
+        <span><ImportIcon /> Criar outra fazenda / importar Tags.xlsx</span>
+        <ChevronRightIcon />
+      </button>
+
+      {showImportPanel && <ImportView onCreated={onImportCreated} embedded />}
 
       {activeAudit.status !== 'finished' && (
         <div className="session-actions">
@@ -412,12 +436,12 @@ function HomeView({
         </>
       )}
 
-      <button className="link-button" onClick={onNewAudit}>Criar outra auditoria</button>
+      <button className="link-button" onClick={onNewAudit}>Abrir tela de importação antiga</button>
     </section>
   );
 }
 
-function ImportView({ onCreated }: { onCreated: (auditId: string) => void }) {
+function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: string) => void; embedded?: boolean }) {
   const [farmName, setFarmName] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
@@ -523,12 +547,12 @@ function ImportView({ onCreated }: { onCreated: (auditId: string) => void }) {
   }
 
   return (
-    <section className="page">
+    <section className={embedded ? 'embedded-import' : 'page'}>
       <div className="section-heading">
         <div>
-          <span className="eyebrow">NOVA AUDITORIA</span>
-          <h1>Importar base Nedap</h1>
-          <p>Use o <strong>Tags.xlsx original</strong>. Depois de salvar, a auditoria fica persistida no aparelho.</p>
+          <span className="eyebrow">{embedded ? 'CRIAR FAZENDA' : 'NOVA AUDITORIA'}</span>
+          <h1>{embedded ? 'Nova fazenda' : 'Importar base Nedap'}</h1>
+          <p>Informe a fazenda e use o <strong>Tags.xlsx original</strong>. Depois de salvar, a auditoria fica persistida no aparelho.</p>
         </div>
       </div>
 
@@ -1166,6 +1190,7 @@ function AuditView({
   const fieldPageClass = [
     'page field-page',
     scan ? 'field-page--scanned' : '',
+    manualMode && !scan && !outcome ? 'field-page--manual' : '',
     decision ? 'field-page--decision' : '',
     outcome ? `field-page--outcome-active field-page--outcome-${outcome.kind}` : ''
   ].filter(Boolean).join(' ');
@@ -1191,7 +1216,54 @@ function AuditView({
       </div>
       <div className="field-progress-bar"><span style={{ width: `${fieldMetrics.percent}%` }} /></div>
 
-      {!scan && !outcome && (
+      {manualMode && !scan && !outcome && (
+        <div className="manual-field-screen">
+          <div className="manual-field-screen__header">
+            <span className="eyebrow">MODO MANUAL</span>
+            <h1>Digitar SmartTag</h1>
+            <p>Use o padrao definido da fazenda. Digite somente os digitos finais quando o prefixo aparecer abaixo.</p>
+          </div>
+
+          <div className="manual-field-card">
+            {manualPrefix && (
+              <div className="manual-prefix-block">
+                <span>Prefixo da fazenda</span>
+                <strong>{manualPrefix}</strong>
+              </div>
+            )}
+
+            <label className="field-label" htmlFor="manual-tag">Digitos da tag</label>
+            <input
+              id="manual-tag"
+              className="text-input manual-field-input"
+              inputMode="numeric"
+              enterKeyHint="done"
+              pattern="[0-9]*"
+              autoComplete="off"
+              placeholder={manualRestLength ? `${manualRestLength} digitos finais` : '9840000...'}
+              value={manualTag}
+              onChange={(event) => setManualTag(event.target.value.replace(/[^0-9]/g, ''))}
+              onKeyDown={(event) => { if (event.key === 'Enter') void manualRead(); }}
+            />
+
+            {manualPreviewTag && (
+              <div className="manual-preview-card">
+                <span>Tag simulada</span>
+                <strong>{manualPreviewTag}</strong>
+              </div>
+            )}
+
+            <button className="button button--primary button--full button--field" onClick={() => void manualRead()}>
+              Simular leitura
+            </button>
+            <button className="button button--ghost button--full" onClick={exitManualMode}>
+              Voltar para NFC
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!manualMode && !scan && !outcome && (
         <div className={`nfc-panel nfc-panel--field ${readerActive ? 'is-active' : ''}`}>
           <div className="nfc-panel__visual"><ScanIcon size={58} /></div>
           <div className="nfc-panel__text">
@@ -1204,6 +1276,9 @@ function AuditView({
           ) : (
             <button className="button button--ghost button--full" onClick={deactivateReader}>Parar leitor</button>
           )}
+          <button className="button button--secondary button--full nfc-manual-button" onClick={() => setManualMode(true)}>
+            Digitar tag manualmente
+          </button>
         </div>
       )}
 
@@ -1343,19 +1418,6 @@ function AuditView({
         </div>
       )}
 
-      {!scan && !outcome && (
-        <details className="manual-test" open={manualMode} onToggle={(event) => setManualMode(event.currentTarget.open)}>
-          <summary>Teste manual sem NFC</summary>
-          <p>Use o padrao definido. Voce pode digitar so o final da tag.</p>
-          <div className="manual-test__row">
-            {manualPrefix && <span className="manual-prefix">{manualPrefix}</span>}
-            <input className="text-input" inputMode="numeric" placeholder={manualRestLength ? `${manualRestLength} digitos finais` : '9840000...'} value={manualTag} onChange={(event) => setManualTag(event.target.value.replace(/[^0-9]/g, ''))} />
-            <button className="button button--secondary" onClick={() => void manualRead()}>Simular</button>
-          </div>
-          {manualPreviewTag && <small className="manual-preview">Tag simulada: {manualPreviewTag}</small>}
-          {manualMode && <button className="button button--ghost button--full manual-exit" onClick={exitManualMode}>Sair do modo manual</button>}
-        </details>
-      )}
     </section>
   );
 }

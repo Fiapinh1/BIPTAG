@@ -1710,3 +1710,264 @@ textarea {
     min-height: 58px;
   }
 }
+
+/* Fase 7 - Home operacional e modo manual dedicado */
+.bottom-nav {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.home-page {
+  display: grid;
+  gap: 14px;
+}
+
+.home-hero {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: center;
+  padding: 18px;
+  border: 2px solid #bfd0c8;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.home-hero h1 {
+  margin: 4px 0 8px;
+  color: #12201b;
+  font-size: clamp(30px, 8vw, 44px);
+}
+
+.home-hero p {
+  margin: 0;
+  color: #52645c;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.home-hero__logo {
+  width: clamp(72px, 20vw, 112px);
+  height: clamp(72px, 20vw, 112px);
+  object-fit: contain;
+}
+
+.home-dashboard {
+  display: grid;
+  gap: 12px;
+}
+
+.home-dashboard .hero-card {
+  margin-bottom: 0;
+}
+
+.home-action-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.field-action {
+  border-radius: 8px;
+}
+
+.field-action--review {
+  color: #12201b;
+  background: #ffffff;
+  border: 2px solid #bfd0c8;
+  box-shadow: none;
+}
+
+.field-action--review .field-action__icon {
+  color: #ffffff;
+  background: var(--copper);
+}
+
+.field-action--review small {
+  color: #52645c;
+}
+
+.secondary-row {
+  min-height: 58px;
+  border-radius: 8px;
+  font-weight: 850;
+}
+
+.embedded-import {
+  padding: 16px;
+  border: 2px solid #bfd0c8;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.embedded-import .section-heading {
+  margin-bottom: 12px;
+}
+
+.embedded-import .section-heading h1 {
+  font-size: clamp(25px, 7vw, 34px);
+}
+
+.embedded-import .section-heading p {
+  font-size: 13px;
+}
+
+.embedded-import .form-card,
+.embedded-import .pattern-card,
+.embedded-import .technical-note {
+  border-color: #d4e0da;
+  box-shadow: none;
+}
+
+.field-page--manual .field-progress-strip,
+.field-page--manual .field-progress-bar {
+  display: none;
+}
+
+.manual-field-screen {
+  display: grid;
+  gap: 14px;
+  padding-bottom: calc(18px + env(safe-area-inset-bottom));
+}
+
+.manual-field-screen__header {
+  padding: 18px;
+  border: 2px solid #bfd0c8;
+  border-radius: 8px;
+  background: #ffffff;
+  text-align: center;
+}
+
+.manual-field-screen__header h1 {
+  margin: 4px 0 8px;
+  color: #12201b;
+  font-size: clamp(32px, 9vw, 46px);
+}
+
+.manual-field-screen__header p {
+  margin: 0;
+  color: #52645c;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.manual-field-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 2px solid #bfd0c8;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.manual-prefix-block,
+.manual-preview-card {
+  padding: 14px;
+  border-radius: 8px;
+  background: #12201b;
+  color: #ffffff;
+  text-align: center;
+}
+
+.manual-prefix-block span,
+.manual-preview-card span {
+  display: block;
+  margin-bottom: 5px;
+  color: #d7e1dc;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.manual-prefix-block strong,
+.manual-preview-card strong {
+  display: block;
+  font-size: clamp(25px, 7vw, 36px);
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.manual-field-input {
+  min-height: 88px;
+  text-align: center;
+  font-size: clamp(36px, 12vw, 58px);
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.manual-field-card .button {
+  min-height: 62px;
+  border-radius: 8px;
+  font-size: 17px;
+}
+
+.nfc-manual-button {
+  margin-top: 10px;
+}
+
+@media (min-width: 760px) {
+  .main-content {
+    width: min(980px, 100%);
+  }
+
+  .home-page {
+    gap: 18px;
+  }
+
+  .home-hero,
+  .embedded-import,
+  .manual-field-screen__header,
+  .manual-field-card {
+    padding: 24px;
+  }
+
+  .home-action-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .embedded-import .form-card {
+    display: grid;
+    grid-template-columns: 1fr 1.2fr;
+    gap: 14px;
+    align-items: end;
+  }
+
+  .embedded-import .form-card .text-input {
+    margin-bottom: 0;
+  }
+
+  .manual-field-screen {
+    max-width: 680px;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 430px) {
+  .home-page {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .home-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .home-hero__logo {
+    justify-self: start;
+    width: 74px;
+    height: 74px;
+  }
+
+  .embedded-import {
+    padding: 12px;
+  }
+
+  .embedded-import .file-drop {
+    min-height: 140px;
+  }
+
+  .manual-field-screen__header,
+  .manual-field-card {
+    padding: 14px;
+  }
+}
