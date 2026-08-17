@@ -2476,6 +2476,7 @@ function SettingsView() {
 function CloudSettingsView({ activeAudit, setToast }: { activeAudit: Audit | null; setToast: (value: string) => void }) {
   const [session, setSession] = useState<Session | null>(null);
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -2497,19 +2498,44 @@ function CloudSettingsView({ activeAudit, setToast }: { activeAudit: Audit | nul
     };
   }, []);
 
-  async function sendMagicLink() {
-    if (!supabase || !email.trim()) return;
+  async function signInWithPassword() {
+    if (!supabase || !email.trim() || password.length < 6) return;
     setBusy(true);
     setMessage(null);
     try {
-      const { error } = await supabase.auth.signInWithOtp({
+      const { error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
-        options: { emailRedirectTo: window.location.origin }
+        password
       });
       if (error) throw error;
-      setMessage('Link de acesso enviado. Abra o e-mail neste navegador para ativar a sessao.');
+      setMessage('Conta conectada. Agora as auditorias podem sincronizar entre dispositivos.');
+      void pullNow();
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Nao foi possivel enviar o link de acesso.');
+      setMessage(err instanceof Error ? err.message : 'Nao foi possivel entrar.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createAccountWithPassword() {
+    if (!supabase || !email.trim() || password.length < 6) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: { data: { app: 'biptag' } }
+      });
+      if (error) throw error;
+      if (!data.session) {
+        setMessage('Conta criada, mas o Supabase ainda esta exigindo confirmacao por e-mail. Desative "Confirm email" no Auth ou crie o usuario confirmado pelo painel.');
+        return;
+      }
+      setMessage('Conta criada e conectada. Use o mesmo e-mail e senha no celular.');
+      void syncNow();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Nao foi possivel criar a conta.');
     } finally {
       setBusy(false);
     }
@@ -2574,8 +2600,11 @@ function CloudSettingsView({ activeAudit, setToast }: { activeAudit: Audit | nul
           {!session ? (
             <>
               <label className="field-label" htmlFor="sync-email">E-mail</label>
-              <input id="sync-email" className="text-input" type="email" inputMode="email" placeholder="voce@fazenda.com" value={email} onChange={(event) => setEmail(event.target.value)} />
-              <button className="button button--primary button--full" disabled={busy || !email.trim()} onClick={() => void sendMagicLink()}><CloudIcon /> Entrar e sincronizar</button>
+              <input id="sync-email" className="text-input" type="email" inputMode="email" placeholder="david.campos@urus.org" value={email} onChange={(event) => setEmail(event.target.value)} />
+              <label className="field-label" htmlFor="sync-password">Senha / PIN</label>
+              <input id="sync-password" className="text-input" type="password" inputMode="text" placeholder="Minimo 6 caracteres" value={password} onChange={(event) => setPassword(event.target.value)} />
+              <button className="button button--primary button--full" disabled={busy || !email.trim() || password.length < 6} onClick={() => void signInWithPassword()}><CloudIcon /> Entrar e sincronizar</button>
+              <button className="button button--secondary button--full" disabled={busy || !email.trim() || password.length < 6} onClick={() => void createAccountWithPassword()}>Criar conta neste e-mail</button>
             </>
           ) : (
             <>
@@ -2588,7 +2617,7 @@ function CloudSettingsView({ activeAudit, setToast }: { activeAudit: Audit | nul
         </div>
       )}
 
-      <div className="technical-note"><strong>Sincronizacao entre dispositivos</strong><p>Para a fazenda criada no computador aparecer no celular, entre com o mesmo e-mail nos dois aparelhos e toque em "Abrir auditorias do banco". Auditoria atual: {activeAudit?.farmName ?? 'nenhuma selecionada'}.</p></div>
+      <div className="technical-note"><strong>Sincronizacao entre dispositivos</strong><p>Use o mesmo e-mail e a mesma senha/PIN no computador e no celular. Depois toque em "Salvar todas auditorias no banco" no aparelho que criou a fazenda e em "Abrir auditorias do banco" no outro. Auditoria atual: {activeAudit?.farmName ?? 'nenhuma selecionada'}.</p></div>
     </section>
   );
 }
