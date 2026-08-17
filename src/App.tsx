@@ -933,9 +933,6 @@ function AuditView({
     });
     setReaderMessage(`Tag lida: ${normalized}`);
     feedbackCorrect();
-    if (!knownIssue && !related.message && !existingRecord && !possibleTypo) {
-      window.setTimeout(() => inputRef.current?.focus(), 650);
-    }
   }
 
   async function findPreviousNewTagRecord(tagNumber: string, observed: string | null) {
@@ -1336,7 +1333,7 @@ function AuditView({
               <div><TagIcon size={20} /><span>Tag lida</span><strong>{scan?.tagNumber}</strong></div>
               <div><AnimalIcon size={20} /><span>Cadastro Nedap</span><strong>{scan?.assignment?.expectedAnimal ?? 'Sem vínculo'}</strong></div>
             </div>
-            <button className="button button--primary button--full button--field" onClick={() => { setDismissedAttentionKey(attentionAlert.key); focusObservedInput(); }}>
+            <button className="button button--primary button--full button--field" onClick={() => setDismissedAttentionKey(attentionAlert.key)}>
               Entendi, conferir brinco
             </button>
             <button className="button button--ghost button--full" onClick={cancelCurrentRead}>
