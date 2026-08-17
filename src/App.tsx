@@ -25,7 +25,7 @@ import { parseNedapWorkbook, exportAuditWorkbook, validateSmartTag } from './ser
 import { knownIssueActionLabel, knownIssueLabel, operationalActionLabel, statusLabel } from './services/audit-labels';
 import { feedbackCorrect, feedbackWarning, primeFeedbackAudio } from './services/feedback';
 import { isWebNfcSupported, startNfcReader } from './services/nfc';
-import { isSupabaseConfigured, supabase } from './services/supabase';
+import { isSupabaseConfigured, isUsingBundledSupabaseConfig, supabase } from './services/supabase';
 import { deleteAuditEverywhere, pullAuditsFromSupabase, syncAllAuditsToSupabase } from './services/cloud-sync';
 import {
   classifyReading,
@@ -332,6 +332,11 @@ function App() {
       .catch((err) => console.warn('Nao foi possivel carregar auditorias do Supabase.', err));
   }, [online, cloudSession?.user.id, pulledCloudUserId]);
 
+  useEffect(() => {
+    if (view !== 'home' || !isSupabaseConfigured || !supabase || !online || !cloudSession) return;
+    pullAuditsFromSupabase().catch((err) => console.warn('Nao foi possivel atualizar auditorias na Home.', err));
+  }, [view, online, cloudSession?.user.id]);
+
   async function chooseAudit(audit: Audit) {
     setSelectedAuditId(audit.id);
     if (audit.status === 'paused') {
@@ -390,7 +395,7 @@ function App() {
             onDeleteAudit={(audit) => void deleteAudit(audit)}
             onImportCreated={(auditId) => {
               setSelectedAuditId(auditId);
-              setToast('Fazenda criada e base salva neste aparelho.');
+              setToast(cloudSession ? 'Fazenda criada e sincronizacao iniciada.' : 'Fazenda salva neste aparelho. Entre no Supabase para aparecer nos outros dispositivos.');
               setView('audit');
               void syncAllInBackground();
             }}
@@ -407,7 +412,7 @@ function App() {
           <ImportView
             onCreated={(auditId) => {
               setSelectedAuditId(auditId);
-              setToast('Base importada e salva neste aparelho.');
+              setToast(cloudSession ? 'Base importada e sincronizacao iniciada.' : 'Base salva neste aparelho. Entre no Supabase para aparecer nos outros dispositivos.');
               setView('audit');
               void syncAllInBackground();
             }}
@@ -2559,8 +2564,8 @@ function CloudSettingsView({ activeAudit, setToast }: { activeAudit: Audit | nul
     <section className="page">
       <div className="section-heading"><div><span className="eyebrow">CONFIGURACAO</span><h1>BIPTAG Web V0.3</h1><p>Offline-first, mobile-first e conectado ao Supabase para salvar todas as auditorias.</p></div></div>
       <div className="settings-card">
-        <div className="settings-row"><span className="settings-row__icon"><CloudIcon /></span><div><strong>Supabase</strong><small>{isSupabaseConfigured ? 'Variaveis configuradas' : 'Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY'}</small></div><span className={`status-dot ${isSupabaseConfigured ? 'is-ok' : ''}`} /></div>
-        <div className="settings-row"><span className="settings-row__icon"><CheckIcon /></span><div><strong>Conta</strong><small>{session?.user.email ?? (session ? 'Sessao ativa' : 'Entre para liberar backup na nuvem')}</small></div><span className={`status-dot ${session ? 'is-ok' : ''}`} /></div>
+        <div className="settings-row"><span className="settings-row__icon"><CloudIcon /></span><div><strong>Supabase</strong><small>{isSupabaseConfigured ? (isUsingBundledSupabaseConfig ? 'Conectado ao banco BIPTAG' : 'Variaveis configuradas') : 'Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY'}</small></div><span className={`status-dot ${isSupabaseConfigured ? 'is-ok' : ''}`} /></div>
+        <div className="settings-row"><span className="settings-row__icon"><CheckIcon /></span><div><strong>Conta</strong><small>{session?.user.email ?? (session ? 'Sessao ativa' : 'Entre com o mesmo e-mail em todos os dispositivos')}</small></div><span className={`status-dot ${session ? 'is-ok' : ''}`} /></div>
         <div className="settings-row"><span className="settings-row__icon"><ScanIcon /></span><div><strong>Web NFC</strong><small>{isWebNfcSupported() ? 'Disponivel neste navegador' : 'Use Chrome Android em HTTPS para leitura real'}</small></div><span className={`status-dot ${isWebNfcSupported() ? 'is-ok' : ''}`} /></div>
       </div>
 
@@ -2570,7 +2575,7 @@ function CloudSettingsView({ activeAudit, setToast }: { activeAudit: Audit | nul
             <>
               <label className="field-label" htmlFor="sync-email">E-mail</label>
               <input id="sync-email" className="text-input" type="email" inputMode="email" placeholder="voce@fazenda.com" value={email} onChange={(event) => setEmail(event.target.value)} />
-              <button className="button button--primary button--full" disabled={busy || !email.trim()} onClick={() => void sendMagicLink()}><CloudIcon /> Enviar link de acesso</button>
+              <button className="button button--primary button--full" disabled={busy || !email.trim()} onClick={() => void sendMagicLink()}><CloudIcon /> Entrar e sincronizar</button>
             </>
           ) : (
             <>
@@ -2583,7 +2588,7 @@ function CloudSettingsView({ activeAudit, setToast }: { activeAudit: Audit | nul
         </div>
       )}
 
-      <div className="technical-note"><strong>Persistencia entre dias</strong><p>Auditorias, base importada e leituras continuam neste aparelho e no Supabase quando houver sessao ativa. Auditoria atual: {activeAudit?.farmName ?? 'nenhuma selecionada'}.</p></div>
+      <div className="technical-note"><strong>Sincronizacao entre dispositivos</strong><p>Para a fazenda criada no computador aparecer no celular, entre com o mesmo e-mail nos dois aparelhos e toque em "Abrir auditorias do banco". Auditoria atual: {activeAudit?.farmName ?? 'nenhuma selecionada'}.</p></div>
     </section>
   );
 }
