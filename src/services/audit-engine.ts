@@ -70,8 +70,8 @@ export async function getRelatedContext(auditId: string, assignment: TagAssignme
     records: relatedRecords,
     effectiveAssignments: relatedEffective,
     message: latest
-      ? `Esta tag ou animal ja esta envolvido em alteracao nesta auditoria. Tag ${latest.tagNumber}; ${latest.expectedAnimal ?? 'sem cadastro'} -> ${latest.observedAnimal ?? 'nao confirmado'}; ${latest.status}.`
-      : `Existe uma tag deslocada relacionada ao animal ${assignment.expectedAnimal}.`
+      ? `Esta tag ou animal ja possui uma leitura relacionada nesta auditoria. Tag ${latest.tagNumber}; cadastro ${latest.expectedAnimal ?? 'sem cadastro'}; campo ${latest.observedAnimal ?? 'nao confirmado'}.`
+      : `Existe uma leitura relacionada ao animal ${assignment.expectedAnimal}.`
   };
 }
 

@@ -582,11 +582,19 @@ function AuditView({
   const [manualMode, setManualMode] = useState(false);
   const [decision, setDecision] = useState<DecisionState | null>(null);
   const [outcome, setOutcome] = useState<OutcomeState | null>(null);
+  const [showCorrectOptions, setShowCorrectOptions] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const stopReader = useRef<null | (() => void)>(null);
   const lastRead = useRef<{ tag: string; at: number } | null>(null);
 
   useEffect(() => () => stopReader.current?.(), []);
+  useEffect(() => {
+    if (!outcome || outcome.kind === 'correct') return;
+    const timer = window.setTimeout(() => {
+      resetForNext('Registrado. Aproxime a proxima SmartTag.');
+    }, outcome.kind === 'swap' ? 2100 : 1700);
+    return () => window.clearTimeout(timer);
+  }, [outcome]);
 
   const auditRecords = useLiveQuery(
     () => audit ? db.auditRecords.where('auditId').equals(audit.id).toArray() : Promise.resolve<AuditRecord[]>([]),
@@ -668,6 +676,7 @@ function AuditView({
     setObservedAnimal('');
     setDecision(null);
     setOutcome(null);
+    setShowCorrectOptions(false);
     setScan({
       tagNumber: normalized,
       rawValue,
@@ -681,6 +690,7 @@ function AuditView({
     });
     setReaderMessage(`Tag lida: ${normalized}`);
     feedbackCorrect();
+    window.setTimeout(() => inputRef.current?.focus(), 650);
   }
 
   async function findPreviousNewTagRecord(tagNumber: string, observed: string | null) {
@@ -799,8 +809,8 @@ function AuditView({
         if (swap.kind === 'conflict') {
           setOutcome({
             kind: 'issue',
-            title: 'Conflito de auditoria',
-            message: swap.message,
+            title: 'Ocorrencia relacionada',
+            message: 'Esta leitura possui informacoes conflitantes com uma ocorrencia anterior. Registramos para revisao.',
             tagNumber: swap.current.tagNumber,
             expectedAnimal: swap.current.expectedAnimal,
             observedAnimal: swap.current.observedAnimal
@@ -817,7 +827,7 @@ function AuditView({
     setOutcome({
       kind: 'issue',
       title: issueSavedTitle(saved.status),
-      message: saved.status === 'new_tag_conflict' && saved.note ? saved.note : issueSavedMessage(saved.status, saved.observedAnimal),
+      message: issueSavedMessage(saved.status, saved.observedAnimal),
       tagNumber: saved.tagNumber,
       expectedAnimal: saved.expectedAnimal,
       observedAnimal: saved.observedAnimal
@@ -916,6 +926,7 @@ function AuditView({
     setScan(null);
     setDecision(null);
     setOutcome(null);
+    setShowCorrectOptions(false);
     setObservedAnimal('');
     setReaderMessage(readerActive ? 'Leitor ativo. Aproxime a próxima SmartTag.' : message);
   }
@@ -1072,7 +1083,12 @@ function AuditView({
           <button className="button button--primary button--full button--field" onClick={() => void keepCorrectTag(outcome.recordId)}>Próxima tag</button>
           <button className="button button--danger button--full" onClick={() => void removeCorrectTag(outcome.recordId)}>Remover vínculo</button>
           <button className="button button--secondary button--full" onClick={() => void replaceCorrectTag(outcome.recordId)}>Substituir tag</button>
-          <button className="button button--ghost button--full" onClick={() => void addCorrectObservation(outcome.recordId)}>Adicionar observação</button>
+          <button className="button button--ghost button--full" onClick={() => setShowCorrectOptions((value) => !value)}>Mais opções</button>
+          {showCorrectOptions && (
+            <div className="field-more-options">
+              <button className="button button--ghost button--full" onClick={() => void addCorrectObservation(outcome.recordId)}>Adicionar observação</button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1087,22 +1103,22 @@ function AuditView({
             <div><span>Nedap</span><strong>{outcome.expectedAnimal ?? '—'}</strong></div>
             <div><span>Brinco visto</span><strong>{outcome.observedAnimal ?? '—'}</strong></div>
           </div>
-          <button className="button button--primary button--full button--field" onClick={() => resetForNext()}>Próxima tag</button>
+          <button className="button button--primary button--full button--field" onClick={() => resetForNext()}>Continuar auditoria</button>
         </div>
       )}
 
       {outcome?.kind === 'swap' && (
         <div className="field-outcome field-outcome--swap">
           <SwapIcon size={58} />
-          <span className="eyebrow">CRUZAMENTO AUTOMÁTICO</span>
+          <span className="eyebrow">OCORRÊNCIA RELACIONADA</span>
           <h1>{outcome.title}</h1>
-          <p>As duas leituras confirmadas em campo formam uma possível troca. Você não precisa resolver isso agora.</p>
+          <p>As duas leituras foram relacionadas. Os detalhes ficam na Revisão.</p>
           <div className="swap-pair">
             <div><span>Tag {outcome.other.tagNumber}</span><strong>{outcome.other.expectedAnimal} → {outcome.other.observedAnimal}</strong></div>
             <SwapIcon size={26} />
             <div><span>Tag {outcome.current.tagNumber}</span><strong>{outcome.current.expectedAnimal} → {outcome.current.observedAnimal}</strong></div>
           </div>
-          <button className="button button--primary button--full button--field" onClick={() => resetForNext()}>Entendi, próxima tag</button>
+          <button className="button button--primary button--full button--field" onClick={() => resetForNext()}>Continuar auditoria</button>
         </div>
       )}
 
@@ -1168,58 +1184,58 @@ function GuidedDecision({
 function decisionCopy(status: Exclude<RecordStatus, 'correct'>, expected: string | null, observed: string, isReplacement = false) {
   if (isReplacement) {
     return {
-      title: `Registrar substituicao no animal ${observed}?`,
-      subtitle: `O animal ${observed} ja possui outra tag cadastrada ou efetiva.`,
-      confirmLabel: 'Sim, registrar substituicao'
+      title: `Você está vendo o brinco ${observed}?`,
+      subtitle: `Esta tag esta cadastrada no animal ${expected ?? 'sem vinculo'}. O animal ${observed} ja possui outra tag relacionada.`,
+      confirmLabel: `Sim, estou no ${observed}`
     };
   }
   if (status === 'divergence' || status === 'reassignment') {
     return {
-      title: `O brinco deste animal é ${observed}?`,
+      title: `Você está vendo o brinco ${observed}?`,
       subtitle: `Esta tag está cadastrada no animal ${expected}.`,
-      confirmLabel: `Sim, estou no animal ${observed}`
+      confirmLabel: `Sim, estou no ${observed}`
     };
   }
   if (status === 'animal_not_in_base') {
     return {
-      title: `Você confirma o brinco ${observed}?`,
+      title: `Você está vendo o brinco ${observed}?`,
       subtitle: `O animal ${observed} não aparece na base Nedap importada.`,
-      confirmLabel: `Sim, o brinco é ${observed}`
+      confirmLabel: `Sim, estou no ${observed}`
     };
   }
   if (status === 'tag_without_animal') {
     return {
-      title: `Esta tag está no animal ${observed}?`,
-      subtitle: 'A tag não possui animal vinculado na base.',
-      confirmLabel: `Sim, está no animal ${observed}`
+      title: `Você está vendo o brinco ${observed}?`,
+      subtitle: 'Esta tag existe na base, mas nao possui animal vinculado.',
+      confirmLabel: `Sim, estou no ${observed}`
     };
   }
   if (status === 'linked') {
     return {
-      title: `Vincular esta tag ao animal ${observed}?`,
-      subtitle: 'A tag existe na base, mas esta sem animal vinculado no Nedap.',
-      confirmLabel: `Sim, vincular ao animal ${observed}`
+      title: `Você está vendo o brinco ${observed}?`,
+      subtitle: 'Esta tag existe na base, mas esta sem animal vinculado no Nedap.',
+      confirmLabel: `Sim, estou no ${observed}`
     };
   }
   if (status === 'new_tag') {
     return {
-      title: `Usar esta nova tag no animal ${observed}?`,
-      subtitle: 'A SmartTag nao existe na base, mas o animal existe no Nedap.',
-      confirmLabel: 'Sim, registrar nova tag'
+      title: `Você está vendo o brinco ${observed}?`,
+      subtitle: 'Esta SmartTag nao existe na base Nedap importada.',
+      confirmLabel: `Sim, estou no ${observed}`
     };
   }
   if (status === 'new_tag_conflict') {
     return {
-      title: 'Conflito para revisao',
-      subtitle: `A mesma SmartTag nao cadastrada ja foi registrada anteriormente em outro animal. Novo animal informado: ${observed}.`,
-      confirmLabel: 'Registrar conflito para revisao'
+      title: `Você está vendo o brinco ${observed}?`,
+      subtitle: 'Existe uma ocorrencia anterior para esta SmartTag. Vamos registrar para revisao.',
+      confirmLabel: `Sim, estou no ${observed}`
     };
   }
   if (status === 'tag_not_found' || status === 'tag_not_registered') {
     return {
-      title: `Esta tag está no animal ${observed}?`,
+      title: `Você está vendo o brinco ${observed}?`,
       subtitle: 'A SmartTag não existe na base Nedap importada.',
-      confirmLabel: `Sim, está no animal ${observed}`
+      confirmLabel: `Sim, estou no ${observed}`
     };
   }
   return {
@@ -1230,28 +1246,25 @@ function decisionCopy(status: Exclude<RecordStatus, 'correct'>, expected: string
 }
 
 function issueSavedTitle(status: RecordStatus) {
-  if (status === 'tag_not_registered') return 'Tag nao cadastrada confirmada';
-  if (status === 'divergence' || status === 'reassignment') return 'Tag encontrada em outro animal';
+  if (status === 'tag_not_registered') return 'Registrado para revisao';
+  if (status === 'divergence' || status === 'reassignment') return 'Registrado';
   if (status === 'audit_conflict' || status === 'new_tag_conflict') return 'Conflito para revisao';
-  if (status === 'linked') return 'Tag vinculada em campo';
-  if (status === 'new_tag') return 'Nova tag registrada';
+  if (status === 'linked') return 'Registrado';
+  if (status === 'new_tag') return 'Registrado';
   if (status === 'animal_not_in_base') return 'Animal fora da base';
-  if (status === 'tag_without_animal') return 'Tag sem vínculo confirmada';
-  if (status === 'tag_not_found') return 'Tag não cadastrada confirmada';
+  if (status === 'tag_without_animal') return 'Registrado';
+  if (status === 'tag_not_found') return 'Registrado para revisao';
   return 'Ocorrência registrada';
 }
 
 function issueSavedMessage(status: RecordStatus, observed: string | null) {
-  if (status === 'tag_not_registered') return `A tag foi encontrada fisicamente no animal ${observed ?? ''}, mas nao existe na base importada.`;
-  if (status === 'divergence' || status === 'reassignment') return 'O BIPTAG guardou a posicao fisica desta tag e vai cruzar as proximas leituras.';
-  if (status === 'audit_conflict') return 'Esta leitura conflita com uma troca ja confirmada. Revise antes de corrigir o cadastro.';
-  if (status === 'new_tag_conflict') return 'A mesma SmartTag nao cadastrada apareceu em mais de um animal. Validacao manual necessaria.';
-  if (status === 'linked') return `A tag sem vinculo no Nedap foi confirmada fisicamente no animal ${observed ?? ''}.`;
-  if (status === 'new_tag') return `A nova SmartTag foi confirmada fisicamente no animal ${observed ?? ''}.`;
-  if (status === 'animal_not_in_base') return `O brinco ${observed ?? ''} foi confirmado em campo e ficará separado para revisão.`;
-  if (status === 'tag_without_animal') return `O vínculo físico com o animal ${observed ?? ''} foi registrado como sugestão de revisão.`;
-  if (status === 'tag_not_found') return `A tag foi encontrada fisicamente no animal ${observed ?? ''}, mas não existe na base importada.`;
-  return 'A ocorrência foi salva para revisão posterior.';
+  if (status === 'tag_not_registered') return `Evidencia salva no brinco ${observed ?? ''}. A acao fica para revisao.`;
+  if (status === 'divergence' || status === 'reassignment') return 'Evidencia salva. O BIPTAG vai organizar a acao na Revisao.';
+  if (status === 'audit_conflict' || status === 'new_tag_conflict') return 'Esta leitura possui informacoes conflitantes com uma ocorrencia anterior. Registramos para revisao.';
+  if (status === 'linked' || status === 'new_tag' || status === 'tag_without_animal') return `Evidencia salva no brinco ${observed ?? ''}.`;
+  if (status === 'animal_not_in_base') return `O brinco ${observed ?? ''} foi confirmado em campo e ficara separado para revisao.`;
+  if (status === 'tag_not_found') return `Evidencia salva no brinco ${observed ?? ''}. A acao fica para revisao.`;
+  return 'Ocorrencia salva para revisao posterior.';
 }
 
 function IssuesView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport: () => void }) {
