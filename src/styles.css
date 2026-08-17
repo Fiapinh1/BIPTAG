@@ -374,6 +374,12 @@ p { color: var(--muted); line-height: 1.55; font-size: 14px; }
   margin-bottom: 12px; padding: 10px 2px;
 }
 .field-session-bar strong { display: block; margin-top: 2px; font-size: 18px; }
+.field-session-actions {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 7px;
+}
 .compact-action {
   border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--graphite);
   min-height: 42px; padding: 8px 11px; display: inline-flex; gap: 6px; align-items: center; font-weight: 800; font-size: 11px;
@@ -3185,7 +3191,7 @@ body {
 /* Fase 12 - Home limpa com modais de tarefa */
 .app-modal {
   position: fixed;
-  z-index: 95;
+  z-index: 140;
   inset: 0;
   display: grid;
   place-items: center;
@@ -3196,7 +3202,7 @@ body {
 
 .app-modal__panel {
   width: min(560px, 100%);
-  max-height: 100%;
+  max-height: calc(100svh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   overflow-y: auto;
   display: grid;
   gap: 14px;
@@ -3272,15 +3278,82 @@ body {
     linear-gradient(135deg, rgba(255,255,255,.9), rgba(247,251,249,.9));
 }
 
+.smarttag-pattern-modal {
+  width: min(520px, 100%);
+}
+
+.pattern-editor-card {
+  display: grid;
+  gap: 11px;
+  padding: 14px;
+  border: 1px solid rgba(22, 117, 92, .18);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at top right, rgba(50, 213, 159, .14), transparent 190px),
+    #ffffff;
+}
+
+.pattern-editor-card p {
+  margin: 0 0 4px;
+  color: #5f6b66;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.pattern-editor-preview {
+  display: grid;
+  gap: 4px;
+  padding: 13px;
+  border: 1px solid rgba(22, 117, 92, .18);
+  border-radius: 14px;
+  background: rgba(50, 213, 159, .08);
+}
+
+.pattern-editor-preview span,
+.pattern-editor-preview small {
+  color: #63716b;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.pattern-editor-preview strong {
+  color: #10211c;
+  font-size: clamp(22px, 7vw, 34px);
+  line-height: 1;
+  word-break: break-all;
+}
+
 @media (max-width: 430px) {
+  .field-session-bar > div:first-child {
+    min-width: 0;
+  }
+
+  .field-session-actions {
+    gap: 6px;
+  }
+
+  .field-session-actions .compact-action {
+    width: 46px;
+    min-height: 46px;
+    justify-content: center;
+    padding: 0;
+    overflow: hidden;
+    font-size: 0;
+  }
+
+  .field-session-actions .compact-action svg {
+    width: 21px;
+    height: 21px;
+  }
+
   .app-modal {
     align-items: stretch;
-    padding-left: 10px;
-    padding-right: 10px;
+    padding: calc(8px + env(safe-area-inset-top)) 10px calc(8px + env(safe-area-inset-bottom));
   }
 
   .app-modal__panel {
     align-self: center;
+    max-height: calc(100svh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     padding: 13px;
     border-radius: 16px;
   }

@@ -746,63 +746,66 @@ function HomeView({
 
   if (!activeAudit) {
     return (
+      <>
+        <section className="page home-page">
+          <div className="home-toolbar">
+            <div>
+              <span className="eyebrow">INICIO</span>
+              <h1>Auditorias</h1>
+              <p>{audits.length ? 'Escolha uma fazenda para abrir a auditoria.' : 'Nenhuma auditoria selecionada.'}</p>
+            </div>
+            <button className="home-add-button" onClick={() => setShowCreateFarmModal(true)} aria-label="Criar nova auditoria">
+              <PlusIcon size={28} />
+            </button>
+          </div>
+          {audits.length ? (
+            <div className="audit-picker">
+              {audits.map((audit) => (
+                <div key={audit.id} className="audit-history__item audit-history__item--picker">
+                  <button className="audit-history__open" onClick={() => onSelectAudit(audit)}>
+                    <span>
+                      <strong>{audit.farmName}</strong>
+                      <small>{formatShortDate(audit.lastActivityAt || audit.updatedAt)} - {audit.status === 'finished' ? 'Finalizada' : audit.status === 'paused' ? 'Pausada' : 'Em andamento'}</small>
+                    </span>
+                    <ChevronRightIcon />
+                  </button>
+                  <button className="audit-history__delete" onClick={() => onDeleteAudit(audit)} title="Excluir auditoria" aria-label={`Excluir auditoria ${audit.farmName}`}>
+                    <TrashIcon size={19} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="home-empty-state">
+              <span className="home-empty-state__icon"><ImportIcon size={36} /></span>
+              <h2>Criar nova auditoria</h2>
+              <p>Importe o Tags.xlsx original do Nedap para iniciar a primeira fazenda neste aparelho.</p>
+              <button className="button button--primary button--full button--large" onClick={() => setShowCreateFarmModal(true)}>
+                <PlusIcon /> Nova auditoria
+              </button>
+            </div>
+          )}
+        </section>
+        {createFarmModal}
+      </>
+    );
+  }
+
+  return (
+    <>
       <section className="page home-page">
         <div className="home-toolbar">
           <div>
-            <span className="eyebrow">INICIO</span>
-            <h1>Auditorias</h1>
-            <p>{audits.length ? 'Escolha uma fazenda para abrir a auditoria.' : 'Nenhuma auditoria selecionada.'}</p>
+            <span className="eyebrow">FAZENDA ABERTA</span>
+            <h1>{activeAudit.farmName}</h1>
+            <p>Use esta auditoria ou abra outra fazenda abaixo.</p>
           </div>
           <button className="home-add-button" onClick={() => setShowCreateFarmModal(true)} aria-label="Criar nova auditoria">
             <PlusIcon size={28} />
           </button>
         </div>
-        {audits.length ? (
-          <div className="audit-picker">
-            {audits.map((audit) => (
-              <div key={audit.id} className="audit-history__item audit-history__item--picker">
-                <button className="audit-history__open" onClick={() => onSelectAudit(audit)}>
-                  <span>
-                    <strong>{audit.farmName}</strong>
-                    <small>{formatShortDate(audit.lastActivityAt || audit.updatedAt)} - {audit.status === 'finished' ? 'Finalizada' : audit.status === 'paused' ? 'Pausada' : 'Em andamento'}</small>
-                  </span>
-                  <ChevronRightIcon />
-                </button>
-                <button className="audit-history__delete" onClick={() => onDeleteAudit(audit)} title="Excluir auditoria" aria-label={`Excluir auditoria ${audit.farmName}`}>
-                  <TrashIcon size={19} />
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="home-empty-state">
-            <span className="home-empty-state__icon"><ImportIcon size={36} /></span>
-            <h2>Criar nova auditoria</h2>
-            <p>Importe o Tags.xlsx original do Nedap para iniciar a primeira fazenda neste aparelho.</p>
-            <button className="button button--primary button--full button--large" onClick={() => setShowCreateFarmModal(true)}>
-              <PlusIcon /> Nova auditoria
-            </button>
-          </div>
-        )}
-        {createFarmModal}
-      </section>
-    );
-  }
 
-  return (
-    <section className="page home-page">
-      <div className="home-toolbar">
-        <div>
-          <span className="eyebrow">FAZENDA ABERTA</span>
-          <h1>{activeAudit.farmName}</h1>
-          <p>Use esta auditoria ou abra outra fazenda abaixo.</p>
-        </div>
-        <button className="home-add-button" onClick={() => setShowCreateFarmModal(true)} aria-label="Criar nova auditoria">
-          <PlusIcon size={28} />
-        </button>
-      </div>
-
-      <div className="home-dashboard">
+        <div className="home-dashboard">
       <div className="hero-card field-hero">
         <div>
           <span className="eyebrow">{activeAudit.status === 'finished' ? 'AUDITORIA FINALIZADA' : activeAudit.status === 'paused' ? 'AUDITORIA PAUSADA' : 'AUDITORIA EM ANDAMENTO'}</span>
@@ -882,9 +885,10 @@ function HomeView({
         </>
       )}
 
+      </section>
       {createFarmModal}
       {lookupModal}
-    </section>
+    </>
   );
 }
 
@@ -1264,6 +1268,9 @@ function AuditView({
   const [observedAnimal, setObservedAnimal] = useState('');
   const [manualTag, setManualTag] = useState('');
   const [manualMode, setManualMode] = useState(false);
+  const [showPatternModal, setShowPatternModal] = useState(false);
+  const [patternPrefixDraft, setPatternPrefixDraft] = useState('');
+  const [patternLengthDraft, setPatternLengthDraft] = useState(String(MAX_SMARTTAG_DIGITS));
   const [decision, setDecision] = useState<DecisionState | null>(null);
   const [outcome, setOutcome] = useState<OutcomeState | null>(null);
   const [showCorrectOptions, setShowCorrectOptions] = useState(false);
@@ -1273,6 +1280,11 @@ function AuditView({
   const lastRead = useRef<{ tag: string; at: number } | null>(null);
 
   useEffect(() => () => stopReader.current?.(), []);
+  useEffect(() => {
+    if (!audit) return;
+    setPatternPrefixDraft(audit.tagPattern?.prefix ?? '');
+    setPatternLengthDraft(String(audit.tagPattern?.length ?? MAX_SMARTTAG_DIGITS));
+  }, [audit?.id, audit?.tagPattern?.prefix, audit?.tagPattern?.length]);
   useEffect(() => {
     if (outcome?.kind !== 'action' || !outcome.autoAdvance) return;
     const timer = window.setTimeout(() => {
@@ -1668,6 +1680,40 @@ function AuditView({
     setManualTag('');
   }
 
+  async function saveSmartTagPattern() {
+    const prefix = patternPrefixDraft.replace(/[^0-9]/g, '');
+    const length = Number(patternLengthDraft.replace(/[^0-9]/g, ''));
+
+    if (!length || length < prefix.length || length > 30) {
+      feedbackWarning();
+      setToast('Confira o padrao: o total deve ser maior ou igual ao prefixo e no maximo 30 digitos.');
+      return;
+    }
+
+    const nextPattern: SmartTagPattern = { prefix, length, numericOnly: true };
+    const now = new Date().toISOString();
+    await db.audits.update(activeAudit.id, {
+      tagPattern: nextPattern,
+      updatedAt: now,
+      lastActivityAt: now
+    });
+
+    if (scan) {
+      const patternCheck = validateSmartTag(scan.tagNumber, nextPattern);
+      const patternWarning = patternCheck.status !== 'valid_tag'
+        ? { status: patternCheck.status, reason: patternCheck.reason }
+        : null;
+      setScan({
+        ...scan,
+        patternWarning,
+        patternConfirmed: !patternWarning
+      });
+    }
+
+    setShowPatternModal(false);
+    setToast(`Padrao SmartTag atualizado: ${prefix || 'sem prefixo'} / ${length} digitos.`);
+  }
+
   function focusObservedInput() {
     window.setTimeout(() => {
       inputRef.current?.focus();
@@ -1693,9 +1739,10 @@ function AuditView({
       ? `${prefix}${typed}`
       : typed;
     if (!tag) return;
-    if (tag.length > MAX_SMARTTAG_DIGITS) {
+    const expectedLength = activeAudit.tagPattern?.length ?? MAX_SMARTTAG_DIGITS;
+    if (tag.length > expectedLength) {
       feedbackWarning();
-      setToast(`SmartTag com ${tag.length} digitos. O limite esperado e ${MAX_SMARTTAG_DIGITS}.`);
+      setToast(`SmartTag com ${tag.length} digitos. O limite esperado e ${expectedLength}.`);
       return;
     }
     await processRead(tag, tag, 'manual');
@@ -1724,7 +1771,9 @@ function AuditView({
   const manualPreviewTag = manualPrefix && manualDigits && !manualDigits.startsWith(manualPrefix)
     ? `${manualPrefix}${manualDigits}`
     : manualDigits;
-  const manualTooLong = manualPreviewTag.length > MAX_SMARTTAG_DIGITS;
+  const manualExpectedLength = activeAudit.tagPattern?.length ?? MAX_SMARTTAG_DIGITS;
+  const manualTooLong = manualPreviewTag.length > manualExpectedLength;
+  const patternPreviewSuffix = Math.max((Number(patternLengthDraft.replace(/[^0-9]/g, '')) || 0) - patternPrefixDraft.replace(/[^0-9]/g, '').length, 0);
   const attentionAlert = scan && !decision && !outcome && !scan.patternWarning
     ? scan.knownIssue
       ? {
@@ -1766,7 +1815,10 @@ function AuditView({
     <section className={fieldPageClass}>
       <div className="field-session-bar">
         <div><span className="eyebrow">MODO CAMPO</span><strong>{activeAudit.farmName}</strong></div>
-        <button className="compact-action" onClick={pauseAudit}><PauseIcon /> Pausar</button>
+        <div className="field-session-actions">
+          <button className="compact-action" onClick={() => setShowPatternModal(true)}><TagIcon /> Padrao</button>
+          <button className="compact-action" onClick={pauseAudit}><PauseIcon /> Pausar</button>
+        </div>
       </div>
 
       <div className="field-progress-strip" aria-label="Progresso da auditoria">
@@ -1832,14 +1884,14 @@ function AuditView({
               <div className={`manual-preview-card ${manualTooLong ? 'is-invalid' : ''}`}>
                 <span>Tag montada</span>
                 <strong>{manualPreviewTag}</strong>
-                <small>{manualPreviewTag.length}/{MAX_SMARTTAG_DIGITS} digitos</small>
+                <small>{manualPreviewTag.length}/{manualExpectedLength} digitos</small>
               </div>
             )}
 
             {manualTooLong && (
               <div className="manual-length-alert">
                 <IssuesIcon />
-                <span>SmartTag acima de {MAX_SMARTTAG_DIGITS} digitos contando com o prefixo. Confira o numero antes de registrar.</span>
+                <span>SmartTag acima de {manualExpectedLength} digitos contando com o prefixo. Confira o numero antes de registrar.</span>
               </div>
             )}
 
@@ -2030,6 +2082,54 @@ function AuditView({
               Continuar auditoria
             </button>
           )}
+        </div>
+      )}
+
+      {showPatternModal && (
+        <div className="app-modal" role="dialog" aria-modal="true" aria-labelledby="pattern-modal-title">
+          <div className="app-modal__panel smarttag-pattern-modal">
+            <div className="app-modal__header">
+              <div>
+                <span className="eyebrow">PADRAO SMARTTAG</span>
+                <h2 id="pattern-modal-title">Ajustar leitura</h2>
+              </div>
+              <button className="app-modal__close" onClick={() => setShowPatternModal(false)} aria-label="Fechar">×</button>
+            </div>
+            <div className="pattern-editor-card">
+              <p>Use quando a fazenda tiver outro inicio de tag ou quando precisar digitar uma sequencia diferente no meio da conferencia.</p>
+              <label className="field-label" htmlFor="pattern-prefix">Prefixo automatico</label>
+              <input
+                id="pattern-prefix"
+                className="text-input"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="Ex.: 9840000"
+                value={patternPrefixDraft}
+                onChange={(event) => setPatternPrefixDraft(event.target.value.replace(/[^0-9]/g, ''))}
+              />
+              <label className="field-label" htmlFor="pattern-length">Total de digitos da SmartTag</label>
+              <input
+                id="pattern-length"
+                className="text-input"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="15"
+                value={patternLengthDraft}
+                onChange={(event) => setPatternLengthDraft(event.target.value.replace(/[^0-9]/g, ''))}
+              />
+              <div className="pattern-editor-preview">
+                <span>No modo manual</span>
+                <strong>{patternPrefixDraft || 'Sem prefixo'}</strong>
+                <small>{patternPreviewSuffix ? `Digite os ${patternPreviewSuffix} digitos finais.` : 'Digite a SmartTag completa.'}</small>
+              </div>
+            </div>
+            <button className="button button--primary button--full button--field" onClick={() => void saveSmartTagPattern()}>
+              Salvar padrao
+            </button>
+            <button className="button button--ghost button--full" onClick={() => setShowPatternModal(false)}>
+              Voltar
+            </button>
+          </div>
         </div>
       )}
 
