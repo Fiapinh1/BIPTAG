@@ -1491,6 +1491,10 @@ function AuditView({
 
       {!manualMode && !scan && !outcome && (
         <div className={`nfc-panel nfc-panel--field ${readerActive ? 'is-active' : ''}`}>
+          <div className="nfc-panel__status">
+            <span />
+            {readerActive ? 'Leitor NFC ativo' : 'Leitor NFC pronto'}
+          </div>
           <div className="nfc-panel__visual"><ScanIcon size={58} /></div>
           <div className="nfc-panel__text">
             <span className="eyebrow">SMARTTAG</span>

@@ -2963,3 +2963,216 @@ body {
     min-height: 48px;
   }
 }
+
+/* Fase 11 - tela NFC com visual de scanner */
+.nfc-panel--field {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: grid;
+  gap: 18px;
+  padding: 22px 18px 20px;
+  border: 1px solid rgba(50, 213, 159, .34);
+  border-radius: 22px;
+  color: #eafff8;
+  background:
+    radial-gradient(circle at 50% 28%, rgba(41, 209, 154, .22), transparent 210px),
+    linear-gradient(135deg, #071713 0%, #0c241e 50%, #102d25 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, .04) inset,
+    0 22px 54px rgba(7, 23, 19, .22);
+}
+
+.nfc-panel--field::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  opacity: .18;
+  background-image:
+    linear-gradient(rgba(255,255,255,.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.12) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: radial-gradient(circle at center, black, transparent 72%);
+}
+
+.nfc-panel--field::after {
+  content: "";
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: -35%;
+  height: 34%;
+  z-index: -1;
+  border-radius: 999px;
+  background: linear-gradient(180deg, transparent, rgba(50, 213, 159, .18), transparent);
+  animation: scannerSweep 3.4s ease-in-out infinite;
+}
+
+.nfc-panel--field.is-active {
+  border-color: rgba(50, 213, 159, .72);
+  box-shadow:
+    0 0 0 4px rgba(50, 213, 159, .1),
+    0 26px 64px rgba(7, 23, 19, .28);
+}
+
+.nfc-panel__status {
+  justify-self: center;
+  min-height: 34px;
+  padding: 8px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(50, 213, 159, .25);
+  border-radius: 999px;
+  color: #bff8e6;
+  background: rgba(255,255,255,.07);
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.nfc-panel__status span {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #32d59f;
+  box-shadow: 0 0 0 0 rgba(50, 213, 159, .55);
+  animation: nfcStatusPulse 1.45s ease-out infinite;
+}
+
+.nfc-panel--field .nfc-panel__visual {
+  width: min(210px, 52vw);
+  height: min(210px, 52vw);
+  margin: 0 auto;
+  border: 1px solid rgba(50, 213, 159, .22);
+  border-radius: 34px;
+  color: #ffffff;
+  background:
+    radial-gradient(circle, rgba(50, 213, 159, .18) 0 28%, transparent 29%),
+    linear-gradient(135deg, rgba(50, 213, 159, .18), rgba(255,255,255,.05));
+  box-shadow:
+    0 0 0 10px rgba(50, 213, 159, .035),
+    0 0 0 22px rgba(50, 213, 159, .025),
+    inset 0 0 34px rgba(50, 213, 159, .16);
+}
+
+.nfc-panel--field .nfc-panel__visual::before,
+.nfc-panel--field .nfc-panel__visual::after {
+  content: "";
+  position: absolute;
+  inset: 16px;
+  border-radius: 28px;
+  border: 1px solid rgba(255,255,255,.2);
+  animation: nfcRingPulse 2.1s ease-out infinite;
+}
+
+.nfc-panel--field .nfc-panel__visual::after {
+  inset: 34px;
+  animation-delay: .55s;
+}
+
+.nfc-panel--field .nfc-panel__visual svg {
+  width: 78px;
+  height: 78px;
+  filter: drop-shadow(0 10px 18px rgba(0,0,0,.22));
+}
+
+.nfc-panel--field .nfc-panel__text {
+  text-align: center;
+}
+
+.nfc-panel--field .nfc-panel__text .eyebrow {
+  color: #32d59f;
+}
+
+.nfc-panel--field h1 {
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(42px, 10vw, 68px);
+  line-height: .98;
+  letter-spacing: 0;
+}
+
+.nfc-panel--field .nfc-panel__text p {
+  min-height: 0;
+  max-width: 480px;
+  margin: 10px auto 0;
+  color: #b9d1c8;
+  font-size: 16px;
+  font-weight: 850;
+}
+
+.nfc-panel--field .button {
+  border-radius: 14px;
+}
+
+.nfc-panel--field .button--ghost {
+  color: #eafff8;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.2);
+}
+
+.nfc-panel--field .nfc-manual-button {
+  color: #10211c;
+  background: linear-gradient(135deg, #ffd95a 0%, #e5aa1e 100%);
+  box-shadow: 0 8px 0 rgba(101, 72, 10, .28);
+}
+
+@keyframes scannerSweep {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  18%, 78% {
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(390%);
+  }
+}
+
+@keyframes nfcRingPulse {
+  from {
+    opacity: .95;
+    transform: scale(.86);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.18);
+  }
+}
+
+@keyframes nfcStatusPulse {
+  to {
+    box-shadow: 0 0 0 9px rgba(50, 213, 159, 0);
+  }
+}
+
+@media (max-width: 430px) {
+  .nfc-panel--field {
+    gap: 14px;
+    padding: 18px 14px;
+    border-radius: 18px;
+  }
+
+  .nfc-panel--field .nfc-panel__visual {
+    width: min(188px, 50vw);
+    height: min(188px, 50vw);
+    border-radius: 30px;
+  }
+
+  .nfc-panel--field .nfc-panel__visual svg {
+    width: 70px;
+    height: 70px;
+  }
+
+  .nfc-panel--field h1 {
+    font-size: clamp(37px, 11vw, 52px);
+  }
+
+  .nfc-panel--field .nfc-panel__text p {
+    font-size: 14px;
+  }
+}
