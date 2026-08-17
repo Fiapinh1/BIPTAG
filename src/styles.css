@@ -1522,3 +1522,191 @@ p {
     font-size: 66px;
   }
 }
+
+/* Fase 6 - polimento mobile e legibilidade em campo */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100svh;
+}
+
+button,
+summary,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+.topbar {
+  padding-top: calc(10px + env(safe-area-inset-top));
+}
+
+.app-shell--audit .topbar {
+  padding-top: calc(7px + env(safe-area-inset-top));
+}
+
+.app-shell {
+  min-height: 100svh;
+}
+
+.bottom-nav {
+  box-shadow: 0 -10px 24px rgba(18, 32, 27, .08);
+}
+
+.nav-button svg {
+  flex: 0 0 auto;
+}
+
+.tag-number,
+.field-id-block strong,
+.animal-input,
+.decision-number,
+.outcome-summary strong,
+.swap-pair strong,
+.stat-card__value,
+.progress-ring strong,
+.manual-prefix,
+.manual-preview,
+.review-card small {
+  font-variant-numeric: tabular-nums;
+}
+
+.field-id-block--tag strong,
+.review-card span,
+.review-card small,
+.issue-row span,
+.issue-row small,
+.outcome-summary strong,
+.swap-pair span,
+.swap-pair strong {
+  overflow-wrap: anywhere;
+}
+
+.field-conference {
+  padding-bottom: calc(18px + env(safe-area-inset-bottom));
+}
+
+.field-question,
+.guided-decision,
+.field-outcome {
+  display: grid;
+  gap: 12px;
+}
+
+.field-question h2,
+.guided-decision h2,
+.field-outcome h1 {
+  overflow-wrap: anywhere;
+}
+
+.field-question .animal-input--field {
+  margin-bottom: 0;
+}
+
+.field-question .button,
+.guided-decision .button,
+.field-outcome .button {
+  width: 100%;
+}
+
+.field-outcome > svg,
+.guided-decision > svg {
+  justify-self: center;
+}
+
+.outcome-summary {
+  width: 100%;
+}
+
+.review-card {
+  align-items: start;
+}
+
+.review-card .button {
+  min-height: 44px;
+  padding-top: 11px;
+  padding-bottom: 11px;
+  font-size: 13px;
+}
+
+.known-issue-actions .button {
+  min-width: 0;
+}
+
+@media (max-width: 430px) {
+  .hero-card {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-card__progress {
+    justify-self: start;
+  }
+
+  .field-id-block--tag strong {
+    font-size: clamp(21px, 7.2vw, 29px);
+  }
+
+  .field-id-block--animal strong {
+    font-size: clamp(38px, 12vw, 48px);
+  }
+
+  .field-question h2 {
+    font-size: clamp(26px, 8vw, 31px);
+  }
+
+  .animal-input--field {
+    min-height: 86px;
+    font-size: clamp(44px, 15vw, 56px);
+  }
+
+  .field-page--scanned .context-alert {
+    padding: 11px;
+  }
+
+  .field-page--scanned .context-alert strong {
+    font-size: 13px;
+  }
+
+  .field-page--scanned .context-alert span {
+    font-size: 11px;
+  }
+
+  .review-card {
+    grid-template-columns: 1fr;
+  }
+
+  .review-card .issue-row__icon {
+    display: none;
+  }
+
+  .known-issue-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-height: 720px) and (max-width: 430px) {
+  .field-page--scanned .field-session-bar {
+    display: none;
+  }
+
+  .field-page--scanned .field-id-block {
+    padding: 9px 10px;
+  }
+
+  .field-question,
+  .guided-decision,
+  .field-outcome {
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+
+  .field-question .button--field,
+  .guided-decision .button--field,
+  .field-outcome .button--field {
+    min-height: 58px;
+  }
+}

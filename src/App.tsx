@@ -247,7 +247,7 @@ function App() {
         <NavButton active={view === 'home'} label="Início" icon={<HomeIcon />} onClick={() => setView('home')} />
         <NavButton active={view === 'import'} label="Importar" icon={<ImportIcon />} onClick={() => setView('import')} />
         <NavButton active={view === 'audit'} label="Auditar" icon={<ScanIcon />} onClick={() => setView('audit')} />
-        <NavButton active={view === 'issues'} label="Revisão" icon={<IssuesIcon />} onClick={() => setView('issues')} />
+        <NavButton active={view === 'issues' || view === 'knownIssues'} label="Revisão" icon={<IssuesIcon />} onClick={() => setView('issues')} />
       </nav>
 
       {toast ? <div className="toast">{toast}</div> : null}
