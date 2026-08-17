@@ -7,6 +7,7 @@ export type RecordStatus =
   | 'linked'
   | 'new_tag'
   | 'possible_swap'
+  | 'audit_conflict'
   | 'replacement_chain'
   | 'tag_not_registered'
   | 'tag_not_found'

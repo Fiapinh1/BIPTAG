@@ -753,7 +753,18 @@ function AuditView({
     if (saved.status === 'divergence' || saved.status === 'reassignment') {
       const swap = await detectReciprocalSwap(saved);
       if (swap) {
-        setOutcome({ kind: 'swap', title: 'Possível troca identificada', current: swap.current, other: swap.other });
+        if (swap.kind === 'conflict') {
+          setOutcome({
+            kind: 'issue',
+            title: 'Conflito de auditoria',
+            message: swap.message,
+            tagNumber: swap.current.tagNumber,
+            expectedAnimal: swap.current.expectedAnimal,
+            observedAnimal: swap.current.observedAnimal
+          });
+        } else {
+          setOutcome({ kind: 'swap', title: 'Possível troca identificada', current: swap.current, other: swap.other });
+        }
         setDecision(null);
         feedbackWarning();
         return;
@@ -1118,6 +1129,7 @@ function decisionCopy(status: Exclude<RecordStatus, 'correct'>, expected: string
 function issueSavedTitle(status: RecordStatus) {
   if (status === 'tag_not_registered') return 'Tag nao cadastrada confirmada';
   if (status === 'divergence' || status === 'reassignment') return 'Tag encontrada em outro animal';
+  if (status === 'audit_conflict') return 'Conflito de auditoria';
   if (status === 'linked') return 'Tag vinculada em campo';
   if (status === 'new_tag') return 'Nova tag registrada';
   if (status === 'animal_not_in_base') return 'Animal fora da base';
@@ -1129,6 +1141,7 @@ function issueSavedTitle(status: RecordStatus) {
 function issueSavedMessage(status: RecordStatus, observed: string | null) {
   if (status === 'tag_not_registered') return `A tag foi encontrada fisicamente no animal ${observed ?? ''}, mas nao existe na base importada.`;
   if (status === 'divergence' || status === 'reassignment') return 'O BIPTAG guardou a posicao fisica desta tag e vai cruzar as proximas leituras.';
+  if (status === 'audit_conflict') return 'Esta leitura conflita com uma troca ja confirmada. Revise antes de corrigir o cadastro.';
   if (status === 'linked') return `A tag sem vinculo no Nedap foi confirmada fisicamente no animal ${observed ?? ''}.`;
   if (status === 'new_tag') return `A nova SmartTag foi confirmada fisicamente no animal ${observed ?? ''}.`;
   if (status === 'animal_not_in_base') return `O brinco ${observed ?? ''} foi confirmado em campo e ficará separado para revisão.`;
@@ -1149,14 +1162,23 @@ function IssuesView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
   const activeAudit = audit;
   const current = records.filter((record) => record.isCurrent !== false);
   const nonCorrect = current.filter((record) => record.status !== 'correct');
-  const swapRecords = nonCorrect.filter((record) => record.status === 'possible_swap');
+  const swapRecords = records.filter((record) => record.status === 'possible_swap');
+  const conflictRecords = records.filter((record) => record.status === 'audit_conflict');
   const seenPairs = new Set<string>();
   const swapPairs = swapRecords.filter((record) => {
     if (!record.pairId || seenPairs.has(record.pairId)) return false;
     seenPairs.add(record.pairId);
     return true;
   });
-  const otherIssues = nonCorrect.filter((record) => record.status !== 'possible_swap');
+  const seenConflictPairs = new Set<string>();
+  const conflictPairs = conflictRecords.filter((record) => {
+    const key = record.pairId ?? record.id;
+    if (seenConflictPairs.has(key)) return false;
+    seenConflictPairs.add(key);
+    return true;
+  });
+  const pendingSwaps = nonCorrect.filter((record) => ['reassignment', 'divergence'].includes(record.status));
+  const otherIssues = nonCorrect.filter((record) => !['possible_swap', 'audit_conflict', 'reassignment', 'divergence'].includes(record.status));
   const pendingTags = effectiveAssignments.filter((item) => item.status === 'pending');
   const displacedTags = effectiveAssignments.filter((item) => item.status === 'displaced');
   const notFoundTags = effectiveAssignments.filter((item) => item.status === 'not_found');
@@ -1178,7 +1200,9 @@ function IssuesView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
       </div>
 
       <div className="stats-grid stats-grid--two">
-        <StatCard label="Possíveis trocas" value={swapPairs.length} tone={swapPairs.length ? 'warning' : 'default'} />
+        <StatCard label="Trocas confirmadas" value={swapPairs.length} tone={swapPairs.length ? 'warning' : 'default'} />
+        <StatCard label="Trocas pendentes" value={pendingSwaps.length} tone={pendingSwaps.length ? 'warning' : 'default'} />
+        <StatCard label="Conflitos" value={conflictPairs.length} tone={conflictPairs.length ? 'danger' : 'default'} />
         <StatCard label="Outras ocorrências" value={otherIssues.length + displacedTags.length + notFoundTags.length} tone={otherIssues.length || displacedTags.length || notFoundTags.length ? 'danger' : 'default'} />
       </div>
 
@@ -1201,6 +1225,15 @@ function IssuesView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
               const other = swapRecords.find((candidate) => candidate.id === record.relatedRecordId);
               return <SwapRow key={record.id} record={record} other={other ?? null} />;
             })}
+          </div>
+        </>
+      )}
+
+      {conflictPairs.length > 0 && (
+        <>
+          <div className="section-heading section-heading--compact"><div><span className="eyebrow">CONFLITOS</span><h2>Conflitos de auditoria</h2></div></div>
+          <div className="issue-list">
+            {conflictPairs.map((record) => <RecordRow key={record.id} record={record} />)}
           </div>
         </>
       )}

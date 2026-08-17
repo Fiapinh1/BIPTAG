@@ -247,6 +247,11 @@ function countStatus(records: AuditRecord[], status: RecordStatus) {
   return records.filter((record) => record.status === status).length;
 }
 
+function countPairs(records: AuditRecord[], status: RecordStatus) {
+  const pairIds = new Set(records.filter((record) => record.status === status && record.pairId).map((record) => record.pairId));
+  return pairIds.size || countStatus(records, status);
+}
+
 function percent(done: number, total: number) {
   return total ? `${Math.min(Math.round((done / total) * 100), 100)}%` : '0%';
 }
@@ -318,7 +323,9 @@ export function exportAuditWorkbook(
     ['Tags nao localizadas', effectiveAssignments.filter((item) => item.status === 'not_found').length + countStatus(current, 'tag_not_found')],
     ['Animais fora da base', countStatus(current, 'animal_not_in_base')],
     ['Nao confirmadas', countStatus(current, 'unconfirmed')],
-    ['Possiveis trocas', countStatus(current, 'possible_swap')],
+    ['Trocas Confirmadas', countPairs(records, 'possible_swap')],
+    ['Trocas Pendentes', countStatus(current, 'reassignment') + countStatus(current, 'divergence')],
+    ['Conflitos de Auditoria', countPairs(records, 'audit_conflict')],
     ['Cadeias', countStatus(current, 'replacement_chain')],
     ['Pendencias', pending + current.filter((record) => record.reviewStatus === 'open').length],
     ['Percentual processado', percent(processedCount, totalValid)]
@@ -361,7 +368,11 @@ export function exportAuditWorkbook(
       '',
       blank(record.tagNumber),
       statusLabel(record.status),
-      record.status === 'unconfirmed' ? 'Revisar em campo' : 'Corrigir cadastro no Nedap quando aplicavel',
+      record.status === 'audit_conflict'
+        ? 'Revisar leituras antes de corrigir o cadastro'
+        : record.status === 'unconfirmed'
+          ? 'Revisar em campo'
+          : 'Corrigir cadastro no Nedap quando aplicavel',
       reviewLabel(record.reviewStatus)
     ]),
     ...effectiveAssignments.filter((item) => ['pending', 'not_found', 'displaced'].includes(item.status)).map((item) => [
@@ -406,6 +417,7 @@ export function statusLabel(status: AuditRecord['status']) {
     linked: 'Tag vinculada em campo',
     new_tag: 'Nova tag cadastrada em campo',
     possible_swap: 'Possivel troca de tags',
+    audit_conflict: 'Conflito de auditoria',
     replacement_chain: 'Cadeia de substituicoes',
     tag_not_registered: 'Tag nao cadastrada',
     tag_not_found: 'Tag nao localizada',

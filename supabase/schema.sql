@@ -77,7 +77,7 @@ create table if not exists public.audit_records (
   expected_animal text,
   observed_animal text,
   effective_animal text,
-  status text not null check (status in ('correct','divergence','reassignment','linked','new_tag','possible_swap','replacement_chain','tag_not_registered','tag_not_found','tag_without_animal','animal_not_in_base','unconfirmed','suspicious_tag','possible_typo')),
+  status text not null check (status in ('correct','divergence','reassignment','linked','new_tag','possible_swap','audit_conflict','replacement_chain','tag_not_registered','tag_not_found','tag_without_animal','animal_not_in_base','unconfirmed','suspicious_tag','possible_typo')),
   field_decision text not null,
   review_status text not null default 'open',
   note text,
