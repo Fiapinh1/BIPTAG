@@ -262,7 +262,11 @@ export async function saveReading(input: {
       await db.auditRecords.update(input.existingRecord.id, { isCurrent: false, updatedAt: now, syncStatus: 'pending' });
     }
 
-    if (input.observedAnimal && !['unconfirmed', 'audit_conflict', 'new_tag_conflict'].includes(input.status)) {
+    // CRITICAL RULE: Only confirmed readings can update effective state, displace tags, or trigger swaps.
+    // Unconfirmed readings are saved to history but cannot alter physical evidence.
+    const isConfirmedReading = !['unconfirmed', 'audit_conflict', 'new_tag_conflict'].includes(input.status);
+
+    if (input.observedAnimal && isConfirmedReading) {
       const candidates = await db.effectiveTagAssignments.where('[auditId+effectiveAnimal]').equals([input.auditId, input.observedAnimal]).toArray();
 
       // Only displace tags that were physically confirmed in some location.
@@ -324,7 +328,11 @@ export async function saveReading(input: {
       relatedRecordId
     });
 
-    if (!input.preserveEffective) {
+    // CRITICAL RULE: Unconfirmed readings MUST preserve existing effective state.
+    // They are saved to history only, never alter effective assignments.
+    const shouldUpdateEffective = input.status !== 'unconfirmed' && !input.preserveEffective;
+
+    if (shouldUpdateEffective) {
       await upsertEffective({
         auditId: input.auditId,
         tagNumber: input.tagNumber,
@@ -352,8 +360,10 @@ export async function saveReading(input: {
 export async function detectReciprocalSwap(record: AuditRecord) {
   // CRITICAL: Swap requires TWO reciprocal physical confirmations.
   // Both records must be in field, confirmed by technician.
+    // Unconfirmed readings (status='unconfirmed') NEVER trigger swaps.
   if (
     !['reassignment', 'divergence', 'possible_swap'].includes(record.status) ||
+      record.status === 'unconfirmed' ||
     !record.expectedAnimal ||
     !record.observedAnimal ||
     record.expectedAnimal === record.observedAnimal ||
