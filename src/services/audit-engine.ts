@@ -274,11 +274,14 @@ export async function saveReading(input: {
 }
 
 export async function detectReciprocalSwap(record: AuditRecord) {
+  // CRITICAL: Swap requires TWO reciprocal physical confirmations.
+  // Both records must be in field, confirmed by technician.
   if (
     !['reassignment', 'divergence', 'possible_swap'].includes(record.status) ||
     !record.expectedAnimal ||
     !record.observedAnimal ||
-    record.expectedAnimal === record.observedAnimal
+    record.expectedAnimal === record.observedAnimal ||
+    record.fieldDecision !== 'confirmed_physical_animal' // NEW RECORD MUST BE PHYSICALLY CONFIRMED
   ) {
     return null;
   }
@@ -290,7 +293,9 @@ export async function detectReciprocalSwap(record: AuditRecord) {
       ['reassignment', 'divergence', 'possible_swap'].includes(candidate.status) &&
       candidate.expectedAnimal === record.observedAnimal &&
       candidate.observedAnimal === record.expectedAnimal &&
-      candidate.fieldDecision === 'confirmed_physical_animal'
+      // CRITICAL: Candidate must also be physically confirmed and have observed location.
+      candidate.fieldDecision === 'confirmed_physical_animal' &&
+      candidate.observedAnimal !== null // Explicit check: candidate was physically read
   );
 
   const pair = candidates.sort((a, b) => recordOrder(b) - recordOrder(a) || b.scannedAt.localeCompare(a.scannedAt))[0];
