@@ -1467,7 +1467,7 @@ function AuditView({
       return;
     }
 
-    let status = await classifyReading(activeAudit.id, scan.assignment, observed);
+    let status = await classifyReading(activeAudit.id, scan.tagNumber, scan.assignment, observed);
     const previousNewTagRecord = !scan.assignment ? await findPreviousNewTagRecord(scan.tagNumber, observed) : null;
     if (previousNewTagRecord) {
       status = 'new_tag_conflict';
