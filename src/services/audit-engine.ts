@@ -357,6 +357,42 @@ export async function saveReading(input: {
   return (await db.auditRecords.get(id))!;
 }
 
+export async function correctConfirmedReading(input: {
+  auditId: string;
+  originalRecord: AuditRecord;
+  assignment: TagAssignment | null;
+  observedAnimal: string;
+}) {
+  const observedAnimal = input.observedAnimal.trim();
+  if (!observedAnimal || input.originalRecord.fieldDecision === 'could_not_confirm') return null;
+
+  const status: RecordStatus = input.originalRecord.expectedAnimal === observedAnimal
+    ? 'correct'
+    : ['new_tag', 'tag_not_registered'].includes(input.originalRecord.status)
+      ? 'new_tag'
+      : ['linked', 'tag_without_animal'].includes(input.originalRecord.status)
+        ? 'linked'
+        : input.originalRecord.status === 'possible_typo'
+          ? 'possible_typo'
+          : 'reassignment';
+  const corrected = await saveReading({
+    auditId: input.auditId,
+    tagNumber: input.originalRecord.tagNumber,
+    assignment: input.assignment,
+    expectedAnimal: input.originalRecord.expectedAnimal,
+    observedAnimal,
+    status,
+    fieldDecision: 'confirmed_physical_animal',
+    source: input.originalRecord.source,
+    existingRecord: input.originalRecord,
+    note: `Correcao de leitura. Evidencia anterior: ${input.originalRecord.id}.`,
+    actionNote: status === 'correct' ? 'Correcao confirmada em campo: manter tag.' : 'Correcao confirmada em campo: atualizar movimento derivado.',
+    operationalAction: defaultOperationalAction(status)
+  });
+
+  return corrected;
+}
+
 export async function detectReciprocalSwap(record: AuditRecord) {
   // CRITICAL: Swap requires TWO reciprocal physical confirmations.
   // Both records must be in field, confirmed by technician.
@@ -488,6 +524,7 @@ function findSwapConflict(record: AuditRecord, pair: AuditRecord, allRecords: Au
 
   const confirmedSwapRecords = allRecords.filter(
     (candidate) =>
+      candidate.isCurrent &&
       candidate.status === 'possible_swap' &&
       candidate.pairId &&
       candidate.pairId !== currentPairId &&

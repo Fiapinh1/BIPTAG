@@ -3897,3 +3897,61 @@ body {
     margin-inline: auto;
   }
 }
+
+.latest-conferences {
+  margin: 14px 0 18px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 253, 249, .82);
+}
+
+.latest-conferences .section-heading {
+  margin: 0 2px 9px;
+}
+
+.latest-conferences .section-heading h2 {
+  font-size: 17px;
+}
+
+.latest-conferences__list {
+  display: grid;
+  gap: 7px;
+}
+
+.latest-conference {
+  width: 100%;
+  min-height: 58px;
+  padding: 8px 7px 8px 10px;
+  display: grid;
+  grid-template-columns: minmax(62px, auto) 1fr auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #e2d8cd;
+  border-radius: 12px;
+  color: var(--graphite);
+  background: #fffdf9;
+  text-align: left;
+  cursor: pointer;
+}
+
+.latest-conference:active { background: #f4ece3; }
+.latest-conference__animal { font-size: 25px; font-weight: 850; line-height: 1; letter-spacing: -.04em; }
+.latest-conference__details { min-width: 0; }
+.latest-conference__details strong,
+.latest-conference__details small { display: block; }
+.latest-conference__details strong { font-size: 12px; }
+.latest-conference__details small { margin-top: 4px; color: var(--muted); font-size: 10px; }
+.latest-conference > svg { color: var(--copper-dark); }
+.latest-conferences__correct { min-height: 48px; padding: 11px 4px 2px; font-size: 11px; }
+
+.correction-modal { width: min(520px, 100%); }
+.correction-summary { display: grid; gap: 7px; }
+.correction-summary div { padding: 10px 12px; border: 1px solid var(--line); border-radius: 11px; background: #fffdf9; }
+.correction-summary span,
+.correction-summary strong { display: block; }
+.correction-summary span { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .1em; }
+.correction-summary strong { margin-top: 3px; font-size: 15px; word-break: break-all; }
+.correction-modal__input { margin: 0; }
+.correction-confirmation { margin: 0; padding: 15px; border-radius: 13px; background: #f0e4d8; color: var(--graphite-2); }
+.correction-confirmation strong { color: var(--copper-dark); font-size: 21px; }

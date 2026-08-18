@@ -29,6 +29,7 @@ import { isSupabaseConfigured, isUsingBundledSupabaseConfig, supabase } from './
 import { deleteAuditEverywhere, pullAuditsFromSupabase, syncAllAuditsToSupabase, syncAuditToSupabase } from './services/cloud-sync';
 import {
   classifyReading,
+  correctConfirmedReading,
   defaultOperationalAction,
   detectReciprocalSwap,
   getAnimalTagContext,
@@ -190,6 +191,17 @@ function formatShortDate(value: string) {
     month: '2-digit',
     year: '2-digit'
   });
+}
+
+function formatTime(value: string) {
+  return new Date(value).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function formatRelativeTime(value: string) {
+  const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+  if (seconds < 60) return seconds <= 1 ? 'Agora' : `Há ${seconds} s`;
+  const minutes = Math.floor(seconds / 60);
+  return `Há ${minutes} min`;
 }
 
 function App() {
@@ -1300,6 +1312,10 @@ function AuditView({
   const [patternLengthDraft, setPatternLengthDraft] = useState(String(MAX_SMARTTAG_DIGITS));
   const [decision, setDecision] = useState<DecisionState | null>(null);
   const [outcome, setOutcome] = useState<OutcomeState | null>(null);
+  const [correctionTarget, setCorrectionTarget] = useState<AuditRecord | null>(null);
+  const [correctionDraft, setCorrectionDraft] = useState('');
+  const [correctionEditing, setCorrectionEditing] = useState(false);
+  const [correctionConfirming, setCorrectionConfirming] = useState(false);
   const [showCorrectOptions, setShowCorrectOptions] = useState(false);
   const [dismissedAttentionKey, setDismissedAttentionKey] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -1329,6 +1345,18 @@ function AuditView({
     () => audit ? db.effectiveTagAssignments.where('auditId').equals(audit.id).toArray() : Promise.resolve<EffectiveTagAssignment[]>([]),
     [audit?.id],
     [] as EffectiveTagAssignment[]
+  );
+
+  const latestConfirmedRecords = useMemo(
+    () => auditRecords
+      .filter((record) =>
+        record.isCurrent !== false &&
+        Boolean(record.observedAnimal) &&
+        (record.fieldDecision === 'confirmed_physical_animal' || record.fieldDecision === 'confirmed_match')
+      )
+      .sort((a, b) => (b.sequence ?? 0) - (a.sequence ?? 0) || b.scannedAt.localeCompare(a.scannedAt))
+      .slice(0, 2),
+    [auditRecords]
   );
 
   const fieldMetrics = useMemo(() => {
@@ -1764,6 +1792,48 @@ function AuditView({
     setReaderMessage(readerActive ? 'Leitor ativo. Aproxime a próxima SmartTag.' : message);
   }
 
+  function openCorrection(record: AuditRecord) {
+    setCorrectionTarget(record);
+    setCorrectionDraft('');
+    setCorrectionEditing(false);
+    setCorrectionConfirming(false);
+  }
+
+  function beginCorrection() {
+    setCorrectionEditing(true);
+    setCorrectionDraft('');
+    setCorrectionConfirming(false);
+  }
+
+  async function confirmCorrection() {
+    if (!correctionTarget) return;
+    const observed = correctionDraft.replace(/[^0-9A-Za-z_-]/g, '').trim();
+    if (!observed) {
+      setToast('Digite o número correto do brinco.');
+      return;
+    }
+
+    const assignment = await db.tagAssignments.where('[auditId+tagNumber]').equals([activeAudit.id, correctionTarget.tagNumber]).first();
+    const corrected = await correctConfirmedReading({
+      auditId: activeAudit.id,
+      originalRecord: correctionTarget,
+      assignment: assignment ?? null,
+      observedAnimal: observed
+    });
+    if (!corrected) {
+      setToast('Somente uma conferência confirmada pode ser corrigida.');
+      return;
+    }
+
+    setCorrectionTarget(null);
+    setCorrectionDraft('');
+    setCorrectionEditing(false);
+    setCorrectionConfirming(false);
+    setToast(`Correção salva: ${corrected.observedAnimal}.`);
+    resetForNext('Correção salva. Aproxime a próxima SmartTag.');
+    onAuditChanged(activeAudit.id);
+  }
+
   async function manualRead() {
     primeFeedbackAudio();
     const typed = manualTag.replace(/[^0-9]/g, '').trim();
@@ -1882,6 +1952,29 @@ function AuditView({
             </button>
           </div>
         </div>
+      )}
+
+      {!scan && !outcome && !manualMode && latestConfirmedRecords.length > 0 && (
+        <section className="latest-conferences" aria-labelledby="latest-conferences-title">
+          <div className="section-heading section-heading--compact">
+            <div><span className="eyebrow">REGISTROS CONFIRMADOS</span><h2 id="latest-conferences-title">Últimas conferências</h2></div>
+          </div>
+          <div className="latest-conferences__list">
+            {latestConfirmedRecords.map((record) => (
+              <button key={record.id} className="latest-conference" onClick={() => openCorrection(record)}>
+                <span className="latest-conference__animal">{record.observedAnimal}</span>
+                <span className="latest-conference__details">
+                  <strong>Tag ...{record.tagNumber.slice(-4)}</strong>
+                  <small>{formatRelativeTime(record.scannedAt)} · {record.source === 'nfc' ? 'NFC' : 'Manual'}</small>
+                </span>
+                <ChevronRightIcon size={18} />
+              </button>
+            ))}
+          </div>
+          <button className="link-button latest-conferences__correct" onClick={() => openCorrection(latestConfirmedRecords[0])}>
+            Corrigir última leitura
+          </button>
+        </section>
       )}
 
       {manualMode && !scan && !outcome && (
@@ -2162,6 +2255,64 @@ function AuditView({
             </button>
             <button className="button button--ghost button--full" onClick={() => setShowPatternModal(false)}>
               Voltar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {correctionTarget && (
+        <div className="app-modal" role="dialog" aria-modal="true" aria-labelledby="correction-modal-title">
+          <div className="app-modal__panel correction-modal">
+            <div className="app-modal__header">
+              <div>
+                <span className="eyebrow">{correctionEditing ? 'CORRIGIR CONFERÊNCIA' : 'CONFERÊNCIA CONFIRMADA'}</span>
+                <h2 id="correction-modal-title">{correctionEditing ? 'Qual é o número correto?' : 'Detalhes da leitura'}</h2>
+              </div>
+              <button className="app-modal__close" onClick={() => setCorrectionTarget(null)} aria-label="Fechar">×</button>
+            </div>
+            <div className="correction-summary">
+              <div><span>Tag</span><strong>{correctionTarget.tagNumber}</strong></div>
+              <div><span>Animal informado</span><strong>{correctionTarget.observedAnimal}</strong></div>
+              <div><span>Animal Nedap</span><strong>{correctionTarget.expectedAnimal ?? 'Sem vínculo'}</strong></div>
+              <div><span>Horário</span><strong>{formatTime(correctionTarget.scannedAt)}</strong></div>
+              <div><span>Origem</span><strong>{correctionTarget.source === 'nfc' ? 'NFC' : 'Manual'}</strong></div>
+            </div>
+            {!correctionEditing ? (
+              correctionTarget.id === latestConfirmedRecords[0]?.id && (
+                <button className="button button--secondary button--full" onClick={beginCorrection}>
+                  Corrigir última leitura
+                </button>
+              )
+            ) : !correctionConfirming ? (
+              <>
+                <label className="field-label" htmlFor="correction-animal">Novo brinco</label>
+                <input
+                  id="correction-animal"
+                  className="animal-input correction-modal__input"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  autoFocus
+                  value={correctionDraft}
+                  onChange={(event) => setCorrectionDraft(event.target.value.replace(/[^0-9A-Za-z_-]/g, ''))}
+                  onKeyDown={(event) => { if (event.key === 'Enter') setCorrectionConfirming(Boolean(correctionDraft.trim())); }}
+                />
+                <button className="button button--primary button--full button--field" onClick={() => setCorrectionConfirming(Boolean(correctionDraft.trim()))}>
+                  Continuar
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="correction-confirmation">Você confirma que esta tag está no animal <strong>{correctionDraft}</strong>?</p>
+                <button className="button button--primary button--full button--field" onClick={() => void confirmCorrection()}>
+                  Sim, estou no {correctionDraft}
+                </button>
+                <button className="button button--ghost button--full" onClick={() => setCorrectionConfirming(false)}>
+                  Voltar
+                </button>
+              </>
+            )}
+            <button className="button button--ghost button--full" onClick={() => setCorrectionTarget(null)}>
+              Cancelar
             </button>
           </div>
         </div>
