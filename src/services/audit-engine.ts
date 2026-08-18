@@ -187,8 +187,24 @@ export async function saveReading(input: {
     }
 
     if (input.observedAnimal && !['unconfirmed', 'audit_conflict', 'new_tag_conflict'].includes(input.status)) {
-      const occupied = (await db.effectiveTagAssignments.where('[auditId+effectiveAnimal]').equals([input.auditId, input.observedAnimal]).toArray())
-        .find((item) => item.tagNumber !== input.tagNumber && !['displaced', 'not_found', 'suspicious', 'invalid'].includes(item.status));
+      const candidates = await db.effectiveTagAssignments.where('[auditId+effectiveAnimal]').equals([input.auditId, input.observedAnimal]).toArray();
+
+      // Only displace tags that were physically confirmed in some location.
+      // Tags never read in field (status='pending') must not be displaced.
+      let occupied: EffectiveTagAssignment | undefined;
+      for (const candidate of candidates) {
+        if (candidate.tagNumber === input.tagNumber || ['displaced', 'not_found', 'suspicious', 'invalid'].includes(candidate.status)) {
+          continue;
+        }
+        // Verify this tag was physically confirmed (has observedAnimal in currentRecord)
+        if (candidate.currentRecordId) {
+          const currentRecord = await db.auditRecords.get(candidate.currentRecordId);
+          if (currentRecord?.observedAnimal) {
+            occupied = candidate;
+            break;
+          }
+        }
+      }
 
       if (occupied) {
         relatedRecordId = occupied.currentRecordId;
