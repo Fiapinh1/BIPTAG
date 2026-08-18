@@ -202,7 +202,9 @@ export async function saveReading(input: {
       }
     }
 
-    const effectiveAnimal = input.status === 'unconfirmed' ? input.expectedAnimal : input.observedAnimal ?? input.expectedAnimal;
+    // CRITICAL RULE: effectiveAnimal preserves physical confirmation only.
+    // No fallback to Nedap reference. Physical evidence must be explicit.
+    const effectiveAnimal = input.observedAnimal ?? null;
 
     await db.auditRecords.add({
       id,
