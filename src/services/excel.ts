@@ -359,170 +359,150 @@ export function exportAuditWorkbook(
   records: AuditRecord[],
   issues: ImportIssue[],
   effectiveAssignments: EffectiveTagAssignment[] = [],
-  knownIssues: KnownIssue[] = []
+  knownIssues: KnownIssue[] = [],
+  assignments: TagAssignment[] = []
 ) {
   const ordered = chronological(records);
+  const confirmed = ordered.filter((record) =>
+    Boolean(record.observedAnimal) &&
+    (record.fieldDecision === 'confirmed_physical_animal' || record.fieldDecision === 'confirmed_match')
+  );
+  const latestConfirmedByTag = new Map<string, AuditRecord>();
+  for (const record of confirmed) latestConfirmedByTag.set(record.tagNumber, record);
+  const latestConfirmed = [...latestConfirmedByTag.values()];
   const current = records.filter((record) => record.isCurrent !== false);
+  const latestUnconfirmedByTag = new Map<string, AuditRecord>();
+  for (const record of ordered.filter((item) => item.status === 'unconfirmed')) latestUnconfirmedByTag.set(record.tagNumber, record);
+  const latestUnconfirmed = [...latestUnconfirmedByTag.values()];
   const validEffective = effectiveAssignments.filter((item) => !['suspicious', 'invalid'].includes(item.status));
   const processedEffective = validEffective.filter((item) => item.status !== 'pending');
-  const processedCount = validEffective.length ? processedEffective.length : new Set(current.map((record) => record.tagNumber)).size;
+  const processedCount = validEffective.length ? processedEffective.length : new Set(latestConfirmed.map((record) => record.tagNumber)).size;
   const totalValid = audit.validTags ?? audit.totalTags;
   const pending = Math.max(totalValid - processedCount, 0);
+  const latestEffective = new Map(validEffective.map((item) => [item.tagNumber, item]));
+  const swapRecords = latestConfirmed.filter((record) => record.status === 'possible_swap' && record.pairId);
+  const swapGroups = new Map<string, AuditRecord[]>();
+  for (const record of swapRecords) {
+    const group = swapGroups.get(record.pairId!) ?? [];
+    group.push(record);
+    swapGroups.set(record.pairId!, group);
+  }
+  const safeTypoMatch = (record: AuditRecord) => assignments
+    .filter((assignment) => assignment.validationStatus === 'suspicious_tag' && assignment.tagNumber !== record.tagNumber)
+    .filter((assignment) => assignment.tagNumber.length === record.tagNumber.length)
+    .sort((a, b) => {
+      const distance = (tag: string) => [...tag].reduce((count, char, index) => count + (char !== record.tagNumber[index] ? 1 : 0), 0);
+      return distance(a.tagNumber) - distance(b.tagNumber);
+    })[0] ?? null;
 
-  const summaryRows: (string | number)[][] = [
-    ['Campo', 'Valor'],
-    ['Fazenda', blank(audit.farmName)],
-    ['Data de inicio', formatDateTime(audit.startedAt)],
-    ['Data de conclusao', audit.finishedAt ? formatDateTime(audit.finishedAt) : ''],
-    ['Total de linhas importadas', audit.totalRows ?? audit.totalTags],
-    ['Tags validas', totalValid],
-    ['Registros suspeitos', audit.suspiciousTags ?? 0],
-    ['Registros invalidos', audit.invalidTags ?? 0],
-    ['Tags processadas', processedCount],
-    ['Tags confirmadas', countStatus(current, 'correct')],
-    ['Tags reatribuidas', countStatus(current, 'reassignment') + countStatus(current, 'divergence') + countStatus(current, 'possible_swap')],
-    ['Tags novas', countStatus(current, 'new_tag')],
-    ['Tags sem vinculo resolvidas', countStatus(current, 'linked') + countStatus(current, 'tag_without_animal')],
-    ['Tags nao localizadas', effectiveAssignments.filter((item) => item.status === 'not_found').length + countStatus(current, 'tag_not_found')],
-    ['Animais fora da base', countStatus(current, 'animal_not_in_base')],
-    ['Nao confirmadas', countStatus(current, 'unconfirmed')],
-    ['Trocas Confirmadas', countPairs(records, 'possible_swap')],
-    ['Trocas Pendentes', countStatus(current, 'reassignment') + countStatus(current, 'divergence')],
-    ['Conflitos de Auditoria', countPairs(records, 'audit_conflict')],
-    ['Conflitos de Tag Nova', countStatus(current, 'new_tag_conflict')],
-    ['Tags removidas', current.filter((record) => record.operationalAction === 'remove_tag').length],
-    ['Substituicoes de tag', current.filter((record) => record.operationalAction === 'replace_tag').length],
-    ['Tags fora de uso', current.filter((record) => record.operationalAction === 'tag_out_of_use').length],
-    ['Problemas conhecidos', knownIssues.length],
-    ['Cadeias', countStatus(current, 'replacement_chain')],
-    ['Pendencias', pending + current.filter((record) => record.reviewStatus === 'open').length],
-    ['Percentual processado', percent(processedCount, totalValid)]
+  const actionRows: (string | number)[][] = [
+    ['AÇÃO', 'TAG', 'CADASTRO ATUAL', 'CORRIGIR PARA', 'ANIMAL', 'OBSERVAÇÃO']
   ];
+  for (const group of swapGroups.values()) {
+    const left = group.find((record) => record.expectedAnimal && record.observedAnimal) ?? group[0];
+    const right = group.find((record) => record.id !== left.id) ?? group[1];
+    if (!left || !right) continue;
+    actionRows.push([
+      'TROCAR TAGS',
+      `${blank(left.tagNumber)} / ${blank(right.tagNumber)}`,
+      `${blank(left.expectedAnimal)}: ${blank(left.tagNumber)}; ${blank(right.expectedAnimal)}: ${blank(right.tagNumber)}`,
+      `${blank(left.expectedAnimal)}: ${blank(right.tagNumber)}; ${blank(right.expectedAnimal)}: ${blank(left.tagNumber)}`,
+      `${blank(left.expectedAnimal)} / ${blank(right.expectedAnimal)}`,
+      'Executar uma única troca dos vínculos no Nedap.'
+    ]);
+  }
 
-  const fieldEvidenceRows: (string | number)[][] = [
-    ['Sequencia', 'Data/Hora', 'Origem', 'Tag', 'Animal Nedap', 'Animal Campo', 'Decisao do Tecnico', 'Status Interno', 'Acao Gerada', 'Ocorrencia Relacionada', 'Observacao'],
+  for (const item of validEffective) {
+    const record = latestConfirmedByTag.get(item.tagNumber);
+    if (!record || record.status === 'possible_swap') continue;
+    if (record.operationalAction === 'remove_tag') {
+      actionRows.push(['REMOVER VÍNCULO', blank(item.tagNumber), blank(record.expectedAnimal ?? record.observedAnimal), 'SEM ANIMAL', blank(record.expectedAnimal ?? record.observedAnimal), blank(record.actionNote ?? record.note)]);
+      continue;
+    }
+    if (record.operationalAction === 'replace_tag') {
+      actionRows.push(['SUBSTITUIR TAG', blank(item.tagNumber), blank(record.expectedAnimal ?? record.observedAnimal), 'NOVA TAG', blank(record.expectedAnimal ?? record.observedAnimal), blank(record.actionNote ?? record.note)]);
+      continue;
+    }
+    if (item.status === 'reassigned' && record.expectedAnimal && record.observedAnimal && record.expectedAnimal !== record.observedAnimal) {
+      actionRows.push(['MOVER TAG', blank(item.tagNumber), blank(record.expectedAnimal), blank(record.observedAnimal), blank(record.observedAnimal), blank(record.actionNote ?? record.note)]);
+    } else if (item.status === 'linked' || (item.status === 'reassigned' && !record.expectedAnimal)) {
+      actionRows.push(['VINCULAR TAG', blank(item.tagNumber), 'SEM ANIMAL', blank(record.observedAnimal), blank(record.observedAnimal), blank(record.actionNote ?? record.note)]);
+    } else if (item.status === 'new_tag') {
+      actionRows.push(['CADASTRAR TAG', blank(item.tagNumber), 'SEM CADASTRO', blank(record.observedAnimal), blank(record.observedAnimal), blank(record.actionNote ?? record.note)]);
+    } else if (item.status === 'displaced') {
+      actionRows.push(['REMOVER VÍNCULO', blank(item.tagNumber), blank(item.originalAnimal), 'SEM ANIMAL', blank(item.originalAnimal), 'Animal ficou sem tag confirmada nesta auditoria.']);
+    }
+  }
+  for (const record of latestConfirmed.filter((item) => item.status === 'possible_typo')) {
+    const match = safeTypoMatch(record);
+    if (match) {
+      actionRows.push(['CORRIGIR TAG', blank(match.tagNumber), blank(match.tagNumber), blank(record.tagNumber), blank(record.observedAnimal), 'Relação confirmada em campo; corrigir o cadastro da SmartTag.']);
+    }
+  }
+
+  const reviewRows: (string | number)[][] = [
+    ['TIPO', 'TAG', 'ANIMAL / CONTEXTO', 'O QUE ACONTECEU', 'ÚLTIMA EVIDÊNCIA CONFIRMADA', 'AÇÃO SUGERIDA']
+  ];
+  for (const record of latestUnconfirmed) {
+    const confirmedRecord = latestConfirmedByTag.get(record.tagNumber);
+    reviewRows.push(['NÃO CONFIRMADA', blank(record.tagNumber), blank(record.observedAnimal ?? record.expectedAnimal), `Tentativa: ${blank(record.observedAnimal)}`, blank(confirmedRecord?.observedAnimal), 'INVESTIGAR']);
+  }
+  for (const record of latestConfirmed.filter((item) => ['audit_conflict', 'new_tag_conflict'].includes(item.status))) {
+    reviewRows.push(['CONFLITO', blank(record.tagNumber), blank(record.observedAnimal ?? record.expectedAnimal), blank(record.note ?? record.actionNote), blank(latestConfirmedByTag.get(record.tagNumber)?.observedAnimal), 'INVESTIGAR']);
+  }
+  for (const item of effectiveAssignments.filter((entry) => ['not_found', 'displaced', 'unresolved', 'suspicious', 'invalid'].includes(entry.status))) {
+    const record = latestConfirmedByTag.get(item.tagNumber);
+    reviewRows.push([
+      item.status === 'not_found' ? 'TAG NÃO LOCALIZADA' : item.status === 'displaced' ? 'ANIMAL SEM TAG' : 'SITUAÇÃO AMBÍGUA',
+      blank(item.tagNumber),
+      blank(item.effectiveAnimal ?? item.originalAnimal),
+      blank(record?.note ?? record?.actionNote),
+      blank(record?.observedAnimal),
+      'INVESTIGAR'
+    ]);
+  }
+  for (const issue of knownIssues) reviewRows.push(['PROBLEMA CONHECIDO', blank(issue.tagNumber), '', blank(issue.note), '', 'INVESTIGAR']);
+  for (const issue of issues.filter((item) => ['possible_typo', 'suspicious_tag', 'invalid_tag'].includes(item.type))) reviewRows.push(['CADASTRO SUSPEITO', blank(issue.tagNumber), blank(issue.animal), blank(issue.detail), '', 'INVESTIGAR']);
+
+  const conferenceRows: (string | number)[][] = [
+    ['SEQUÊNCIA', 'DATA/HORA', 'TAG', 'ANIMAL NEDAP', 'ANIMAL OBSERVADO', 'CONFIRMADO?', 'ORIGEM', 'DECISÃO'],
     ...ordered.map((record) => [
       record.sequence ?? '',
       formatDateTime(record.scannedAt),
+      blank(record.tagNumber),
+      blank(record.expectedAnimal),
+      blank(record.observedAnimal),
+      record.fieldDecision === 'confirmed_physical_animal' || record.fieldDecision === 'confirmed_match' ? 'SIM' : 'NÃO',
       record.source === 'nfc' ? 'NFC' : 'Manual',
-      blank(record.tagNumber),
-      blank(record.expectedAnimal),
-      blank(record.observedAnimal),
-      fieldDecisionLabel(record.fieldDecision),
-      statusLabel(record.status),
-      operationalActionLabel(record.operationalAction),
-      blank(record.relatedRecordId ?? record.pairId),
-      blank(record.actionNote ?? record.note)
+      record.status === 'unconfirmed' ? 'NÃO CONFIRMADA' : record.status === 'correct' ? 'CORRETA' : record.status === 'possible_typo' ? 'CORRIGIR TAG' : record.status === 'possible_swap' ? 'TROCAR TAGS' : record.status === 'reassignment' || record.status === 'divergence' ? 'MOVER TAG' : record.status === 'linked' || record.status === 'tag_without_animal' ? 'VINCULAR TAG' : 'REVISAR'
     ])
   ];
 
-  const pendingRows: (string | number)[][] = [
-    ['Grupo', 'Prioridade', 'Tag', 'Animal Nedap', 'Animal Campo', 'Motivo', 'Acao sugerida', 'Status', 'Observacao'],
-    ...current
-      .filter((record) => record.status !== 'correct' || record.reviewStatus === 'open')
-      .map((record) => [
-      record.status === 'audit_conflict' || record.status === 'new_tag_conflict' ? 'Conflitos'
-        : record.status === 'unconfirmed' ? 'Nao confirmadas'
-        : record.status === 'tag_not_found' ? 'Tags nao localizadas'
-        : 'Outras investigacoes',
-      actionPriority(record),
-      blank(record.tagNumber),
-      blank(record.expectedAnimal),
-      blank(record.observedAnimal),
-      statusLabel(record.status),
-      actionNeeded(record),
-      reviewLabel(record.reviewStatus),
-      blank(record.actionNote ?? record.note)
-    ]),
-    ...effectiveAssignments.filter((item) => ['pending', 'not_found', 'displaced'].includes(item.status)).map((item) => [
-      item.status === 'displaced' ? 'Animais sem tag' : item.status === 'not_found' ? 'Tags nao localizadas' : 'Tags pendentes',
-      effectivePriority(item.status),
-      blank(item.tagNumber),
-      blank(item.originalAnimal),
-      blank(item.effectiveAnimal),
-      effectiveStatusLabel(item.status),
-      actionForEffectiveStatus(item.status),
-      'Pendente',
-      item.status === 'displaced'
-        ? `Animal ${item.originalAnimal ?? ''} ficou sem tag confirmada.`
-        : actionForEffectiveStatus(item.status)
-    ]),
-    ...knownIssues.map((issue) => [
-      'Problemas conhecidos',
-      knownIssuePriority(issue),
-      blank(issue.tagNumber),
-      '',
-      '',
-      knownIssueLabel(issue.type),
-      knownIssueActionLabel(issue.type),
-      'Aberta',
-      blank(issue.note)
-    ])
-  ];
-
-  const actionRows: (string | number)[][] = [
-    ['Prioridade', 'Acao', 'Animal', 'Tag', 'Tag Antiga', 'Tag Nova', 'De', 'Para', 'Motivo', 'Status', 'Observacao'],
-    ...current
-      .filter((record) => record.status !== 'correct' || record.operationalAction !== 'keep_tag' || record.actionNote)
-      .map((record) => [
-        actionPriority(record),
-        actionNeeded(record),
-        blank(record.observedAnimal ?? record.expectedAnimal),
-        blank(record.tagNumber),
-        record.operationalAction === 'replace_tag' || record.operationalAction === 'remove_tag' ? blank(record.tagNumber) : '',
-        record.operationalAction === 'register_new_tag' ? blank(record.tagNumber) : '',
-        blank(record.expectedAnimal),
-        blank(record.observedAnimal),
-        statusLabel(record.status),
-        reviewLabel(record.reviewStatus),
-        `${blank(record.actionNote ?? record.note)} ${nedapInstruction(record)}`.trim()
-      ]),
-    ...effectiveAssignments
-      .filter((item) => ['pending', 'not_found', 'displaced', 'unresolved'].includes(item.status))
-      .map((item) => [
-        effectivePriority(item.status),
-        actionForEffectiveStatus(item.status),
-        blank(item.effectiveAnimal ?? item.originalAnimal),
-        blank(item.tagNumber),
-        item.status === 'displaced' || item.status === 'not_found' ? blank(item.tagNumber) : '',
-        '',
-        blank(item.originalAnimal),
-        blank(item.effectiveAnimal),
-        effectiveStatusLabel(item.status),
-        'Pendente',
-        actionForEffectiveStatus(item.status)
-      ]),
-    ...knownIssues.map((issue) => [
-        knownIssuePriority(issue),
-        knownIssueActionLabel(issue.type),
-        '',
-        blank(issue.tagNumber),
-        '',
-        '',
-        '',
-        '',
-        knownIssueLabel(issue.type),
-        'Aberta',
-        blank(issue.note)
-      ])
-  ];
-
-  const preValidationRows: (string | number)[][] = [
-    ['Tipo', 'Tag', 'Animal', 'Detalhe'],
-    ...issues.map((issue) => [
-      issue.type,
-      blank(issue.tagNumber),
-      blank(issue.animal),
-      blank(issue.detail)
-    ])
+  const correctCount = latestConfirmed.filter((record) => record.status === 'correct').length;
+  const actionCount = actionRows.length - 1;
+  const reviewCount = reviewRows.length - 1;
+  const summaryRows: (string | number)[][] = [
+    ['CAMPO', 'VALOR'],
+    ['Fazenda', blank(audit.farmName)],
+    ['Data início', formatDateTime(audit.startedAt)],
+    ['Data fim', audit.finishedAt ? formatDateTime(audit.finishedAt) : ''],
+    ['Tags válidas da base', totalValid],
+    ['Tags conferidas', processedCount],
+    ['Percentual concluído', percent(processedCount, totalValid)],
+    ['Tags corretas', correctCount],
+    ['Correções necessárias', actionCount],
+    ['Itens para revisar', reviewCount],
+    ['Tags novas', latestConfirmed.filter((record) => ['new_tag', 'tag_not_registered'].includes(record.status)).length],
+    ['Tags não localizadas', effectiveAssignments.filter((item) => item.status === 'not_found').length],
+    ['Animais sem tag', effectiveAssignments.filter((item) => item.status === 'displaced').length],
+    ['Registros suspeitos', (audit.suspiciousTags ?? 0) + issues.filter((item) => ['possible_typo', 'suspicious_tag', 'invalid_tag'].includes(item.type)).length]
   ];
 
   const workbook = XLSX.utils.book_new();
-  appendSheet(workbook, actionRows.length > 1 ? actionRows : [...actionRows, ['Sem acoes', '', '', '', '', '', '', '', '', '', '']], 'Acoes Nedap');
-  appendSheet(workbook, summaryRows, 'Resumo');
-  appendSheet(workbook, pendingRows.length > 1 ? pendingRows : [...pendingRows, ['Sem pendencias', '', '', '', '', '', '', '', '']], 'Pendencias');
-  appendSheet(workbook, fieldEvidenceRows.length > 1 ? fieldEvidenceRows : [...fieldEvidenceRows, ['', '', '', '', '', '', '', 'Sem registros', '', '', '']], 'Evidencias Campo');
-  appendSheet(workbook, preValidationRows.length > 1 ? preValidationRows : [...preValidationRows, ['Sem inconsistencias', '', '', '']], 'Pre-validacao');
+  appendSheet(workbook, actionRows, 'CORRIGIR NO NEDAP');
+  appendSheet(workbook, reviewRows, 'REVISAR');
+  appendSheet(workbook, conferenceRows, 'CONFERÊNCIA');
+  appendSheet(workbook, summaryRows, 'RESUMO');
 
   const safeFarm = audit.farmName.replace(/[^a-zA-Z0-9_-]+/g, '_');
   XLSX.writeFile(workbook, `BIPTAG_${safeFarm}_${new Date().toISOString().slice(0, 10)}.xlsx`);

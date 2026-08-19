@@ -2539,7 +2539,8 @@ function IssuesView({
     pendingTags.length;
 
   async function exportReport() {
-    exportAuditWorkbook(activeAudit, records, issues, effectiveAssignments, knownIssues);
+    const assignments = await db.tagAssignments.where('auditId').equals(activeAudit.id).toArray();
+    exportAuditWorkbook(activeAudit, records, issues, effectiveAssignments, knownIssues, assignments);
   }
 
   async function markMissingTags() {

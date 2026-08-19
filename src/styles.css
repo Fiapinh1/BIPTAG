@@ -22,6 +22,55 @@
   --shadow: 0 10px 34px rgba(50, 41, 34, 0.08);
 }
 
+/* Design system global: visual tokens only. */
+:root {
+  --color-bg: #F5F2EC;
+  --color-surface: #FFFFFF;
+  --color-surface-secondary: #EEE9E1;
+  --color-graphite: #242320;
+  --color-graphite-secondary: #383530;
+  --color-copper: #B86432;
+  --color-copper-dark: #8E4725;
+  --color-sand: #D9C5A6;
+  --color-text: #242320;
+  --color-text-secondary: #716B63;
+  --color-border: #DED8CF;
+  --color-success: #2F7D57;
+  --color-warning: #C8892F;
+  --color-danger: #B54C45;
+  --radius-card: 16px;
+  --radius-button: 12px;
+  --radius-input: 12px;
+  --radius-badge: 999px;
+  --shadow-card: 0 4px 16px rgba(36,35,32,0.08);
+  --shadow-none: none;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --font-body: Manrope, ui-sans-serif, system-ui, sans-serif;
+  --font-size-body: 14px;
+  --button-height: 52px;
+  --container-width: 820px;
+  --breakpoint-mobile: 680px;
+  --bg: var(--color-bg);
+  --surface: var(--color-surface);
+  --surface-2: var(--color-surface-secondary);
+  --graphite: var(--color-graphite);
+  --graphite-2: var(--color-graphite-secondary);
+  --muted: var(--color-text-secondary);
+  --line: var(--color-border);
+  --copper: var(--color-copper);
+  --copper-dark: var(--color-copper-dark);
+  --sand: var(--color-sand);
+  --success: var(--color-success);
+  --warning: var(--color-warning);
+  --danger: var(--color-danger);
+  --shadow: var(--shadow-card);
+}
+
 * { box-sizing: border-box; }
 html { width: 100%; overflow-x: hidden; background: var(--bg); }
 body {
@@ -3897,6 +3946,97 @@ body {
     margin-inline: auto;
   }
 }
+
+/* Final global design-system layer. Visual-only overrides for legacy phase styles. */
+:root {
+  --bg: #F5F2EC;
+  --surface: #FFFFFF;
+  --surface-2: #EEE9E1;
+  --graphite: #242320;
+  --graphite-2: #383530;
+  --muted: #716B63;
+  --line: #DED8CF;
+  --copper: #B86432;
+  --copper-dark: #8E4725;
+  --sand: #D9C5A6;
+  --success: #2F7D57;
+  --warning: #C8892F;
+  --danger: #B54C45;
+  --shadow: 0 4px 16px rgba(36,35,32,0.08);
+}
+
+body, .app-shell { background: var(--bg); color: var(--graphite); }
+.main-content { width: min(820px, 100%); }
+.hero-card,
+.form-card,
+.settings-card,
+.technical-note,
+.stat-card,
+.nfc-panel,
+.scan-result,
+.issue-row,
+.field-id-block,
+.context-alert,
+.field-question,
+.guided-decision,
+.field-outcome,
+.audit-history__item,
+.summary-strip,
+.expected-animal,
+.outcome-summary div,
+.swap-pair div,
+.app-modal__panel,
+.latest-conferences {
+  border-radius: 16px;
+  border-color: var(--line);
+  box-shadow: var(--shadow);
+}
+.hero-card { color: #FFFFFF; background: var(--graphite-2); }
+.hero-card::after { display: none; }
+.hero-card .eyebrow { color: var(--sand); }
+.field-action { background: var(--copper); box-shadow: var(--shadow); }
+.button,
+.field-action,
+.secondary-row,
+.compact-action,
+.icon-action,
+.nav-button,
+.link-button { border-radius: 12px; }
+.button { min-height: 52px; }
+.button--primary { color: #FFFFFF; background: var(--copper); box-shadow: none; }
+.button--secondary { color: var(--graphite); background: var(--sand); box-shadow: none; }
+.button--ghost { color: var(--graphite); background: var(--surface); border-color: var(--line); box-shadow: none; }
+.button--danger { background: var(--danger); box-shadow: none; }
+.field-action--primary, .field-action--review { background: var(--copper); }
+.text-input,
+.animal-input,
+select,
+textarea { border-radius: 12px; border-color: var(--line); background: var(--surface); color: var(--graphite); }
+.text-input:focus, .animal-input:focus { border-color: var(--copper); box-shadow: 0 0 0 3px rgba(184,100,50,.14); }
+.badge { border-radius: 999px; }
+.stat-card { background: var(--surface); box-shadow: var(--shadow); }
+.stat-card__value { color: var(--graphite); }
+.stat-card--success .stat-card__value { color: var(--success); }
+.stat-card--warning .stat-card__value { color: var(--warning); }
+.stat-card--danger .stat-card__value { color: var(--danger); }
+.topbar { background: var(--graphite); border-bottom-color: var(--copper-dark); }
+.connection-pill.is-online .connection-pill__dot, .status-dot.is-ok { background: var(--success); }
+.nav-button.is-active { color: var(--copper-dark); background: var(--surface-2); }
+.nfc-panel--field { border-color: rgba(184,100,50,.38); background: var(--graphite); box-shadow: var(--shadow); }
+.nfc-panel--field::before, .nfc-panel--field::after { display: none; }
+.nfc-panel--field.is-active { border-color: var(--copper); box-shadow: var(--shadow); }
+.nfc-panel__status { border-color: rgba(255,255,255,.16); color: #F5F2EC; background: rgba(255,255,255,.06); }
+.nfc-panel__status span { background: var(--copper); box-shadow: none; animation: none; }
+.nfc-panel--field .nfc-panel__visual { border-color: rgba(184,100,50,.4); background: var(--graphite-2); box-shadow: none; }
+.nfc-panel--field .nfc-panel__visual::before, .nfc-panel--field .nfc-panel__visual::after { border-color: rgba(184,100,50,.38); }
+.nfc-panel--field .nfc-panel__text .eyebrow { color: var(--sand); }
+.nfc-panel--field .nfc-panel__text p { color: #DED8CF; }
+.nfc-panel--field .button--ghost { color: #FFFFFF; background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.2); }
+.nfc-panel--field .nfc-manual-button { color: var(--graphite); background: var(--sand); box-shadow: none; }
+.app-modal { background: rgba(36,35,32,.62); }
+.app-modal__panel { border-color: var(--line); background: var(--surface); box-shadow: var(--shadow); }
+.app-modal__header h2 { color: var(--graphite); }
+.app-modal__close { border-color: var(--line); color: var(--graphite); background: var(--surface); }
 
 .latest-conferences {
   margin: 14px 0 18px;
