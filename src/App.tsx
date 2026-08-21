@@ -55,7 +55,7 @@ import type {
 } from './types/domain';
 import type { Session } from '@supabase/supabase-js';
 
-type View = 'home' | 'import' | 'audit' | 'issues' | 'knownIssues' | 'settings';
+type View = 'home' | 'import' | 'audit' | 'lookup' | 'issues' | 'knownIssues' | 'settings';
 
 type DialogTone = 'default' | 'danger' | 'warning' | 'success';
 
@@ -424,6 +424,8 @@ function App() {
     }
   }
 
+  const auditNavActive = Boolean(selectedAudit) && !['import', 'settings'].includes(view);
+
   return (
     <div className={`app-shell app-shell--${view}`}>
       <header className="topbar">
@@ -435,9 +437,9 @@ function App() {
           </span>
         </button>
 
-        <button className={`connection-pill ${online ? 'is-online' : 'is-offline'}`} onClick={() => setView('settings')} title="Status do sistema">
-          <span className="connection-pill__dot" />
-          {online ? 'Online' : 'Offline'}
+        <button className={`connection-pill connection-pill--settings ${online ? 'is-online' : 'is-offline'}`} onClick={() => setView('settings')} title="Configuracao">
+          <ActionIcon size={18} />
+          Configuracao
         </button>
       </header>
 
@@ -458,6 +460,7 @@ function App() {
               if (selectedAudit) await chooseAudit(selectedAudit);
               setView('audit');
             }}
+            onLookup={() => setView('lookup')}
             onIssues={() => setView('issues')}
             onKnownIssues={() => setView('knownIssues')}
             setToast={setToast}
@@ -476,6 +479,9 @@ function App() {
         {view === 'audit' && (
           <AuditView audit={selectedAudit} onNeedImport={() => setView('import')} setToast={setToast} onPaused={() => setView('home')} onAuditChanged={(auditId) => syncAuditInBackground(auditId)} />
         )}
+        {view === 'lookup' && (
+          <LookupView audit={selectedAudit} onNeedImport={() => setView('import')} />
+        )}
         {view === 'issues' && (
           <IssuesView audit={selectedAudit} onNeedImport={() => setView('import')} onAuditChanged={(auditId) => syncAuditInBackground(auditId)} />
         )}
@@ -485,24 +491,21 @@ function App() {
         {view === 'settings' && <CloudSettingsView activeAudit={selectedAudit} setToast={setToast} />}
       </main>
 
-      <nav className="bottom-nav" aria-label="Navegação principal">
-        <NavButton active={view === 'home'} label="Início" icon={<HomeIcon />} onClick={() => setView('home')} />
-        <NavButton active={view === 'audit'} label="Auditar" icon={<ScanIcon />} onClick={() => {
-          if (!selectedAudit) {
-            setToast('Escolha uma fazenda na tela inicial antes de auditar.');
-            setView('home');
-            return;
-          }
-          setView('audit');
-        }} />
-        <NavButton active={view === 'issues' || view === 'knownIssues'} label="Revisão" icon={<IssuesIcon />} onClick={() => {
-          if (!selectedAudit) {
-            setToast('Escolha uma fazenda na tela inicial antes de revisar.');
-            setView('home');
-            return;
-          }
-          setView('issues');
-        }} />
+      <nav className={`bottom-nav ${auditNavActive ? 'bottom-nav--audit' : 'bottom-nav--home'}`} aria-label="Navegação principal">
+        {auditNavActive ? (
+          <>
+            <NavButton active={view === 'home'} label="Resumo" icon={<HomeIcon />} onClick={() => setView('home')} />
+            <NavButton active={view === 'audit'} label="Auditar" icon={<ScanIcon />} onClick={() => setView('audit')} />
+            <NavButton active={view === 'lookup'} label="Consultar" icon={<AnimalIcon />} onClick={() => setView('lookup')} />
+            <NavButton active={view === 'issues' || view === 'knownIssues'} label="Revisao" icon={<IssuesIcon />} onClick={() => setView('issues')} />
+          </>
+        ) : (
+          <>
+            <NavButton active={view === 'home'} label="Fazendas" icon={<HomeIcon />} onClick={() => setView('home')} />
+            <NavButton active={view === 'import'} label="Nova" icon={<PlusIcon />} onClick={() => setView('import')} />
+            <NavButton active={view === 'settings'} label="Config." icon={<ActionIcon />} onClick={() => setView('settings')} />
+          </>
+        )}
       </nav>
 
       {toast ? <div className="toast">{toast}</div> : null}
@@ -586,6 +589,7 @@ function HomeView({
   onDeleteAudit,
   onImportCreated,
   onAudit,
+  onLookup,
   onIssues,
   onKnownIssues,
   setToast
@@ -596,6 +600,7 @@ function HomeView({
   onDeleteAudit: (audit: Audit) => void;
   onImportCreated: (auditId: string) => void;
   onAudit: () => void;
+  onLookup: () => void;
   onIssues: () => void;
   onKnownIssues: () => void;
   setToast: (value: string) => void;
@@ -788,7 +793,7 @@ function HomeView({
           <div className="home-toolbar">
             <div>
               <span className="eyebrow">INICIO</span>
-              <h1>Auditorias</h1>
+              <h1>Fazendas</h1>
               <p>{audits.length ? 'Escolha uma fazenda para abrir a auditoria.' : 'Nenhuma auditoria selecionada.'}</p>
             </div>
             <button className="home-add-button" onClick={() => setShowCreateFarmModal(true)} aria-label="Criar nova auditoria">
@@ -833,9 +838,9 @@ function HomeView({
       <section className="page home-page">
         <div className="home-toolbar">
           <div>
-            <span className="eyebrow">FAZENDA ABERTA</span>
+            <span className="eyebrow">FAZENDA ATUAL</span>
             <h1>{activeAudit.farmName}</h1>
-            <p>Use esta auditoria ou abra outra fazenda abaixo.</p>
+            <p>Continue a auditoria ou use os atalhos da fazenda.</p>
           </div>
           <button className="home-add-button" onClick={() => setShowCreateFarmModal(true)} aria-label="Criar nova auditoria">
             <PlusIcon size={28} />
@@ -875,6 +880,14 @@ function HomeView({
             </span>
             <ChevronRightIcon />
           </button>
+          <button className="field-action field-action--lookup" onClick={onLookup}>
+            <span className="field-action__icon"><AnimalIcon size={30} /></span>
+            <span>
+              <strong>Consultar brinco</strong>
+              <small>Buscar SmartTag pela base importada</small>
+            </span>
+            <ChevronRightIcon />
+          </button>
           <button className="field-action field-action--review" onClick={onIssues}>
             <span className="field-action__icon"><IssuesIcon size={30} /></span>
             <span>
@@ -886,13 +899,8 @@ function HomeView({
         </div>
       )}
 
-      <button className="secondary-row secondary-row--compact" onClick={() => setShowLookupModal(true)}>
-        <span><AnimalIcon /> Consultar tag por brinco</span>
-        <ChevronRightIcon />
-      </button>
-
       <button className="secondary-row" onClick={onKnownIssues}>
-        <span><IssuesIcon /> Problemas conhecidos antes da ordenha</span>
+        <span><IssuesIcon /> Problemas com SmartTag</span>
         <ChevronRightIcon />
       </button>
 
@@ -926,6 +934,145 @@ function HomeView({
       {createFarmModal}
       {lookupModal}
     </>
+  );
+}
+
+function LookupView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport: () => void }) {
+  const [animalSearch, setAnimalSearch] = useState('');
+  const records = useLiveQuery(
+    () => audit ? db.auditRecords.where('auditId').equals(audit.id).toArray() : Promise.resolve<AuditRecord[]>([]),
+    [audit?.id],
+    [] as AuditRecord[]
+  );
+  const tagAssignments = useLiveQuery(
+    () => audit ? db.tagAssignments.where('auditId').equals(audit.id).toArray() : Promise.resolve<TagAssignment[]>([]),
+    [audit?.id],
+    [] as TagAssignment[]
+  );
+  const effectiveAssignments = useLiveQuery(
+    () => audit ? db.effectiveTagAssignments.where('auditId').equals(audit.id).toArray() : Promise.resolve<EffectiveTagAssignment[]>([]),
+    [audit?.id],
+    [] as EffectiveTagAssignment[]
+  );
+
+  const currentRecords = records.filter((record) => record.isCurrent !== false);
+  const animalSearchNumber = animalSearch.replace(/[^0-9A-Za-z_-]/g, '').trim();
+  const animalLookup = useMemo(() => {
+    if (!animalSearchNumber) return null;
+
+    const assignments = tagAssignments.filter((assignment) => assignment.expectedAnimal === animalSearchNumber);
+    const recordMatches = currentRecords.filter(
+      (record) =>
+        record.expectedAnimal === animalSearchNumber ||
+        record.observedAnimal === animalSearchNumber ||
+        record.effectiveAnimal === animalSearchNumber
+    );
+    const effectiveMatches = effectiveAssignments.filter(
+      (item) => item.originalAnimal === animalSearchNumber || item.effectiveAnimal === animalSearchNumber
+    );
+    const tagNumbers = Array.from(new Set([
+      ...assignments.map((assignment) => assignment.tagNumber),
+      ...recordMatches.map((record) => record.tagNumber),
+      ...effectiveMatches.map((item) => item.tagNumber)
+    ]));
+    const latestRecordForTag = (tagNumber: string) =>
+      recordMatches
+        .filter((record) => record.tagNumber === tagNumber)
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.scannedAt.localeCompare(a.scannedAt))[0] ?? null;
+
+    return {
+      animal: animalSearchNumber,
+      tags: tagNumbers.map((tagNumber) => {
+        const assignment = assignments.find((item) => item.tagNumber === tagNumber) ?? tagAssignments.find((item) => item.tagNumber === tagNumber) ?? null;
+        const effective = effectiveMatches.find((item) => item.tagNumber === tagNumber) ?? effectiveAssignments.find((item) => item.tagNumber === tagNumber) ?? null;
+        const record = latestRecordForTag(tagNumber) ?? currentRecords.find((item) => item.tagNumber === tagNumber) ?? null;
+        return { tagNumber, assignment, effective, record };
+      })
+    };
+  }, [animalSearchNumber, tagAssignments, currentRecords, effectiveAssignments]);
+
+  if (!audit) {
+    return (
+      <section className="page page--centered">
+        <EmptyState
+          icon={<AnimalIcon size={42} />}
+          title="Sem fazenda aberta"
+          text="Abra uma fazenda para consultar a SmartTag pelo numero do brinco."
+          action={<button className="button button--primary" onClick={onNeedImport}>Criar auditoria</button>}
+        />
+      </section>
+    );
+  }
+
+  return (
+    <section className="page lookup-page">
+      <div className="section-heading lookup-heading">
+        <div>
+          <span className="eyebrow">CONSULTA DA FAZENDA</span>
+          <h1>Buscar por brinco</h1>
+          <p>{audit.farmName} - consulte a SmartTag esperada sem registrar uma leitura.</p>
+        </div>
+      </div>
+
+      <div className="animal-lookup-card animal-lookup-card--page">
+        <div className="animal-lookup-card__header">
+          <AnimalIcon size={28} />
+          <div>
+            <span className="eyebrow">BRINCO DO ANIMAL</span>
+            <h2>Digite o numero visto no animal</h2>
+          </div>
+        </div>
+
+        <div className="animal-lookup-card__search">
+          <input
+            className="text-input"
+            inputMode="numeric"
+            placeholder="Ex.: 4105"
+            value={animalSearch}
+            onChange={(event) => setAnimalSearch(event.target.value.replace(/[^0-9A-Za-z_-]/g, ''))}
+          />
+          {animalSearch && <button className="button button--ghost" onClick={() => setAnimalSearch('')}>Limpar</button>}
+        </div>
+
+        {!animalLookup && (
+          <div className="animal-lookup-empty animal-lookup-empty--idle">
+            <ScanIcon size={24} />
+            <span>A consulta nao altera a auditoria. Use apenas para conferir cadastro e SmartTag esperada.</span>
+          </div>
+        )}
+
+        {animalLookup && (
+          animalLookup.tags.length ? (
+            <div className="animal-lookup-results">
+              {animalLookup.tags.map(({ tagNumber, assignment, effective, record }) => {
+                const action = operationalActionLabel(record?.operationalAction) || (record ? statusLabel(record.status) : '');
+                const status = action || (effective && effective.status !== 'pending' ? 'Alterado na auditoria' : 'Cadastro Nedap');
+                const detail = record
+                  ? `Nedap ${record.expectedAnimal ?? 'sem vinculo'} | campo ${record.observedAnimal ?? 'nao informado'}`
+                  : effective?.effectiveAnimal && effective.effectiveAnimal !== assignment?.expectedAnimal
+                    ? `Cadastro ${effective.originalAnimal ?? 'sem vinculo'} | atual ${effective.effectiveAnimal}`
+                    : `Animal ${assignment?.expectedAnimal ?? effective?.originalAnimal ?? animalLookup.animal}`;
+                return (
+                  <div className="animal-lookup-result animal-lookup-result--large" key={tagNumber}>
+                    <TagIcon size={26} />
+                    <div>
+                      <span>{status}</span>
+                      <strong>{tagNumber}</strong>
+                      <small>{detail}</small>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="animal-lookup-empty">
+              <IssuesIcon size={22} />
+              <span>Nenhuma SmartTag encontrada para o brinco {animalLookup.animal} nesta base.</span>
+            </div>
+          )
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -1127,7 +1274,7 @@ function KnownIssuesView({
   if (!audit) {
     return (
       <section className="page page--centered">
-        <EmptyState icon={<IssuesIcon size={42} />} title="Sem auditoria" text="Importe uma base antes de cadastrar problemas conhecidos." action={<button className="button button--primary" onClick={onNeedImport}>Importar planilha</button>} />
+        <EmptyState icon={<IssuesIcon size={42} />} title="Sem auditoria" text="Importe uma base antes de cadastrar problemas com SmartTag." action={<button className="button button--primary" onClick={onNeedImport}>Importar planilha</button>} />
       </section>
     );
   }
@@ -1219,8 +1366,8 @@ function KnownIssuesView({
     <section className="page">
       <div className="section-heading">
         <div>
-          <span className="eyebrow">ANTES DA ORDENHA</span>
-          <h1>Problemas conhecidos</h1>
+          <span className="eyebrow">SMARTTAG</span>
+          <h1>Problemas com SmartTag</h1>
           <p>Cadastre tags que ja precisam de atencao. Ao bipar, o BIPTAG mostra o aviso e continua a auditoria.</p>
         </div>
       </div>
@@ -1238,20 +1385,20 @@ function KnownIssuesView({
         <textarea id="known-note" className="text-input known-issue-note" rows={3} placeholder="Ex.: conferir posicao do colar na proxima passagem" value={note} onChange={(event) => setNote(event.target.value)} />
 
         <button className="button button--primary button--full" onClick={() => void saveKnownIssue()}>
-          {editingId ? 'Atualizar problema conhecido' : 'Adicionar problema conhecido'}
+          {editingId ? 'Atualizar problema com SmartTag' : 'Adicionar problema com SmartTag'}
         </button>
         {editingId && <button className="button button--ghost button--full" onClick={resetForm}>Cancelar edicao</button>}
       </div>
 
       <div className="section-heading section-heading--compact">
-        <div><span className="eyebrow">LISTA</span><h2>{knownIssues.length} problemas cadastrados</h2></div>
+        <div><span className="eyebrow">LISTA</span><h2>{knownIssues.length} problemas de SmartTag</h2></div>
       </div>
       <input className="text-input" inputMode="numeric" placeholder="Filtrar por tag" value={filter} onChange={(event) => setFilter(event.target.value.replace(/[^0-9]/g, ''))} />
 
       <div className="issue-list">
         {visibleIssues.length ? visibleIssues.map((issue) => (
           <KnownIssueCard key={issue.id} issue={issue} onEdit={editKnownIssue} onRemove={(item) => void removeKnownIssue(item)} />
-        )) : <p className="muted-block">Nenhum problema conhecido cadastrado.</p>}
+        )) : <p className="muted-block">Nenhum problema de SmartTag cadastrado.</p>}
       </div>
     </section>
   );
@@ -1932,6 +2079,10 @@ function AuditView({
         <div><span>Total</span><strong>{activeAudit.validTags ?? activeAudit.totalTags}</strong></div>
       </div>
       <div className="field-progress-bar"><span style={{ width: `${fieldMetrics.percent}%` }} /></div>
+      <div className="field-save-banner">
+        <CheckIcon size={18} />
+        <span>Salvamento automatico ativo. As leituras desta fazenda ficam preservadas mesmo se a pagina atualizar.</span>
+      </div>
 
       {attentionAlert && showAttentionOverlay && (
         <div className="attention-overlay" role="dialog" aria-modal="true" aria-labelledby="attention-title">
