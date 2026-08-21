@@ -380,13 +380,24 @@ export function exportAuditWorkbook(
   const totalValid = audit.validTags ?? audit.totalTags;
   const pending = Math.max(totalValid - processedCount, 0);
   const latestEffective = new Map(validEffective.map((item) => [item.tagNumber, item]));
-  const swapRecords = latestConfirmed.filter((record) => record.status === 'possible_swap' && record.pairId);
+  const swapRecords = confirmed.filter((record) => record.status === 'possible_swap' && record.pairId);
   const swapGroups = new Map<string, AuditRecord[]>();
   for (const record of swapRecords) {
     const group = swapGroups.get(record.pairId!) ?? [];
     group.push(record);
     swapGroups.set(record.pairId!, group);
   }
+  const swapRecordIds = new Set([...swapGroups.values()].flat().map((record) => record.id));
+  const movedWithoutSwap = latestConfirmed.filter(
+    (record) =>
+      record.operationalAction === 'move_tag' &&
+      !swapRecordIds.has(record.id) &&
+      record.expectedAnimal &&
+      record.observedAnimal &&
+      record.expectedAnimal !== record.observedAnimal
+  );
+  const displacedAnimals = new Set(effectiveAssignments.filter((item) => item.status === 'displaced').map((item) => item.originalAnimal).filter(Boolean));
+  const movedAnimalWithoutTags = movedWithoutSwap.filter((record) => !displacedAnimals.has(record.expectedAnimal));
   const safeTypoMatch = (record: AuditRecord) => assignments
     .filter((assignment) => assignment.validationStatus === 'suspicious_tag' && assignment.tagNumber !== record.tagNumber)
     .filter((assignment) => assignment.tagNumber.length === record.tagNumber.length)
@@ -427,7 +438,7 @@ export function exportAuditWorkbook(
       actionRows.push(['MOVER TAG', blank(item.tagNumber), blank(record.expectedAnimal), blank(record.observedAnimal), blank(record.observedAnimal), blank(record.actionNote ?? record.note)]);
     } else if (item.status === 'linked' || (item.status === 'reassigned' && !record.expectedAnimal)) {
       actionRows.push(['VINCULAR TAG', blank(item.tagNumber), 'SEM ANIMAL', blank(record.observedAnimal), blank(record.observedAnimal), blank(record.actionNote ?? record.note)]);
-    } else if (item.status === 'new_tag') {
+    } else if (item.status === 'new_tag' || record.status === 'tag_not_registered') {
       actionRows.push(['CADASTRAR TAG', blank(item.tagNumber), 'SEM CADASTRO', blank(record.observedAnimal), blank(record.observedAnimal), blank(record.actionNote ?? record.note)]);
     } else if (item.status === 'displaced') {
       actionRows.push(['REMOVER VÍNCULO', blank(item.tagNumber), blank(item.originalAnimal), 'SEM ANIMAL', blank(item.originalAnimal), 'Animal ficou sem tag confirmada nesta auditoria.']);
@@ -461,6 +472,16 @@ export function exportAuditWorkbook(
       'INVESTIGAR'
     ]);
   }
+  for (const record of movedAnimalWithoutTags) {
+    reviewRows.push([
+      'ANIMAL SEM TAG',
+      blank(record.tagNumber),
+      blank(record.expectedAnimal),
+      `Tag confirmada no animal ${blank(record.observedAnimal)}. O animal de origem ficou sem tag confirmada nesta auditoria.`,
+      blank(record.observedAnimal),
+      'REVISAR'
+    ]);
+  }
   for (const issue of knownIssues) reviewRows.push(['PROBLEMA CONHECIDO', blank(issue.tagNumber), '', blank(issue.note), '', 'INVESTIGAR']);
   for (const issue of issues.filter((item) => ['possible_typo', 'suspicious_tag', 'invalid_tag'].includes(item.type))) reviewRows.push(['CADASTRO SUSPEITO', blank(issue.tagNumber), blank(issue.animal), blank(issue.detail), '', 'INVESTIGAR']);
 
@@ -481,6 +502,10 @@ export function exportAuditWorkbook(
   const correctCount = latestConfirmed.filter((record) => record.status === 'correct').length;
   const actionCount = actionRows.length - 1;
   const reviewCount = reviewRows.length - 1;
+  const animalsWithoutConfirmedTag = new Set([
+    ...effectiveAssignments.filter((item) => item.status === 'displaced').map((item) => item.originalAnimal).filter(Boolean),
+    ...movedAnimalWithoutTags.map((record) => record.expectedAnimal).filter(Boolean)
+  ]).size;
   const summaryRows: (string | number)[][] = [
     ['CAMPO', 'VALOR'],
     ['Fazenda', blank(audit.farmName)],
@@ -494,7 +519,7 @@ export function exportAuditWorkbook(
     ['Itens para revisar', reviewCount],
     ['Tags novas', latestConfirmed.filter((record) => ['new_tag', 'tag_not_registered'].includes(record.status)).length],
     ['Tags não localizadas', effectiveAssignments.filter((item) => item.status === 'not_found').length],
-    ['Animais sem tag', effectiveAssignments.filter((item) => item.status === 'displaced').length],
+    ['Animais sem tag', animalsWithoutConfirmedTag],
     ['Registros suspeitos', (audit.suspiciousTags ?? 0) + issues.filter((item) => ['possible_typo', 'suspicious_tag', 'invalid_tag'].includes(item.type)).length]
   ];
 

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
+    "test": "vitest run",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
@@ -20,8 +21,10 @@
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "@vitejs/plugin-react": "latest",
+    "fake-indexeddb": "^6.2.5",
     "typescript": "latest",
     "vite": "latest",
-    "vite-plugin-pwa": "latest"
+    "vite-plugin-pwa": "latest",
+    "vitest": "^4.1.11"
   }
 }

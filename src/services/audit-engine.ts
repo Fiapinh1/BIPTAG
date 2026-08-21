@@ -39,7 +39,7 @@ export async function getAnimalTagContext(auditId: string, animal: string | null
     db.effectiveTagAssignments.where('[auditId+effectiveAnimal]').equals([auditId, animal]).toArray()
   ]);
 
-  const effective = effectiveCandidates.find((item) => !['displaced', 'not_found', 'suspicious', 'invalid'].includes(item.status)) ?? null;
+  const effective = effectiveCandidates.find((item) => !['pending', 'displaced', 'not_found', 'suspicious', 'invalid', 'unresolved'].includes(item.status)) ?? null;
   return { assignment: assignment ?? null, effective };
 }
 
@@ -162,9 +162,9 @@ export async function classifyReading(
       // Strong evidence of registry error/typo. Physical tag takes precedence.
       return 'possible_typo';
     }
-    return animalExists ? 'new_tag' : 'tag_not_registered';
+    return 'new_tag';
   }
-  if (!assignment.expectedAnimal) return animalExists ? 'linked' : 'tag_without_animal';
+  if (!assignment.expectedAnimal) return 'linked';
   if (assignment.expectedAnimal === observedAnimal) return 'correct';
   return animalExists ? 'reassignment' : 'animal_not_in_base';
 }
@@ -177,8 +177,8 @@ async function getNextSequence(auditId: string) {
 function statusForEffectiveRecord(status: RecordStatus): EffectiveTagStatus {
   if (status === 'correct') return 'confirmed';
   if (status === 'reassignment' || status === 'divergence' || status === 'possible_swap') return 'reassigned';
-  if (status === 'linked') return 'linked';
-  if (status === 'new_tag') return 'new_tag';
+  if (status === 'linked' || status === 'tag_without_animal') return 'linked';
+  if (status === 'new_tag' || status === 'tag_not_registered') return 'new_tag';
   if (status === 'tag_not_found') return 'not_found';
   if (status === 'suspicious_tag' || status === 'possible_typo') return 'suspicious';
   if (status === 'unconfirmed' || status === 'audit_conflict' || status === 'new_tag_conflict') return 'unresolved';
@@ -192,7 +192,8 @@ function reviewForStatus(status: RecordStatus): AuditRecord['reviewStatus'] {
 export function defaultOperationalAction(status: RecordStatus): OperationalAction {
   if (status === 'correct') return 'keep_tag';
   if (status === 'possible_swap') return 'swap_tags';
-  if (status === 'new_tag') return 'register_new_tag';
+  if (status === 'reassignment' || status === 'divergence') return 'move_tag';
+  if (status === 'new_tag' || status === 'tag_not_registered') return 'register_new_tag';
   if (status === 'linked' || status === 'tag_without_animal') return 'link_tag';
   return 'investigate';
 }
@@ -256,51 +257,15 @@ export async function saveReading(input: {
   const id = newId('record');
   const sequence = await getNextSequence(input.auditId);
   let relatedRecordId: string | null = null;
+  const isConfirmedReading = !['unconfirmed', 'audit_conflict', 'new_tag_conflict'].includes(input.status);
+  const existingRecord = input.existingRecord;
+  const shouldSupersedeCurrent = Boolean(existingRecord?.isCurrent && isConfirmedReading && !input.keepExistingCurrent);
+  const effectiveAnimal = input.observedAnimal ?? null;
 
-  await db.transaction('rw', db.auditRecords, db.effectiveTagAssignments, db.audits, async () => {
-    if (input.existingRecord?.isCurrent && !input.keepExistingCurrent) {
-      await db.auditRecords.update(input.existingRecord.id, { isCurrent: false, updatedAt: now, syncStatus: 'pending' });
+  await db.transaction('rw', db.auditRecords, db.audits, async () => {
+    if (shouldSupersedeCurrent) {
+      await db.auditRecords.update(existingRecord!.id, { isCurrent: false, updatedAt: now, syncStatus: 'pending' });
     }
-
-    // CRITICAL RULE: Only confirmed readings can update effective state, displace tags, or trigger swaps.
-    // Unconfirmed readings are saved to history but cannot alter physical evidence.
-    const isConfirmedReading = !['unconfirmed', 'audit_conflict', 'new_tag_conflict'].includes(input.status);
-
-    if (input.observedAnimal && isConfirmedReading) {
-      const candidates = await db.effectiveTagAssignments.where('[auditId+effectiveAnimal]').equals([input.auditId, input.observedAnimal]).toArray();
-
-      // Only displace tags that were physically confirmed in some location.
-      // Tags never read in field (status='pending') must not be displaced.
-      let occupied: EffectiveTagAssignment | undefined;
-      for (const candidate of candidates) {
-        if (candidate.tagNumber === input.tagNumber || ['displaced', 'not_found', 'suspicious', 'invalid'].includes(candidate.status)) {
-          continue;
-        }
-        // Verify this tag was physically confirmed (has observedAnimal in currentRecord)
-        if (candidate.currentRecordId) {
-          const currentRecord = await db.auditRecords.get(candidate.currentRecordId);
-          if (currentRecord?.observedAnimal) {
-            occupied = candidate;
-            break;
-          }
-        }
-      }
-
-      if (occupied) {
-        relatedRecordId = occupied.currentRecordId;
-        await db.effectiveTagAssignments.update(occupied.id, {
-          status: 'displaced',
-          effectiveAnimal: null,
-          relatedRecordId: id,
-          updatedAt: now,
-          syncStatus: 'pending'
-        });
-      }
-    }
-
-    // CRITICAL RULE: effectiveAnimal preserves physical confirmation only.
-    // No fallback to Nedap reference. Physical evidence must be explicit.
-    const effectiveAnimal = input.observedAnimal ?? null;
 
     await db.auditRecords.add({
       id,
@@ -322,17 +287,65 @@ export async function saveReading(input: {
       syncedAt: null,
       syncStatus: 'pending',
       source: input.source,
-      isCurrent: true,
+      isCurrent: input.status !== 'unconfirmed',
       supersedesRecordId: input.existingRecord?.id ?? null,
       pairId: null,
       relatedRecordId
     });
 
+    await db.audits.update(input.auditId, {
+      updatedAt: now,
+      lastActivityAt: now,
+      status: 'in_progress',
+      pausedAt: undefined
+    });
+  });
+
+  // Evidence has already been persisted. From here on, interpretation failures
+  // must not remove the physical fact from the chronological history.
+  try {
     // CRITICAL RULE: Unconfirmed readings MUST preserve existing effective state.
     // They are saved to history only, never alter effective assignments.
     const shouldUpdateEffective = input.status !== 'unconfirmed' && !input.preserveEffective;
+    if (!shouldUpdateEffective) return (await db.auditRecords.get(id))!;
 
-    if (shouldUpdateEffective) {
+    await db.transaction('rw', db.auditRecords, db.effectiveTagAssignments, async () => {
+      if (input.observedAnimal && isConfirmedReading) {
+        const candidates = await db.effectiveTagAssignments.where('[auditId+effectiveAnimal]').equals([input.auditId, input.observedAnimal]).toArray();
+
+        // Only displace tags that were physically confirmed in some location.
+        // Tags never read in field (status='pending') must not be displaced.
+        let occupied: EffectiveTagAssignment | undefined;
+        for (const candidate of candidates) {
+          if (candidate.tagNumber === input.tagNumber || ['pending', 'displaced', 'not_found', 'suspicious', 'invalid', 'unresolved'].includes(candidate.status)) {
+            continue;
+          }
+          if (candidate.currentRecordId) {
+            const currentRecord = await db.auditRecords.get(candidate.currentRecordId);
+            if (currentRecord?.observedAnimal) {
+              occupied = candidate;
+              break;
+            }
+          }
+        }
+
+        if (occupied) {
+          relatedRecordId = occupied.currentRecordId;
+          await db.effectiveTagAssignments.update(occupied.id, {
+            status: 'displaced',
+            effectiveAnimal: null,
+            relatedRecordId: id,
+            updatedAt: now,
+            syncStatus: 'pending'
+          });
+          await db.auditRecords.update(id, {
+            relatedRecordId,
+            updatedAt: now,
+            syncStatus: 'pending'
+          });
+        }
+      }
+
       await upsertEffective({
         auditId: input.auditId,
         tagNumber: input.tagNumber,
@@ -344,15 +357,10 @@ export async function saveReading(input: {
         relatedRecordId,
         now
       });
-    }
-
-    await db.audits.update(input.auditId, {
-      updatedAt: now,
-      lastActivityAt: now,
-      status: 'in_progress',
-      pausedAt: undefined
     });
-  });
+  } catch (err) {
+    console.warn('Evidencia salva, mas a interpretacao efetiva falhou.', err);
+  }
 
   return (await db.auditRecords.get(id))!;
 }

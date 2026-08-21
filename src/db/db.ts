@@ -121,7 +121,7 @@ class BiptagDB extends Dexie {
       });
 
       await records.toCollection().modify((record: Partial<AuditRecord>) => {
-        record.effectiveAnimal = record.effectiveAnimal ?? record.observedAnimal ?? record.expectedAnimal ?? null;
+        record.effectiveAnimal = record.effectiveAnimal ?? record.observedAnimal ?? null;
       });
 
       const allAssignments = (await assignments.toArray()) as TagAssignment[];
@@ -134,28 +134,29 @@ class BiptagDB extends Dexie {
       for (const assignment of allAssignments) {
         const key = `${assignment.auditId}:${assignment.tagNumber}`;
         const currentRecord = currentRecordByTag.get(key);
+        const observedAnimal = currentRecord?.observedAnimal ?? null;
         const status = assignment.validationStatus === 'invalid_tag'
           ? 'invalid'
           : assignment.validationStatus === 'suspicious_tag'
             ? 'suspicious'
-            : currentRecord
-              ? currentRecord.status === 'correct'
+            : currentRecord?.status === 'tag_not_found'
+              ? 'not_found'
+              : currentRecord && observedAnimal
+                ? currentRecord.status === 'correct'
                 ? 'confirmed'
-                : currentRecord.status === 'tag_not_found'
-                  ? 'not_found'
-                  : currentRecord.status === 'tag_without_animal'
+                : currentRecord.status === 'tag_without_animal' || currentRecord.status === 'linked'
                     ? 'linked'
                     : currentRecord.status === 'unconfirmed'
                       ? 'unresolved'
                       : 'reassigned'
-              : 'pending';
+                : 'pending';
 
         await effective.add({
           id: newId('effective'),
           auditId: assignment.auditId,
           tagNumber: assignment.tagNumber,
           originalAnimal: assignment.expectedAnimal,
-          effectiveAnimal: currentRecord?.observedAnimal ?? assignment.expectedAnimal ?? null,
+          effectiveAnimal: observedAnimal,
           status,
           sourceAssignmentId: assignment.id,
           currentRecordId: currentRecord?.id ?? null,

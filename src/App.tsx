@@ -1004,7 +1004,7 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
         auditId,
         tagNumber: assignment.tagNumber,
         originalAnimal: assignment.expectedAnimal,
-        effectiveAnimal: assignment.expectedAnimal,
+        effectiveAnimal: null,
         status: assignment.validationStatus === 'invalid_tag'
           ? 'invalid' as const
           : assignment.validationStatus === 'suspicious_tag'
@@ -1554,7 +1554,7 @@ function AuditView({
         ? `Validar manualmente. Primeiro animal: ${firstNewTagAnimal}; novo animal: ${decision.observedAnimal ?? 'nao informado'}.`
         : movementNote,
       preserveEffective: decision.status === 'new_tag_conflict',
-      keepExistingCurrent: decision.status === 'new_tag_conflict',
+      keepExistingCurrent: decision.status === 'new_tag_conflict' || scan.existingRecord?.status === 'possible_swap',
       operationalAction
     });
 
@@ -2493,7 +2493,13 @@ function IssuesView({
   const replacementRecords = current.filter((record) => record.operationalAction === 'replace_tag');
   const newTagRecords = nonCorrect.filter((record) => ['new_tag', 'tag_not_registered'].includes(record.status) || record.operationalAction === 'register_new_tag');
   const unlinkedRecords = nonCorrect.filter((record) => ['linked', 'tag_without_animal'].includes(record.status) || record.operationalAction === 'link_tag');
-  const unconfirmedRecords = nonCorrect.filter((record) => record.status === 'unconfirmed');
+  const latestUnconfirmedByTag = new Map<string, AuditRecord>();
+  for (const record of records
+    .filter((item) => item.status === 'unconfirmed')
+    .sort((a, b) => (a.sequence ?? Number.MAX_SAFE_INTEGER) - (b.sequence ?? Number.MAX_SAFE_INTEGER) || a.scannedAt.localeCompare(b.scannedAt))) {
+    latestUnconfirmedByTag.set(record.tagNumber, record);
+  }
+  const unconfirmedRecords = [...latestUnconfirmedByTag.values()];
   const notFoundRecords = nonCorrect.filter((record) => record.status === 'tag_not_found');
   const actionRecords = current.filter((record) => record.operationalAction && record.operationalAction !== 'keep_tag');
   const groupedIds = new Set([
@@ -2512,12 +2518,20 @@ function IssuesView({
   const otherIssues = nonCorrect.filter((record) => !groupedIds.has(record.id));
   const pendingTags = effectiveAssignments.filter((item) => item.status === 'pending');
   const displacedTags = effectiveAssignments.filter((item) => item.status === 'displaced');
+  const displacedAnimals = new Set(displacedTags.map((item) => item.originalAnimal).filter(Boolean));
+  const movedAnimalWithoutTags = movementRecords.filter(
+    (record) =>
+      record.expectedAnimal &&
+      record.observedAnimal &&
+      record.expectedAnimal !== record.observedAnimal &&
+      !displacedAnimals.has(record.expectedAnimal)
+  );
   const notFoundTags = effectiveAssignments.filter((item) => item.status === 'not_found');
   const reviewSummaryStats = [
     { label: 'Trocas', value: swapPairs.length, tone: 'warning' as const },
     { label: 'Pendentes', value: pendingSwapRecords.length, tone: 'warning' as const },
     { label: 'Conflitos', value: conflictPairs.length + newTagConflictRecords.length, tone: 'danger' as const },
-    { label: 'Acoes', value: actionRecords.length + displacedTags.length + notFoundTags.length, tone: 'danger' as const }
+    { label: 'Acoes', value: actionRecords.length + displacedTags.length + movedAnimalWithoutTags.length + notFoundTags.length, tone: 'danger' as const }
   ].filter((item) => item.value > 0);
   const reviewItemCount =
     swapPairs.length +
@@ -2528,6 +2542,7 @@ function IssuesView({
     removedRecords.length +
     unlinkedRecords.length +
     displacedTags.length +
+    movedAnimalWithoutTags.length +
     conflictPairs.length +
     newTagConflictRecords.length +
     unconfirmedRecords.length +
@@ -2622,6 +2637,7 @@ function IssuesView({
         </ReviewSection>
 
         <ReviewSection eyebrow="ANIMAIS" title="Animais sem tag" emptyText="Nenhum animal sem tag confirmado.">
+          {movedAnimalWithoutTags.map((record) => <ReviewMovedAnimalCard key={`moved-${record.id}`} record={record} />)}
           {displacedTags.map((item) => <ReviewEffectiveCard key={item.id} item={item} />)}
         </ReviewSection>
 
@@ -2756,6 +2772,25 @@ function ReviewEffectiveCard({ item }: { item: EffectiveTagAssignment }) {
   );
 }
 
+function ReviewMovedAnimalCard({ record }: { record: AuditRecord }) {
+  return (
+    <div className="review-card review-card--warning">
+      <span className="issue-row__icon"><IssuesIcon /></span>
+      <div className="review-card__body">
+        <strong>Animal sem tag confirmada</strong>
+        <span>{`${record.expectedAnimal ?? '-'} -> sem tag confirmada`}</span>
+        <div className="review-card__meta">
+          <small>Animal antigo: {record.expectedAnimal ?? '-'}</small>
+          <small>Tag movida: {record.tagNumber}</small>
+          <small>Novo animal: {record.observedAnimal ?? '-'}</small>
+          <small>Origem: Auditoria</small>
+        </div>
+        <button className="button button--ghost button--full" onClick={() => showMovedAnimalDetails(record)}>Ver detalhes</button>
+      </div>
+    </div>
+  );
+}
+
 function showRecordDetails(record: AuditRecord) {
   void appDialog.alert({
     title: 'Detalhe da ocorrencia',
@@ -2767,6 +2802,18 @@ function showRecordDetails(record: AuditRecord) {
       record.actionNote ?? record.note ?? ''
     ].filter((line) => line !== '').join('\n'),
     tone: record.status === 'audit_conflict' || record.status === 'new_tag_conflict' ? 'danger' : 'warning'
+  });
+}
+
+function showMovedAnimalDetails(record: AuditRecord) {
+  void appDialog.alert({
+    title: 'Animal sem tag confirmada',
+    message: [
+      `Animal antigo: ${record.expectedAnimal ?? '-'}`,
+      `Tag ${record.tagNumber} foi confirmada no animal ${record.observedAnimal ?? '-'}.`,
+      'Acao sugerida: revisar o animal antigo antes de executar no Nedap.'
+    ].join('\n'),
+    tone: 'warning'
   });
 }
 
