@@ -11,7 +11,7 @@ import {
   saveReading
 } from '../src/services/audit-engine';
 import { deriveReconciliation } from '../src/services/reconciliation';
-import { buildAuditReportRows } from '../src/services/excel';
+import { buildAuditReportRows, createAuditWorkbook } from '../src/services/excel';
 
 const AUDIT_ID = 'audit-test';
 
@@ -151,6 +151,18 @@ async function saveAnimalWithoutEarTag(input: {
     operationalAction: null,
     note: 'Animal sem brinco visual.'
   });
+}
+
+function summaryValue(rows: (string | number)[][], label: string) {
+  return rows.find((row) => row[0] === label)?.[1];
+}
+
+function finalResultRow(rows: ReturnType<typeof buildAuditReportRows>, tagNumber: string) {
+  return rows.resultFinalRows.find((row) => row.smartTag === tagNumber);
+}
+
+function conferenceDecisionFor(rows: ReturnType<typeof buildAuditReportRows>, tagNumber: string) {
+  return rows.conferenceRows.find((row) => row[2] === tagNumber)?.[7];
 }
 
 beforeEach(async () => {
@@ -428,7 +440,7 @@ describe('BIPTAG audit rules', () => {
 
     expect(effective[0].status).toBe('without_animal');
     expect(effective[0].effectiveAnimal).toBeNull();
-    expect(rows.actionRows).toContainEqual(expect.arrayContaining(['REMOVER VÍNCULO', assignments[0].tagNumber, '1001', 'SEM ANIMAL']));
+    expect(rows.actionRows).toContainEqual(expect.arrayContaining(['REMOVER VINCULO', assignments[0].tagNumber, '1001', 'SEM ANIMAL']));
   });
 
   it('P. records a stored tag that was already without animal without Nedap action', async () => {
@@ -587,5 +599,192 @@ describe('BIPTAG audit rules', () => {
     expect(records[1].operationalAction).toBeNull();
     expect(effective?.effectiveAnimal).toBe('3001');
     expect(rows.reviewRows).toContainEqual(expect.arrayContaining(['ANIMAL SEM BRINCO', assignments[0].tagNumber]));
+  });
+
+  it('Report 1. new field tags do not increase base coverage', async () => {
+    const base = Array.from({ length: 9 }, (_, index) => ({
+      tag: `98400001235000${index + 1}`,
+      animal: `600${index + 1}`
+    }));
+    const { audit, assignments } = await seedAudit(base);
+
+    for (const assignment of assignments.slice(0, 8)) {
+      await saveConfirmed({ tag: assignment.tagNumber, assignment, observed: assignment.expectedAnimal, status: 'correct' });
+    }
+    await saveConfirmed({ tag: '984000099999999', assignment: null, observed: '6018', status: 'new_tag' });
+
+    const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
+    const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
+    const rows = buildAuditReportRows(audit, records, [], effective, [], assignments);
+
+    expect(rows.metrics.totalValid).toBe(9);
+    expect(rows.metrics.baseResolvedCount).toBe(8);
+    expect(rows.metrics.newTagsCount).toBe(1);
+    expect(summaryValue(rows.resultRows, 'Tags da base com resultado')).toBe(8);
+    expect(summaryValue(rows.resultRows, 'Tags novas encontradas')).toBe(1);
+  });
+
+  it('Report 2. final confirmed state does not remain as a generic pending item', async () => {
+    const { audit, assignments } = await seedAudit([{ tag: '984000012350004', animal: '6004' }]);
+
+    const first = await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '6104' });
+    await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '6204', existingRecord: first });
+
+    const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
+    const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
+    const rows = buildAuditReportRows(audit, records, [], effective, [], assignments);
+    const tagReviewRows = rows.reviewRows.filter((row) => row[1] === assignments[0].tagNumber);
+
+    expect(rows.actionRows).toContainEqual(expect.arrayContaining(['MOVER TAG', assignments[0].tagNumber, '6004', '6204']));
+    expect(rows.actionRows.flat().join(' ')).not.toContain('6104');
+    expect(tagReviewRows.map((row) => row[0])).not.toContain('PENDENCIA');
+  });
+
+  it('Report 3. animal without ear tag appears once and not as generic pending', async () => {
+    const { audit, assignments } = await seedAudit([{ tag: '984000012350006', animal: '6006' }]);
+
+    await saveAnimalWithoutEarTag({ tag: assignments[0].tagNumber, assignment: assignments[0] });
+
+    const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
+    const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
+    const rows = buildAuditReportRows(audit, records, [], effective, [], assignments);
+    const tagRows = rows.reviewRows.filter((row) => row[1] === assignments[0].tagNumber);
+
+    expect(tagRows.filter((row) => row[0] === 'ANIMAL SEM BRINCO')).toHaveLength(1);
+    expect(tagRows.map((row) => row[0])).not.toContain('PENDENCIA');
+  });
+
+  it('Report 4. known issue does not automatically become INVESTIGAR when physical state is resolved', async () => {
+    const { audit, assignments } = await seedAudit([{ tag: '984000012350010', animal: '6010' }]);
+    const timestamp = now();
+    await db.knownIssues.add({
+      id: 'known-report-1',
+      auditId: AUDIT_ID,
+      tagNumber: assignments[0].tagNumber,
+      type: 'stopped_sending',
+      note: 'Parou de enviar dados.',
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      syncStatus: 'pending'
+    });
+    await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '6010', status: 'correct' });
+
+    const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
+    const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
+    const knownIssues = await db.knownIssues.where('auditId').equals(AUDIT_ID).toArray();
+    const rows = buildAuditReportRows(audit, records, [], effective, knownIssues, assignments);
+    const knownIssueRow = rows.reviewRows.find((row) => row[0] === 'PROBLEMA CONHECIDO');
+
+    expect(knownIssueRow?.[4]).not.toBe('INVESTIGAR');
+    expect(finalResultRow(rows, assignments[0].tagNumber)?.acaoNoNedap).toBe('NENHUMA');
+  });
+
+  it('Report 5. confirmed animal outside imported base still generates a definitive move', async () => {
+    const { audit, assignments } = await seedAudit([{ tag: '984000012350004', animal: '6004' }]);
+
+    await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '6204' });
+
+    const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
+    const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
+    const rows = buildAuditReportRows(audit, records, [], effective, [], assignments);
+    const alertRow = rows.reviewRows.find((row) => row[0] === 'ANIMAL FORA DA BASE');
+
+    expect(rows.actionRows).toContainEqual(expect.arrayContaining(['MOVER TAG', assignments[0].tagNumber, '6004', '6204']));
+    expect(alertRow?.[4]).toBe('ALERTA INFORMATIVO');
+    expect(rows.reviewRows.filter((row) => row[1] === assignments[0].tagNumber).map((row) => row[0])).not.toContain('PENDENCIA');
+  });
+
+  it('Report 6. confirmed new tag receives CADASTRAR TAG decision in history', async () => {
+    const { audit, assignments } = await seedAudit([{ tag: '984000012350001', animal: '6001' }]);
+
+    await saveConfirmed({ tag: '984000099999999', assignment: null, observed: '6018', status: 'new_tag' });
+
+    const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
+    const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
+    const rows = buildAuditReportRows(audit, records, [], effective, [], assignments);
+
+    expect(conferenceDecisionFor(rows, '984000099999999')).toBe('CADASTRAR TAG');
+  });
+
+  it('Report 7. not located tag receives TAG NAO LOCALIZADA decision in history', async () => {
+    const { audit, assignments } = await seedAudit([{ tag: '984000012350009', animal: '6009' }]);
+
+    await markPendingTagsNotFound(AUDIT_ID);
+
+    const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
+    const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
+    const rows = buildAuditReportRows(audit, records, [], effective, [], assignments);
+
+    expect(conferenceDecisionFor(rows, assignments[0].tagNumber)).toBe('TAG NAO LOCALIZADA');
+  });
+
+  it('Report 8. final result includes correct tags', async () => {
+    const { audit, assignments } = await seedAudit([{ tag: '984000012350001', animal: '6001' }]);
+
+    await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '6001', status: 'correct' });
+
+    const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
+    const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
+    const rows = buildAuditReportRows(audit, records, [], effective, [], assignments);
+
+    expect(finalResultRow(rows, assignments[0].tagNumber)?.status).toBe('CORRETA');
+    expect(finalResultRow(rows, assignments[0].tagNumber)?.acaoNoNedap).toBe('NENHUMA');
+  });
+
+  it('Report 9. final result includes new tags found in field', async () => {
+    const { audit, assignments } = await seedAudit([{ tag: '984000012350001', animal: '6001' }]);
+
+    await saveConfirmed({ tag: '984000099999999', assignment: null, observed: '6018', status: 'new_tag' });
+
+    const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
+    const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
+    const rows = buildAuditReportRows(audit, records, [], effective, [], assignments);
+
+    expect(finalResultRow(rows, '984000099999999')?.status).toBe('NOVA');
+    expect(finalResultRow(rows, '984000099999999')?.acaoNoNedap).toBe('CADASTRAR -> 6018');
+  });
+
+  it('Report 10. final result does not duplicate SmartTags', async () => {
+    const { audit, assignments } = await seedAudit([{ tag: '984000012350004', animal: '6004' }]);
+
+    const first = await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '6104' });
+    await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '6204', existingRecord: first });
+
+    const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
+    const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
+    const rows = buildAuditReportRows(audit, records, [], effective, [], assignments);
+    const smartTags = rows.resultFinalRows.map((row) => row.smartTag);
+
+    expect(smartTags).toHaveLength(new Set(smartTags).size);
+  });
+
+  it('Report 11. SmartTag cells are exported as text', async () => {
+    const { audit, assignments } = await seedAudit([{ tag: '984000012350001', animal: '6001' }]);
+
+    await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '6001', status: 'correct' });
+
+    const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
+    const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
+    const workbook = createAuditWorkbook(audit, records, [], effective, [], assignments);
+    const sheet = workbook.Sheets['RESULTADO FINAL'];
+    const smartTagCell = Object.values(sheet).find((cell) => typeof cell === 'object' && 'v' in cell && cell.v === assignments[0].tagNumber);
+
+    expect(smartTagCell?.t).toBe('s');
+    expect(smartTagCell?.z).toBe('@');
+  });
+
+  it('Report 12. Corrigir no Nedap contains only the final state', async () => {
+    const { audit, assignments } = await seedAudit([{ tag: '984000012350004', animal: '6004' }]);
+
+    const first = await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '6104' });
+    await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '6204', existingRecord: first });
+
+    const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
+    const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
+    const rows = buildAuditReportRows(audit, records, [], effective, [], assignments);
+
+    expect(rows.actionRows).toContainEqual(expect.arrayContaining(['MOVER TAG', assignments[0].tagNumber, '6004', '6204']));
+    expect(rows.actionRows.flat().join(' ')).not.toContain('6104');
+    expect(rows.actionRows.map((row) => row[0])).not.toContain('MANTER TAG');
   });
 });

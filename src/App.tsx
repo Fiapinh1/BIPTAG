@@ -80,6 +80,16 @@ function readStoredAuditId() {
   }
 }
 
+function baseEffectiveAssignments(items: EffectiveTagAssignment[]) {
+  return items.filter((item) => Boolean(item.sourceAssignmentId) && !['suspicious', 'invalid'].includes(item.status));
+}
+
+function countAuditedBaseTags(effectiveAssignments: EffectiveTagAssignment[], records: AuditRecord[]) {
+  const baseItems = baseEffectiveAssignments(effectiveAssignments);
+  if (baseItems.length) return baseItems.filter((item) => item.status !== 'pending').length;
+  return new Set(records.filter((record) => record.status !== 'unconfirmed' && record.expectedAnimal !== null).map((record) => record.tagNumber)).size;
+}
+
 type DialogTone = 'default' | 'danger' | 'warning' | 'success';
 
 type AppDialogRequest =
@@ -663,10 +673,7 @@ function HomeView({
   const metrics = useMemo(() => {
     const correct = currentRecords.filter((record) => record.status === 'correct').length;
     const problems = currentRecords.filter((record) => record.status !== 'correct').length;
-    const validEffective = effectiveAssignments.filter((item) => !['suspicious', 'invalid'].includes(item.status));
-    const auditedUnique = validEffective.length
-      ? validEffective.filter((item) => item.status !== 'pending').length
-      : new Set(currentRecords.map((record) => record.tagNumber)).size;
+    const auditedUnique = countAuditedBaseTags(effectiveAssignments, currentRecords);
     const total = activeAudit?.validTags ?? activeAudit?.totalTags ?? 0;
     return {
       correct,
@@ -716,8 +723,8 @@ function HomeView({
   }
 
   const createFarmModal = showCreateFarmModal ? (
-    <div className="app-modal" role="dialog" aria-modal="true" aria-labelledby="create-farm-title">
-      <div className="app-modal__panel app-modal__panel--wide">
+    <div className="app-modal app-modal--create-audit" role="dialog" aria-modal="true" aria-labelledby="create-farm-title">
+      <div className="app-modal__panel app-modal__panel--wide create-audit-modal">
         <div className="app-modal__header">
           <div>
             <span className="eyebrow">NOVA AUDITORIA</span>
@@ -781,10 +788,13 @@ function HomeView({
 
   return (
     <>
-      <section className="page home-page">
+      <section className="page home-page home-page--active-audit">
         <div className="home-toolbar home-toolbar--audit">
           <div>
-            <button className="back-link" onClick={onClearAudit}>← Fazendas</button>
+            <button className="back-link" onClick={onClearAudit} aria-label="Voltar para fazendas">
+              <span className="back-link__icon" aria-hidden="true">&lsaquo;</span>
+              <span>Fazendas</span>
+            </button>
             <h1>{activeAudit.farmName}</h1>
             <p>{activeAudit.status === 'finished' ? 'Auditoria finalizada' : activeAudit.status === 'paused' ? 'Auditoria pausada' : 'Auditoria em andamento'}</p>
           </div>
@@ -1658,10 +1668,7 @@ function AuditView({
 
   const fieldMetrics = useMemo(() => {
     const current = auditRecords.filter((record) => record.isCurrent !== false);
-    const validEffective = effectiveAssignments.filter((item) => !['suspicious', 'invalid'].includes(item.status));
-    const auditedUnique = validEffective.length
-      ? validEffective.filter((item) => item.status !== 'pending').length
-      : new Set(current.map((record) => record.tagNumber)).size;
+    const auditedUnique = countAuditedBaseTags(effectiveAssignments, current);
     const issues = current.filter((record) => record.status !== 'correct').length;
     const total = audit?.validTags ?? audit?.totalTags ?? 0;
     return {
@@ -2872,6 +2879,7 @@ function IssuesView({
       state.record
     )
     .map((state) => state.record!);
+  const finalActionTagNumbers = new Set(finalActionRecords.map((record) => record.tagNumber));
   const seenConflictPairs = new Set<string>();
   const conflictPairs = conflictRecords.filter((record) => {
     const key = record.pairId ?? record.id;
@@ -2879,7 +2887,7 @@ function IssuesView({
     seenConflictPairs.add(key);
     return true;
   });
-  const pendingSwapRecords = nonCorrect.filter((record) => ['reassignment', 'divergence'].includes(record.status) && record.operationalAction !== 'move_tag');
+  const pendingSwapRecords = nonCorrect.filter((record) => ['reassignment', 'divergence'].includes(record.status) && record.operationalAction !== 'move_tag' && !finalActionTagNumbers.has(record.tagNumber));
   const movementRecords = finalActionRecords.filter((record) => record.operationalAction === 'move_tag');
   const removedRecords = finalActionRecords.filter((record) => record.operationalAction === 'remove_tag');
   const replacementRecords = finalActionRecords.filter((record) => record.operationalAction === 'replace_tag');
@@ -2891,8 +2899,9 @@ function IssuesView({
     .sort((a, b) => (a.sequence ?? Number.MAX_SAFE_INTEGER) - (b.sequence ?? Number.MAX_SAFE_INTEGER) || a.scannedAt.localeCompare(b.scannedAt))) {
     latestUnconfirmedByTag.set(record.tagNumber, record);
   }
-  const unconfirmedRecords = [...latestUnconfirmedByTag.values()];
+  const unconfirmedRecords = [...latestUnconfirmedByTag.values()].filter((record) => !reconciliation.finalRecordByTag.has(record.tagNumber));
   const notFoundRecords = nonCorrect.filter((record) => record.status === 'tag_not_found');
+  const notFoundRecordTags = new Set(notFoundRecords.map((record) => record.tagNumber));
   const animalWithoutEarTagRecords = nonCorrect.filter((record) => record.status === 'animal_without_ear_tag');
   const actionRecords = finalActionRecords;
   const groupedIds = new Set([
@@ -2912,19 +2921,16 @@ function IssuesView({
   const otherIssues = nonCorrect.filter((record) => !groupedIds.has(record.id));
   const pendingTags = effectiveAssignments.filter((item) => item.status === 'pending');
   const animalGaps = reconciliation.animalsWithoutConfirmedTag;
-  const notFoundTags = effectiveAssignments.filter((item) => item.status === 'not_found');
-  const validEffective = effectiveAssignments.filter((item) => !['suspicious', 'invalid'].includes(item.status));
-  const processedCount = validEffective.length
-    ? validEffective.filter((item) => item.status !== 'pending').length
-    : new Set(current.map((record) => record.tagNumber)).size;
+  const notFoundTags = effectiveAssignments.filter((item) => item.status === 'not_found' && !notFoundRecordTags.has(item.tagNumber));
+  const processedCount = countAuditedBaseTags(effectiveAssignments, current);
   const totalValid = activeAudit.validTags ?? activeAudit.totalTags;
   const correctCount = current.filter((record) => record.status === 'correct').length;
-  const actionCount = actionRecords.length;
+  const actionCount = actionRecords.length + swapPairs.length;
   const reviewSummaryStats = [
     { label: 'Trocas', value: swapPairs.length, tone: 'warning' as const },
     { label: 'Pendentes', value: pendingSwapRecords.length, tone: 'warning' as const },
     { label: 'Conflitos', value: conflictPairs.length + newTagConflictRecords.length, tone: 'danger' as const },
-    { label: 'Acoes', value: actionCount, tone: 'danger' as const }
+    { label: 'Acoes Nedap', value: actionCount, tone: 'danger' as const }
   ].filter((item) => item.value > 0);
   const reviewItemCount =
     swapPairs.length +
@@ -2970,7 +2976,7 @@ function IssuesView({
     if (swapPairs.length) {
       lines.push('', 'Trocas confirmadas:');
       for (const pair of swapPairs.slice(0, 12)) {
-        lines.push(`- ${pair.left.originalAnimal ?? 'sem animal'} ↔ ${pair.left.finalAnimal ?? 'sem animal'}`);
+        lines.push(`- ${pair.left.originalAnimal ?? 'sem animal'} <-> ${pair.left.finalAnimal ?? 'sem animal'}`);
       }
       if (swapPairs.length > 12) lines.push(`- mais ${swapPairs.length - 12} troca(s) no relatorio`);
     }
