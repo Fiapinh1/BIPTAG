@@ -494,17 +494,13 @@ function App() {
             activeAudit={selectedAudit}
             onSelectAudit={(audit) => void chooseAudit(audit)}
             onDeleteAudit={(audit) => void deleteAudit(audit)}
+            onClearAudit={() => setSelectedAuditId(null)}
             onImportCreated={(auditId) => {
               setSelectedAuditId(auditId);
               setToast(cloudSession ? 'Fazenda criada e sincronizacao iniciada.' : 'Fazenda salva neste aparelho. Entre no Supabase para aparecer nos outros dispositivos.');
               setView('audit');
               void syncCreatedAuditInBackground(auditId);
             }}
-            onAudit={async () => {
-              if (selectedAudit) await chooseAudit(selectedAudit);
-              setView('audit');
-            }}
-            onLookup={() => setView('lookup')}
             onIssues={() => setView('issues')}
             onKnownIssues={() => setView('knownIssues')}
             setToast={setToast}
@@ -546,7 +542,6 @@ function App() {
         ) : (
           <>
             <NavButton active={view === 'home'} label="Fazendas" icon={<HomeIcon />} onClick={() => setView('home')} />
-            <NavButton active={view === 'import'} label="Nova" icon={<PlusIcon />} onClick={() => setView('import')} />
             <NavButton active={view === 'settings'} label="Config." icon={<ActionIcon />} onClick={() => setView('settings')} />
           </>
         )}
@@ -631,9 +626,8 @@ function HomeView({
   activeAudit,
   onSelectAudit,
   onDeleteAudit,
+  onClearAudit,
   onImportCreated,
-  onAudit,
-  onLookup,
   onIssues,
   onKnownIssues,
   setToast
@@ -642,30 +636,27 @@ function HomeView({
   activeAudit: Audit | null;
   onSelectAudit: (audit: Audit) => void;
   onDeleteAudit: (audit: Audit) => void;
+  onClearAudit: () => void;
   onImportCreated: (auditId: string) => void;
-  onAudit: () => void;
-  onLookup: () => void;
   onIssues: () => void;
   onKnownIssues: () => void;
   setToast: (value: string) => void;
 }) {
   const [showCreateFarmModal, setShowCreateFarmModal] = useState(false);
-  const [showLookupModal, setShowLookupModal] = useState(false);
-  const [animalSearch, setAnimalSearch] = useState('');
   const records = useLiveQuery(
     () => activeAudit ? db.auditRecords.where('auditId').equals(activeAudit.id).toArray() : Promise.resolve<AuditRecord[]>([]),
     [activeAudit?.id],
     [] as AuditRecord[]
   );
-  const tagAssignments = useLiveQuery(
-    () => activeAudit ? db.tagAssignments.where('auditId').equals(activeAudit.id).toArray() : Promise.resolve<TagAssignment[]>([]),
-    [activeAudit?.id],
-    [] as TagAssignment[]
-  );
   const effectiveAssignments = useLiveQuery(
     () => activeAudit ? db.effectiveTagAssignments.where('auditId').equals(activeAudit.id).toArray() : Promise.resolve<EffectiveTagAssignment[]>([]),
     [activeAudit?.id],
     [] as EffectiveTagAssignment[]
+  );
+  const knownIssues = useLiveQuery(
+    () => activeAudit ? db.knownIssues.where('auditId').equals(activeAudit.id).toArray() : Promise.resolve<KnownIssue[]>([]),
+    [activeAudit?.id],
+    [] as KnownIssue[]
   );
 
   const currentRecords = records.filter((record) => record.isCurrent !== false);
@@ -685,41 +676,6 @@ function HomeView({
       percent: total ? Math.min(Math.round((auditedUnique / total) * 100), 100) : 0
     };
   }, [currentRecords, effectiveAssignments, activeAudit]);
-  const animalSearchNumber = animalSearch.replace(/[^0-9A-Za-z_-]/g, '').trim();
-  const animalLookup = useMemo(() => {
-    if (!animalSearchNumber) return null;
-
-    const assignments = tagAssignments.filter((assignment) => assignment.expectedAnimal === animalSearchNumber);
-    const recordMatches = currentRecords.filter(
-      (record) =>
-        record.expectedAnimal === animalSearchNumber ||
-        record.observedAnimal === animalSearchNumber ||
-        record.effectiveAnimal === animalSearchNumber
-    );
-    const effectiveMatches = effectiveAssignments.filter(
-      (item) => item.originalAnimal === animalSearchNumber || item.effectiveAnimal === animalSearchNumber
-    );
-    const tagNumbers = Array.from(new Set([
-      ...assignments.map((assignment) => assignment.tagNumber),
-      ...recordMatches.map((record) => record.tagNumber),
-      ...effectiveMatches.map((item) => item.tagNumber)
-    ]));
-    const latestRecordForTag = (tagNumber: string) =>
-      recordMatches
-        .filter((record) => record.tagNumber === tagNumber)
-        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.scannedAt.localeCompare(a.scannedAt))[0] ?? null;
-
-    return {
-      animal: animalSearchNumber,
-      tags: tagNumbers.map((tagNumber) => {
-        const assignment = assignments.find((item) => item.tagNumber === tagNumber) ?? tagAssignments.find((item) => item.tagNumber === tagNumber) ?? null;
-        const effective = effectiveMatches.find((item) => item.tagNumber === tagNumber) ?? effectiveAssignments.find((item) => item.tagNumber === tagNumber) ?? null;
-        const record = latestRecordForTag(tagNumber) ?? currentRecords.find((item) => item.tagNumber === tagNumber) ?? null;
-        return { tagNumber, assignment, effective, record };
-      })
-    };
-  }, [animalSearchNumber, tagAssignments, currentRecords, effectiveAssignments]);
-
   async function pauseAudit() {
     if (!activeAudit || activeAudit.status === 'finished') return;
     const now = new Date().toISOString();
@@ -774,62 +730,6 @@ function HomeView({
     </div>
   ) : null;
 
-  const lookupModal = showLookupModal ? (
-    <div className="app-modal" role="dialog" aria-modal="true" aria-labelledby="lookup-title">
-      <div className="app-modal__panel">
-        <div className="app-modal__header">
-          <div>
-            <span className="eyebrow">CONSULTA RAPIDA</span>
-            <h2 id="lookup-title">Buscar tag pelo brinco</h2>
-          </div>
-          <button className="app-modal__close" onClick={() => setShowLookupModal(false)} aria-label="Fechar">×</button>
-        </div>
-        <div className="animal-lookup-card animal-lookup-card--modal">
-          <div className="animal-lookup-card__search">
-            <input
-              className="text-input"
-              inputMode="numeric"
-              placeholder="Digite o numero do brinco"
-              value={animalSearch}
-              onChange={(event) => setAnimalSearch(event.target.value.replace(/[^0-9A-Za-z_-]/g, ''))}
-            />
-            {animalSearch && <button className="button button--ghost" onClick={() => setAnimalSearch('')}>Limpar</button>}
-          </div>
-          {animalLookup && (
-            animalLookup.tags.length ? (
-              <div className="animal-lookup-results">
-                {animalLookup.tags.map(({ tagNumber, assignment, effective, record }) => {
-                  const action = operationalActionLabel(record?.operationalAction) || (record ? statusLabel(record.status) : '');
-                  const status = action || (effective && effective.status !== 'pending' ? 'Alterado na auditoria' : 'Cadastro Nedap');
-                  const detail = record
-                    ? `Nedap ${record.expectedAnimal ?? 'sem vinculo'} | campo ${record.observedAnimal ?? 'nao informado'}`
-                    : effective?.effectiveAnimal && effective.effectiveAnimal !== assignment?.expectedAnimal
-                      ? `Cadastro ${effective.originalAnimal ?? 'sem vinculo'} | atual ${effective.effectiveAnimal}`
-                      : `Animal ${assignment?.expectedAnimal ?? effective?.originalAnimal ?? animalLookup.animal}`;
-                  return (
-                    <div className="animal-lookup-result" key={tagNumber}>
-                      <TagIcon size={22} />
-                      <div>
-                        <span>{status}</span>
-                        <strong>{tagNumber}</strong>
-                        <small>{detail}</small>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="animal-lookup-empty">
-                <IssuesIcon size={20} />
-                <span>Nenhuma tag encontrada para o brinco {animalLookup.animal} nesta base.</span>
-              </div>
-            )
-          )}
-        </div>
-      </div>
-    </div>
-  ) : null;
-
   if (!activeAudit) {
     return (
       <>
@@ -838,11 +738,13 @@ function HomeView({
             <div>
               <span className="eyebrow">INICIO</span>
               <h1>Fazendas</h1>
-              <p>{audits.length ? 'Escolha uma fazenda para abrir a auditoria.' : 'Nenhuma auditoria selecionada.'}</p>
+              <p>{audits.length ? 'Escolha uma fazenda para abrir a auditoria.' : 'Nenhuma auditoria neste aparelho.'}</p>
             </div>
-            <button className="home-add-button" onClick={() => setShowCreateFarmModal(true)} aria-label="Criar nova auditoria">
-              <PlusIcon size={28} />
-            </button>
+            {audits.length > 0 && (
+              <button className="home-add-button" onClick={() => setShowCreateFarmModal(true)} aria-label="Criar nova auditoria">
+                <PlusIcon size={18} />
+              </button>
+            )}
           </div>
           {audits.length ? (
             <div className="audit-picker">
@@ -864,10 +766,10 @@ function HomeView({
           ) : (
             <div className="home-empty-state">
               <span className="home-empty-state__icon"><ImportIcon size={36} /></span>
-              <h2>Criar nova auditoria</h2>
-              <p>Importe o Tags.xlsx original do Nedap para iniciar a primeira fazenda neste aparelho.</p>
+              <h2>Nenhuma auditoria</h2>
+              <p>Importe o Tags.xlsx original do Nedap para iniciar uma fazenda.</p>
               <button className="button button--primary button--full button--large" onClick={() => setShowCreateFarmModal(true)}>
-                <PlusIcon /> Nova auditoria
+                <PlusIcon /> Criar nova auditoria
               </button>
             </div>
           )}
@@ -880,80 +782,46 @@ function HomeView({
   return (
     <>
       <section className="page home-page">
-        <div className="home-toolbar">
+        <div className="home-toolbar home-toolbar--audit">
           <div>
-            <span className="eyebrow">FAZENDA ATUAL</span>
+            <button className="back-link" onClick={onClearAudit}>← Fazendas</button>
             <h1>{activeAudit.farmName}</h1>
-            <p>Continue a auditoria ou use os atalhos da fazenda.</p>
+            <p>{activeAudit.status === 'finished' ? 'Auditoria finalizada' : activeAudit.status === 'paused' ? 'Auditoria pausada' : 'Auditoria em andamento'}</p>
           </div>
-          <button className="home-add-button" onClick={() => setShowCreateFarmModal(true)} aria-label="Criar nova auditoria">
-            <PlusIcon size={28} />
-          </button>
         </div>
 
         <div className="home-dashboard">
-      <div className="hero-card field-hero">
-        <div>
-          <span className="eyebrow">{activeAudit.status === 'finished' ? 'AUDITORIA FINALIZADA' : activeAudit.status === 'paused' ? 'AUDITORIA PAUSADA' : 'AUDITORIA EM ANDAMENTO'}</span>
-          <h1>{activeAudit.farmName}</h1>
-          <p>Última atividade: {formatDate(activeAudit.lastActivityAt || activeAudit.updatedAt)}</p>
-          <div className="saved-pill"><CheckIcon size={17} /> Salvo neste aparelho</div>
-        </div>
-        <div className="hero-card__progress">
-          <div className="progress-ring" style={{ '--progress': `${metrics.percent * 3.6}deg` } as React.CSSProperties}>
-            <div><strong>{metrics.percent}%</strong><small>concluído</small></div>
+          <div className="audit-progress-card">
+            <div className="audit-progress-card__text">
+              <span className="eyebrow">{activeAudit.status === 'finished' ? 'FINALIZADA' : activeAudit.status === 'paused' ? 'PAUSADA' : 'EM ANDAMENTO'}</span>
+              <strong>{metrics.percent}% concluído</strong>
+              <small>Última atividade: {formatDate(activeAudit.lastActivityAt || activeAudit.updatedAt)}</small>
+              <span className="saved-pill"><CheckIcon size={15} /> Salvo neste aparelho</span>
+            </div>
+            <div className="progress-ring" style={{ '--progress': `${metrics.percent * 3.6}deg` } as React.CSSProperties}>
+              <div><strong>{metrics.percent}%</strong><small>feito</small></div>
+            </div>
+            {activeAudit.status !== 'finished' && (
+              <div className="audit-progress-card__actions">
+                <button className="button button--ghost" onClick={pauseAudit}><PauseIcon /> Pausar</button>
+                <button className="button button--ghost" onClick={finishAudit}>Finalizar</button>
+              </div>
+            )}
           </div>
         </div>
-      </div>
-      </div>
 
-      <div className="stats-grid field-stats">
-        <StatCard label="Processadas" value={metrics.auditedUnique} hint={`${metrics.pending} pendentes`} icon={<CheckIcon />} />
-        <StatCard label="Corretas" value={metrics.correct} tone="success" icon={<CheckIcon />} />
-        <StatCard label="Ocorrências" value={metrics.problems} tone={metrics.problems ? 'danger' : 'default'} icon={<IssuesIcon />} />
-        <StatCard label="Tags válidas" value={activeAudit.validTags ?? activeAudit.totalTags} icon={<ScanIcon />} />
-      </div>
-
-      {activeAudit.status !== 'finished' && (
-        <div className="home-action-grid">
-          <button className="field-action field-action--primary" onClick={onAudit}>
-            <span className="field-action__icon"><NfcReaderGlyph /></span>
-            <span>
-              <strong>{activeAudit.status === 'paused' ? 'Retomar auditoria' : 'Auditar'}</strong>
-              <small>Leitura NFC ou digitação manual</small>
-            </span>
-            <ChevronRightIcon />
-          </button>
-          <button className="field-action field-action--lookup" onClick={onLookup}>
-            <span className="field-action__icon"><CowIcon size={30} /></span>
-            <span>
-              <strong>Consultar brinco</strong>
-              <small>Buscar SmartTag pela base importada</small>
-            </span>
-            <ChevronRightIcon />
-          </button>
-          <button className="field-action field-action--review" onClick={onIssues}>
-            <span className="field-action__icon"><IssuesIcon size={30} /></span>
-            <span>
-              <strong>Revisão</strong>
-              <small>Ocorrências e ações Nedap</small>
-            </span>
-            <ChevronRightIcon />
-          </button>
+        <div className="summary-metrics" aria-label="Resumo da auditoria">
+          <div><span>Processadas</span><strong>{metrics.auditedUnique}</strong><small>{metrics.pending} pendentes</small></div>
+          <div><span>Corretas</span><strong>{metrics.correct}</strong></div>
+          <div className={metrics.problems ? 'is-danger' : ''}><span>Ocorrências</span><strong>{metrics.problems}</strong></div>
+          <div><span>Tags válidas</span><strong>{activeAudit.validTags ?? activeAudit.totalTags}</strong></div>
         </div>
-      )}
 
-      <button className="secondary-row" onClick={onKnownIssues}>
-        <span><IssuesIcon /> Problemas com SmartTag</span>
-        <ChevronRightIcon />
-      </button>
-
-      {activeAudit.status !== 'finished' && (
-        <div className="session-actions">
-          <button className="button button--ghost" onClick={pauseAudit}><PauseIcon /> Pausar</button>
-          <button className="button button--ghost" onClick={finishAudit}>Finalizar</button>
-        </div>
-      )}
+        <button className="secondary-row secondary-row--compact" onClick={onKnownIssues}>
+          <span><IssuesIcon /> Problemas conhecidos</span>
+          <strong>{knownIssues.length}</strong>
+          <ChevronRightIcon />
+        </button>
 
       {audits.length > 0 && (
         <>
@@ -976,13 +844,13 @@ function HomeView({
 
       </section>
       {createFarmModal}
-      {lookupModal}
     </>
   );
 }
 
 function LookupView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport: () => void }) {
-  const [animalSearch, setAnimalSearch] = useState('');
+  const [lookupMode, setLookupMode] = useState<'animal' | 'tag'>('animal');
+  const [searchValue, setSearchValue] = useState('');
   const records = useLiveQuery(
     () => audit ? db.auditRecords.where('auditId').equals(audit.id).toArray() : Promise.resolve<AuditRecord[]>([]),
     [audit?.id],
@@ -1000,19 +868,41 @@ function LookupView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
   );
 
   const currentRecords = records.filter((record) => record.isCurrent !== false);
-  const animalSearchNumber = animalSearch.replace(/[^0-9A-Za-z_-]/g, '').trim();
-  const animalLookup = useMemo(() => {
-    if (!animalSearchNumber) return null;
+  const lookupPrefix = audit?.tagPattern?.prefix ?? '';
+  const lookupRestLength = Math.max((audit?.tagPattern?.length ?? MAX_SMARTTAG_DIGITS) - lookupPrefix.length, 0);
+  const normalizedSearch = searchValue.replace(/[^0-9A-Za-z_-]/g, '').trim();
+  const normalizedTagSearch = searchValue.replace(/[^0-9]/g, '').trim();
+  const composedTagSearch = lookupMode === 'tag' && lookupPrefix && normalizedTagSearch && !normalizedTagSearch.startsWith(lookupPrefix)
+    ? `${lookupPrefix}${normalizedTagSearch}`
+    : normalizedTagSearch;
+  const lookupResult = useMemo(() => {
+    const query = lookupMode === 'animal' ? normalizedSearch : composedTagSearch;
+    if (!query) return null;
 
-    const assignments = tagAssignments.filter((assignment) => assignment.expectedAnimal === animalSearchNumber);
+    if (lookupMode === 'tag') {
+      const assignment = tagAssignments.find((item) => item.tagNumber === query) ?? null;
+      const effective = effectiveAssignments.find((item) => item.tagNumber === query) ?? null;
+      const record = currentRecords
+        .filter((item) => item.tagNumber === query)
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.scannedAt.localeCompare(a.scannedAt))[0] ?? null;
+      return {
+        mode: lookupMode,
+        query,
+        tags: assignment || effective || record
+          ? [{ tagNumber: query, assignment, effective, record }]
+          : []
+      };
+    }
+
+    const assignments = tagAssignments.filter((assignment) => assignment.expectedAnimal === query);
     const recordMatches = currentRecords.filter(
       (record) =>
-        record.expectedAnimal === animalSearchNumber ||
-        record.observedAnimal === animalSearchNumber ||
-        record.effectiveAnimal === animalSearchNumber
+        record.expectedAnimal === query ||
+        record.observedAnimal === query ||
+        record.effectiveAnimal === query
     );
     const effectiveMatches = effectiveAssignments.filter(
-      (item) => item.originalAnimal === animalSearchNumber || item.effectiveAnimal === animalSearchNumber
+      (item) => item.originalAnimal === query || item.effectiveAnimal === query
     );
     const tagNumbers = Array.from(new Set([
       ...assignments.map((assignment) => assignment.tagNumber),
@@ -1025,7 +915,8 @@ function LookupView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.scannedAt.localeCompare(a.scannedAt))[0] ?? null;
 
     return {
-      animal: animalSearchNumber,
+      mode: lookupMode,
+      query,
       tags: tagNumbers.map((tagNumber) => {
         const assignment = assignments.find((item) => item.tagNumber === tagNumber) ?? tagAssignments.find((item) => item.tagNumber === tagNumber) ?? null;
         const effective = effectiveMatches.find((item) => item.tagNumber === tagNumber) ?? effectiveAssignments.find((item) => item.tagNumber === tagNumber) ?? null;
@@ -1033,7 +924,7 @@ function LookupView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
         return { tagNumber, assignment, effective, record };
       })
     };
-  }, [animalSearchNumber, tagAssignments, currentRecords, effectiveAssignments]);
+  }, [lookupMode, normalizedSearch, composedTagSearch, tagAssignments, currentRecords, effectiveAssignments]);
 
   if (!audit) {
     return (
@@ -1053,49 +944,73 @@ function LookupView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
       <div className="section-heading lookup-heading">
         <div>
           <span className="eyebrow">CONSULTA DA FAZENDA</span>
-          <h1>Buscar por brinco</h1>
-          <p>{audit.farmName} - consulte a SmartTag esperada sem registrar uma leitura.</p>
+          <h1>Consultar base</h1>
+          <p>{audit.farmName} - busque sem registrar leitura.</p>
         </div>
       </div>
 
       <div className="animal-lookup-card animal-lookup-card--page">
         <div className="animal-lookup-card__header">
-          <CowIcon size={28} />
+          {lookupMode === 'animal' ? <CowIcon size={28} /> : <TagIcon size={28} />}
           <div>
-            <span className="eyebrow">BRINCO DO ANIMAL</span>
-            <h2>Digite o numero visto no animal</h2>
+            <span className="eyebrow">BUSCA RAPIDA</span>
+            <h2>{lookupMode === 'animal' ? 'Brinco do animal' : 'SmartTag'}</h2>
           </div>
+        </div>
+
+        <div className="segmented-toggle" role="tablist" aria-label="Tipo de consulta">
+          <span className={`segmented-toggle__thumb ${lookupMode === 'tag' ? 'is-right' : ''}`} />
+          <button type="button" className={lookupMode === 'animal' ? 'is-active' : ''} onClick={() => { setLookupMode('animal'); setSearchValue(''); }}>
+            Animal
+          </button>
+          <button type="button" className={lookupMode === 'tag' ? 'is-active' : ''} onClick={() => { setLookupMode('tag'); setSearchValue(''); }}>
+            Tag
+          </button>
         </div>
 
         <div className="animal-lookup-card__search">
-          <input
-            className="text-input"
-            inputMode="numeric"
-            placeholder="Ex.: 4105"
-            value={animalSearch}
-            onChange={(event) => setAnimalSearch(event.target.value.replace(/[^0-9A-Za-z_-]/g, ''))}
-          />
-          {animalSearch && <button className="button button--ghost" onClick={() => setAnimalSearch('')}>Limpar</button>}
+          {lookupMode === 'tag' && lookupPrefix ? (
+            <div className="tag-compose-input tag-compose-input--lookup">
+              <span>{lookupPrefix}</span>
+              <input
+                className="text-input"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder={lookupRestLength ? `${lookupRestLength} finais` : 'SmartTag'}
+                value={searchValue}
+                onChange={(event) => setSearchValue(event.target.value.replace(/[^0-9]/g, ''))}
+              />
+            </div>
+          ) : (
+            <input
+              className="text-input"
+              inputMode="numeric"
+              placeholder={lookupMode === 'animal' ? 'Ex.: 4105' : '9840000...'}
+              value={searchValue}
+              onChange={(event) => setSearchValue(lookupMode === 'animal' ? event.target.value.replace(/[^0-9A-Za-z_-]/g, '') : event.target.value.replace(/[^0-9]/g, ''))}
+            />
+          )}
+          {searchValue && <button className="button button--ghost" onClick={() => setSearchValue('')}>Limpar</button>}
         </div>
 
-        {!animalLookup && (
+        {!lookupResult && (
           <div className="animal-lookup-empty animal-lookup-empty--idle">
             <ScanIcon size={24} />
-            <span>A consulta nao altera a auditoria. Use apenas para conferir cadastro e SmartTag esperada.</span>
+            <span>A consulta nao altera a auditoria.</span>
           </div>
         )}
 
-        {animalLookup && (
-          animalLookup.tags.length ? (
+        {lookupResult && (
+          lookupResult.tags.length ? (
             <div className="animal-lookup-results">
-              {animalLookup.tags.map(({ tagNumber, assignment, effective, record }) => {
+              {lookupResult.tags.map(({ tagNumber, assignment, effective, record }) => {
                 const action = operationalActionLabel(record?.operationalAction) || (record ? statusLabel(record.status) : '');
                 const status = action || (effective && effective.status !== 'pending' ? 'Alterado na auditoria' : 'Cadastro Nedap');
                 const detail = record
                   ? `Nedap ${record.expectedAnimal ?? 'sem vinculo'} | campo ${record.observedAnimal ?? 'nao informado'}`
                   : effective?.effectiveAnimal && effective.effectiveAnimal !== assignment?.expectedAnimal
                     ? `Cadastro ${effective.originalAnimal ?? 'sem vinculo'} | atual ${effective.effectiveAnimal}`
-                    : `Animal ${assignment?.expectedAnimal ?? effective?.originalAnimal ?? animalLookup.animal}`;
+                    : `Animal ${assignment?.expectedAnimal ?? effective?.originalAnimal ?? 'sem vinculo'}`;
                 return (
                   <div className="animal-lookup-result animal-lookup-result--large" key={tagNumber}>
                     <TagIcon size={26} />
@@ -1111,7 +1026,7 @@ function LookupView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
           ) : (
             <div className="animal-lookup-empty">
               <IssuesIcon size={22} />
-              <span>Nenhuma SmartTag encontrada para o brinco {animalLookup.animal} nesta base.</span>
+              <span>Nenhum resultado para {lookupMode === 'animal' ? 'animal' : 'tag'} {lookupResult.query} nesta base.</span>
             </div>
           )
         )}
@@ -1175,8 +1090,17 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
     void handleFile(dropped);
   }
 
+  const issuePattern = patternDraft ?? preview?.pattern ?? null;
+  const knownIssuePrefix = issuePattern?.prefix ?? '';
+  const knownIssueExpectedLength = issuePattern?.length ?? MAX_SMARTTAG_DIGITS;
+  const knownIssueRestLength = Math.max(knownIssueExpectedLength - knownIssuePrefix.length, 0);
+  const knownIssueDigits = knownIssueTag.replace(/[^0-9]/g, '');
+  const knownIssuePreview = knownIssuePrefix && knownIssueDigits && !knownIssueDigits.startsWith(knownIssuePrefix)
+    ? `${knownIssuePrefix}${knownIssueDigits}`
+    : knownIssueDigits;
+
   function addKnownIssueDraft() {
-    const normalizedTag = knownIssueTag.replace(/[^0-9]/g, '').trim();
+    const normalizedTag = knownIssuePreview.trim();
     if (!normalizedTag) {
       setError('Informe a SmartTag do problema conhecido.');
       return;
@@ -1302,12 +1226,6 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
         </div>
       </div>
 
-      <div className="import-steps" aria-label="Etapas da nova auditoria">
-        <span className={farmName.trim() ? 'is-complete' : ''}>1. Fazenda</span>
-        <span className={file ? 'is-complete' : ''}>2. Arquivo</span>
-        <span className={patternConfirmed ? 'is-complete' : ''}>3. Validacao</span>
-      </div>
-
       <div className="form-card import-plan-card">
         <label className="field-label" htmlFor="farm">Nome da fazenda</label>
         <input id="farm" className="text-input" placeholder="Ex.: Fazenda Santa Juliana" value={farmName} onChange={(event) => setFarmName(event.target.value)} />
@@ -1321,8 +1239,8 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
         >
           <input key={file?.name ?? 'empty-file'} type="file" accept=".xlsx,.xls" onChange={(event) => handleFile(event.target.files?.[0] ?? null)} />
           <span className="file-drop__icon"><ImportIcon size={30} /></span>
-          <strong>{file ? file.name : 'Selecionar ou arrastar Tags.xlsx'}</strong>
-          <small>{file ? 'Arquivo carregado. Confira o preparo.' : 'No PC, arraste a planilha aqui. No celular, toque para escolher.'}</small>
+          <strong>{file ? file.name : 'Selecionar Tags.xlsx'}</strong>
+          <small>{file ? 'Arquivo carregado. Confira o preparo.' : 'Arraste no PC ou toque no celular.'}</small>
         </label>
       </div>
 
@@ -1361,34 +1279,50 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
               </section>
 
               {patternDraft && (
-                <section className={`pattern-card import-prep-section import-prep-pattern ${patternConfirmed ? 'is-confirmed' : ''}`}>
-                  <div>
-                    <span className="eyebrow">PADRAO DAS SMARTTAGS</span>
-                    <h2>{patternDraft.prefix || 'Sem prefixo'}</h2>
-                  </div>
-                  <div className="pattern-card__fields">
-                    <label>
-                      <span>Prefixo</span>
-                      <input className="text-input" inputMode="numeric" value={patternDraft.prefix} onChange={(event) => { setPatternDraft({ ...patternDraft, prefix: event.target.value.replace(/[^0-9]/g, '') }); setPatternConfirmed(false); }} />
-                    </label>
-                    <label>
-                      <span>Digitos</span>
-                      <input className="text-input" inputMode="numeric" value={patternDraft.length} onChange={(event) => { setPatternDraft({ ...patternDraft, length: Number(event.target.value.replace(/[^0-9]/g, '')) || 0 }); setPatternConfirmed(false); }} />
-                    </label>
-                  </div>
-                  <button className="button button--secondary button--full" disabled={busy || !patternDraft.prefix || !patternDraft.length} onClick={() => void applyPattern()}>
-                    {patternConfirmed ? 'Padrao confirmado' : 'Confirmar padrao'}
-                  </button>
-                </section>
+                patternConfirmed ? (
+                  <section className="pattern-card pattern-card--compact import-prep-section import-prep-pattern is-confirmed">
+                    <div className="pattern-confirmed-row">
+                      <CheckIcon size={20} />
+                      <div>
+                        <span className="eyebrow">PADRAO CONFIRMADO</span>
+                        <strong>{patternDraft.prefix || 'Sem prefixo'} / {patternDraft.length} digitos</strong>
+                      </div>
+                    </div>
+                    <button className="link-button" onClick={() => setPatternConfirmed(false)}>Alterar</button>
+                  </section>
+                ) : (
+                  <section className="pattern-card import-prep-section import-prep-pattern">
+                    <div>
+                      <span className="eyebrow">PADRAO DAS SMARTTAGS</span>
+                      <h2>{patternDraft.prefix || 'Sem prefixo'}</h2>
+                    </div>
+                    <div className="pattern-card__fields">
+                      <label>
+                        <span>Prefixo</span>
+                        <input className="text-input" inputMode="numeric" value={patternDraft.prefix} onChange={(event) => { setPatternDraft({ ...patternDraft, prefix: event.target.value.replace(/[^0-9]/g, '') }); setPatternConfirmed(false); }} />
+                      </label>
+                      <label>
+                        <span>Digitos</span>
+                        <input className="text-input" inputMode="numeric" value={patternDraft.length} onChange={(event) => { setPatternDraft({ ...patternDraft, length: Number(event.target.value.replace(/[^0-9]/g, '')) || 0 }); setPatternConfirmed(false); }} />
+                      </label>
+                    </div>
+                    <button className="button button--secondary button--full" disabled={busy || !patternDraft.prefix || !patternDraft.length} onClick={() => void applyPattern()}>
+                      Confirmar padrao
+                    </button>
+                  </section>
+                )
               )}
 
               <section className="import-prep-section prep-known-issues">
                 <div className="import-prep-title-row">
-                  <div><span className="eyebrow">ANTES DA ORDENHA</span><h3>Problemas com SmartTag</h3></div>
+                  <div><span className="eyebrow">ANTES DA ORDENHA</span><h3>Alertas de SmartTag</h3></div>
                   <strong>{knownIssueDrafts.length}</strong>
                 </div>
                 <div className="prep-known-issues__form">
-                  <input className="text-input" inputMode="numeric" placeholder="SmartTag com problema" value={knownIssueTag} onChange={(event) => setKnownIssueTag(event.target.value.replace(/[^0-9]/g, ''))} />
+                  <div className="tag-compose-input">
+                    {knownIssuePrefix && <span>{knownIssuePrefix}</span>}
+                    <input className="text-input" inputMode="numeric" placeholder={knownIssueRestLength ? `${knownIssueRestLength} finais` : 'SmartTag'} value={knownIssueTag} onChange={(event) => setKnownIssueTag(event.target.value.replace(/[^0-9]/g, ''))} />
+                  </div>
                   <select className="text-input" value={knownIssueType} onChange={(event) => setKnownIssueType(event.target.value as KnownIssueType)}>
                     {KNOWN_ISSUE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
@@ -1422,7 +1356,7 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
                 <span>{preview.stats.duplicateTags} duplicadas · {preview.issues.length} alertas · {knownIssueDrafts.length} conhecidos</span>
               </div>
               <button className="button button--primary button--full button--large" disabled={!farmName.trim() || busy || !patternConfirmed} onClick={saveImport}>
-                Salvar e iniciar auditoria
+                Iniciar auditoria
               </button>
             </div>
           </div>
@@ -1452,6 +1386,13 @@ function KnownIssuesView({
   const [note, setNote] = useState('');
   const [filter, setFilter] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const issuePrefix = audit?.tagPattern?.prefix ?? '';
+  const issueExpectedLength = audit?.tagPattern?.length ?? MAX_SMARTTAG_DIGITS;
+  const issueRestLength = Math.max(issueExpectedLength - issuePrefix.length, 0);
+  const issueDigits = tagNumber.replace(/[^0-9]/g, '');
+  const composedKnownIssueTag = issuePrefix && issueDigits && !issueDigits.startsWith(issuePrefix)
+    ? `${issuePrefix}${issueDigits}`
+    : issueDigits;
 
   if (!audit) {
     return (
@@ -1475,15 +1416,16 @@ function KnownIssuesView({
   }
 
   function editKnownIssue(issue: KnownIssue) {
+    const digits = issue.tagNumber.replace(/[^0-9]/g, '');
     setEditingId(issue.id);
-    setTagNumber(issue.tagNumber);
+    setTagNumber(issuePrefix && digits.startsWith(issuePrefix) ? digits.slice(issuePrefix.length) : digits);
     setType(issue.type);
     setNote(issue.note ?? '');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   async function saveKnownIssue() {
-    const normalizedTag = tagNumber.replace(/[^0-9]/g, '').trim();
+    const normalizedTag = composedKnownIssueTag.trim();
     if (!normalizedTag) {
       setToast('Informe a SmartTag do problema conhecido.');
       return;
@@ -1556,7 +1498,10 @@ function KnownIssuesView({
 
       <div className="form-card known-issue-form">
         <label className="field-label" htmlFor="known-tag">SmartTag</label>
-        <input id="known-tag" className="text-input" inputMode="numeric" placeholder="9840000..." value={tagNumber} onChange={(event) => setTagNumber(event.target.value.replace(/[^0-9]/g, ''))} />
+        <div className="tag-compose-input">
+          {issuePrefix && <span>{issuePrefix}</span>}
+          <input id="known-tag" className="text-input" inputMode="numeric" placeholder={issueRestLength ? `${issueRestLength} finais` : '9840000...'} value={tagNumber} onChange={(event) => setTagNumber(event.target.value.replace(/[^0-9]/g, ''))} />
+        </div>
 
         <label className="field-label" htmlFor="known-type">Tipo</label>
         <select id="known-type" className="text-input" value={type} onChange={(event) => setType(event.target.value as KnownIssueType)}>
@@ -1664,6 +1609,13 @@ function AuditView({
     }, 3000);
     return () => window.clearTimeout(timer);
   }, [outcome]);
+  useEffect(() => {
+    if (!manualMode || scan || outcome) return;
+    const timer = window.setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [manualMode, scan, outcome]);
 
   const auditRecords = useLiveQuery(
     () => audit ? db.auditRecords.where('auditId').equals(audit.id).toArray() : Promise.resolve<AuditRecord[]>([]),
@@ -2289,7 +2241,7 @@ function AuditView({
       <div className="field-progress-bar"><span style={{ width: `${fieldMetrics.percent}%` }} /></div>
       <div className="field-save-banner">
         <CheckIcon size={18} />
-        <span>Salvamento automatico ativo. As leituras desta fazenda ficam preservadas mesmo se a pagina atualizar.</span>
+        <span>Salvamento automatico ativo</span>
       </div>
 
       {attentionAlert && showAttentionOverlay && (
@@ -2389,7 +2341,7 @@ function AuditView({
       )}
 
       {!manualMode && !scan && !outcome && (
-        <div className={`nfc-panel nfc-panel--field ${readerActive ? 'is-active' : ''}`}>
+        <div className={`nfc-panel nfc-panel--field ${readerActive ? 'is-active' : 'is-standby'}`}>
           {readerActive && (
             <div className="nfc-panel__field-meta">
               <div>
@@ -2409,12 +2361,12 @@ function AuditView({
           )}
           <div className="nfc-panel__status">
             <span />
-            {readerActive ? 'Leitor NFC ativo' : 'Leitor NFC pronto'}
+            {readerActive ? 'Leitor NFC ativo' : 'Inativo'}
           </div>
           <div className="nfc-panel__visual"><ScanIcon size={58} /></div>
           <div className="nfc-panel__text">
             <span className="eyebrow">SMARTTAG</span>
-            <h1>{readerActive ? 'Aproxime a tag' : 'Pronto para conferir'}</h1>
+            <h1>{readerActive ? 'Aproxime a tag' : 'Leitor NFC'}</h1>
             <p>{readerMessage}</p>
           </div>
           {readerActive && latestConfirmedRecords.length > 0 && (
