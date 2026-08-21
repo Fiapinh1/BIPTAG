@@ -7750,37 +7750,112 @@ body:has(.field-page--reader-flow) .bottom-nav {
   }
 }
 
-/* Emergency containment fix: import preparation must never overflow horizontally. */
+/* Responsive containment: create/prep audit uses one centered column at every size. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 html,
 body,
 #root {
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
-.app-modal--create-audit,
-.import-prep-overlay {
-  width: 100vw;
-  max-width: 100vw;
+.app-modal--create-audit {
+  inset: 0;
+  width: auto;
+  max-width: none;
   overflow: hidden;
-  box-sizing: border-box;
+  padding: 24px;
 }
 
-.create-audit-modal,
-.import-prep-panel {
-  box-sizing: border-box;
-  max-width: calc(100vw - 32px);
+.create-audit-modal {
+  width: min(780px, calc(100vw - 48px));
+  max-width: calc(100vw - 48px);
+  max-height: calc(100dvh - 48px);
+  animation: none;
+  transform: none;
   overflow: hidden;
 }
 
 .create-audit-modal *,
 .import-prep-panel * {
-  box-sizing: border-box;
   min-width: 0;
+}
+
+.create-audit-modal .app-modal__header {
+  padding: 22px 24px 10px;
+}
+
+.create-audit-modal .app-modal__header h2 {
+  font-size: clamp(30px, 4vw, 40px);
+}
+
+.create-audit-modal .app-modal__close,
+.import-prep-header .app-modal__close {
+  position: static;
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  margin-left: auto;
+  transform: none;
+}
+
+.create-audit-modal .embedded-import {
+  overflow-x: hidden;
+}
+
+.create-audit-modal .import-plan-card {
+  width: min(640px, 100%);
+  margin-inline: auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto;
+  gap: 10px;
+  align-items: stretch;
+  padding: 18px;
+}
+
+.create-audit-modal .import-plan-card > .file-drop,
+.create-audit-modal .import-plan-card > .field-label,
+.create-audit-modal .import-plan-card > .text-input {
+  grid-column: 1;
+  grid-row: auto;
+}
+
+.create-audit-modal .import-plan-card > .text-input {
+  min-height: 52px;
+}
+
+.create-audit-modal .import-plan-card > .file-drop {
+  min-height: 128px;
+}
+
+.import-prep-overlay {
+  inset: 0;
+  z-index: 180;
+  width: auto;
+  max-width: none;
+  overflow: hidden;
+  padding: 24px;
+  place-items: center;
+}
+
+.import-prep-panel {
+  width: min(820px, calc(100vw - 48px));
+  max-width: calc(100vw - 48px);
+  min-height: 0;
+  max-height: calc(100dvh - 48px);
+  animation: none;
+  transform: none;
+  overflow: hidden;
 }
 
 .import-prep-header {
   min-width: 0;
+  padding: 18px 20px 12px;
 }
 
 .import-prep-header > div {
@@ -7788,90 +7863,199 @@ body,
   overflow: hidden;
 }
 
-.import-prep-header h2,
-.import-prep-header p,
-.import-prep-file {
-  overflow-wrap: anywhere;
-  word-break: break-word;
+.import-prep-header h2 {
+  font-size: clamp(34px, 4.8vw, 44px);
 }
 
-.import-prep-header .app-modal__close {
-  position: static;
-  margin-left: auto;
-  transform: none;
+.import-prep-header p,
+.import-prep-file {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .import-prep-body {
   width: 100%;
   max-width: 100%;
-  overflow-x: hidden;
   grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 12px;
 }
 
-.import-prep-stats {
+.import-prep-section {
   width: 100%;
   max-width: 100%;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.import-prep-stats .stat-card {
-  min-width: 0;
-  overflow: hidden;
+  padding: 13px;
 }
 
 .import-prep-title-row {
   max-width: 100%;
 }
 
-.pattern-card__fields,
-.prep-known-issues__form {
+.import-prep-file {
+  max-width: min(300px, 46%);
+  white-space: normal;
+}
+
+.import-prep-stats {
+  width: 100%;
   max-width: 100%;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.import-prep-stats .stat-card {
+  min-width: 0;
+  min-height: 78px;
+  overflow: hidden;
+  padding: 12px;
+}
+
+.import-prep-stats .stat-card__value {
+  font-size: clamp(25px, 5vw, 34px);
+}
+
+.pattern-card__fields {
+  max-width: 100%;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  gap: 8px;
+}
+
+.import-prep-pattern {
+  gap: 9px;
+}
+
+.pattern-card--compact {
+  min-height: 62px;
+  padding: 11px 12px;
+}
+
+.prep-known-issues {
+  padding: 12px;
+}
+
+.prep-known-issues .import-prep-title-row {
+  margin-bottom: 8px;
+}
+
+.prep-known-issues .import-prep-title-row h3 {
+  font-size: clamp(22px, 4vw, 28px);
+}
+
+.prep-known-issues__form {
+  max-width: 100%;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, .8fr);
+  gap: 7px;
+}
+
+.prep-known-issues__form > .tag-compose-input,
+.prep-known-issues__form > select {
+  grid-column: auto;
+}
+
+.prep-known-issues__form > input,
+.prep-known-issues__form > .button {
+  grid-column: 1 / -1;
+}
+
+.prep-known-issues__form .text-input,
+.prep-known-issues__form .button,
+.tag-compose-input {
+  min-height: 48px;
+}
+
+.tag-compose-input > .text-input {
+  min-height: 46px;
+  font-size: clamp(17px, 4vw, 23px);
+}
+
+.tag-compose-input > span {
+  flex: 0 0 auto;
+  min-width: max-content;
+  white-space: nowrap;
+}
+
+.prep-known-issues__empty {
+  margin-top: 7px;
+  font-size: 12px;
 }
 
 .summary-strip {
   max-width: 100%;
+  min-height: 38px;
+  padding-block: 7px;
   overflow-wrap: anywhere;
 }
 
-@media (min-width: 900px) {
+.import-prep-footer {
+  padding: 10px 12px 12px;
+}
+
+.import-prep-footer .button--large {
+  min-height: 56px;
+}
+
+@media (max-width: 900px) {
+  .create-audit-modal {
+    width: min(720px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
+  }
+
   .import-prep-panel {
-    width: min(1040px, calc(100vw - 48px));
-    max-width: calc(100vw - 48px);
+    width: min(720px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
   }
 
-  .import-prep-body {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  .prep-known-issues__form {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .import-prep-section--farm,
-  .import-prep-section--summary {
-    grid-column: 1 / -1;
+  .prep-known-issues__form > .tag-compose-input,
+  .prep-known-issues__form > select {
+    grid-column: 1;
   }
 }
 
-@media (max-width: 700px) {
+@media (max-width: 520px) {
   .app-modal--create-audit {
-    align-items: stretch;
     place-items: stretch;
     padding: 0;
   }
 
   .create-audit-modal,
   .import-prep-panel {
-    width: 100vw;
-    max-width: 100vw;
+    width: 100%;
+    max-width: 100%;
     height: 100dvh;
     max-height: 100dvh;
     border-radius: 0;
   }
 
-  .create-audit-modal {
-    grid-template-rows: auto minmax(0, 1fr);
+  .create-audit-modal .app-modal__header {
+    padding: max(12px, env(safe-area-inset-top)) 16px 8px;
+  }
+
+  .create-audit-modal .app-modal__header h2 {
+    font-size: clamp(30px, 8.5vw, 36px);
   }
 
   .create-audit-modal .embedded-import {
-    overflow-x: hidden;
+    padding: 0 16px max(14px, env(safe-area-inset-bottom));
+  }
+
+  .create-audit-modal .import-plan-card {
+    padding: 13px;
+    gap: 8px;
+  }
+
+  .create-audit-modal .import-plan-card > .text-input {
+    min-height: 48px;
+  }
+
+  .create-audit-modal .import-plan-card > .file-drop {
+    min-height: 108px;
   }
 
   .import-prep-overlay {
@@ -7885,45 +8069,17 @@ body,
   }
 
   .import-prep-header {
-    padding: max(14px, env(safe-area-inset-top)) 16px 12px;
+    gap: 8px;
+    padding: max(12px, env(safe-area-inset-top)) 14px 10px;
   }
 
   .import-prep-header h2 {
-    font-size: clamp(32px, 10vw, 44px);
+    margin: 2px 0;
+    font-size: clamp(30px, 9vw, 38px);
   }
 
-  .import-prep-body {
-    padding: 12px;
-  }
-
-  .import-prep-stats,
-  .pattern-card__fields,
-  .prep-known-issues__form {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .import-prep-title-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: start;
-  }
-
-  .import-prep-file {
-    grid-column: 1 / -1;
-    max-width: 100%;
-    text-align: left;
-  }
-
-  .import-prep-footer {
-    padding: 10px 12px max(12px, env(safe-area-inset-bottom));
-  }
-}
-
-@media (max-width: 420px) {
-  .import-prep-header {
-    gap: 8px;
-    padding-left: 12px;
-    padding-right: 12px;
+  .import-prep-header p {
+    font-size: clamp(15px, 4.2vw, 18px);
   }
 
   .import-prep-header .app-modal__close,
@@ -7933,11 +8089,79 @@ body,
     border-radius: 14px;
   }
 
+  .import-prep-body {
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
   .import-prep-section {
-    padding: 12px;
+    padding: 11px;
+    border-radius: 16px;
+  }
+
+  .import-prep-title-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    margin-bottom: 8px;
+  }
+
+  .import-prep-title-row h3 {
+    font-size: clamp(22px, 6.2vw, 28px);
+  }
+
+  .import-prep-file {
+    grid-column: 1 / -1;
+    max-width: 100%;
+    text-align: left;
+    font-size: 12px;
+  }
+
+  .import-prep-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .import-prep-stats .stat-card {
-    min-height: 76px;
+    min-height: 72px;
+    padding: 10px;
+  }
+
+  .pattern-card__fields {
+    grid-template-columns: minmax(0, 1fr) 96px;
+  }
+
+  .pattern-card--compact {
+    min-height: 58px;
+  }
+
+  .prep-known-issues__form {
+    gap: 6px;
+  }
+
+  .prep-known-issues__form .text-input,
+  .prep-known-issues__form .button,
+  .tag-compose-input {
+    min-height: 46px;
+  }
+
+  .tag-compose-input > span {
+    padding-inline: 10px;
+    font-size: 16px;
+  }
+
+  .import-prep-footer {
+    gap: 8px;
+    padding: 9px 12px max(10px, env(safe-area-inset-bottom));
+  }
+
+  .import-prep-footer .button--large {
+    min-height: 54px;
+  }
+}
+
+@media (max-width: 380px) {
+  .import-prep-stats,
+  .pattern-card__fields {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
