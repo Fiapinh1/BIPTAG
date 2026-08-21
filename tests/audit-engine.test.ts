@@ -11,7 +11,7 @@ import {
   saveReading
 } from '../src/services/audit-engine';
 import { deriveReconciliation } from '../src/services/reconciliation';
-import { buildAuditReportRows, createAuditWorkbook } from '../src/services/excel';
+import { buildAuditReportRows, buildAuditWhatsAppText, createAuditWorkbook } from '../src/services/excel';
 
 const AUDIT_ID = 'audit-test';
 
@@ -163,6 +163,10 @@ function finalResultRow(rows: ReturnType<typeof buildAuditReportRows>, tagNumber
 
 function conferenceDecisionFor(rows: ReturnType<typeof buildAuditReportRows>, tagNumber: string) {
   return rows.conferenceRows.find((row) => row[2] === tagNumber)?.[7];
+}
+
+function conferenceConfirmedFor(rows: ReturnType<typeof buildAuditReportRows>, tagNumber: string) {
+  return rows.conferenceRows.find((row) => row[2] === tagNumber)?.[5];
 }
 
 beforeEach(async () => {
@@ -594,7 +598,7 @@ describe('BIPTAG audit rules', () => {
     const effective = await db.effectiveTagAssignments.where('[auditId+tagNumber]').equals([AUDIT_ID, assignments[0].tagNumber]).first();
     const rows = buildAuditReportRows(audit, records, [], effective ? [effective] : [], [], assignments);
 
-    expect(records.map((record) => record.status)).toEqual(['animal_not_in_base', 'animal_without_ear_tag']);
+    expect(records.map((record) => record.status)).toEqual(['reassignment', 'animal_without_ear_tag']);
     expect(records[1].observedAnimal).toBeNull();
     expect(records[1].operationalAction).toBeNull();
     expect(effective?.effectiveAnimal).toBe('3001');
@@ -679,18 +683,21 @@ describe('BIPTAG audit rules', () => {
     expect(finalResultRow(rows, assignments[0].tagNumber)?.acaoNoNedap).toBe('NENHUMA');
   });
 
-  it('Report 5. confirmed animal outside imported base still generates a definitive move', async () => {
+  it('Report 5. confirmed animal outside imported base generates only a definitive move', async () => {
     const { audit, assignments } = await seedAudit([{ tag: '984000012350004', animal: '6004' }]);
 
-    await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '6204' });
+    const status = await classifyReading(AUDIT_ID, assignments[0].tagNumber, assignments[0], '6204');
+    await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '6204', status });
 
     const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
     const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
     const rows = buildAuditReportRows(audit, records, [], effective, [], assignments);
     const alertRow = rows.reviewRows.find((row) => row[0] === 'ANIMAL FORA DA BASE');
 
+    expect(status).toBe('reassignment');
     expect(rows.actionRows).toContainEqual(expect.arrayContaining(['MOVER TAG', assignments[0].tagNumber, '6004', '6204']));
-    expect(alertRow?.[4]).toBe('ALERTA INFORMATIVO');
+    expect(alertRow).toBeUndefined();
+    expect(rows.reviewRows.flat().join(' ')).not.toContain('INVESTIGAR');
     expect(rows.reviewRows.filter((row) => row[1] === assignments[0].tagNumber).map((row) => row[0])).not.toContain('PENDENCIA');
   });
 
@@ -758,7 +765,59 @@ describe('BIPTAG audit rules', () => {
     expect(smartTags).toHaveLength(new Set(smartTags).size);
   });
 
-  it('Report 11. SmartTag cells are exported as text', async () => {
+  it('Report 11. special physical outcomes count as found tags but not located tags do not', async () => {
+    const { audit, assignments } = await seedAudit([
+      { tag: '984000012350001', animal: '6001' },
+      { tag: '984000012350005', animal: '6005' },
+      { tag: '984000012350006', animal: '6006' },
+      { tag: '984000012350009', animal: '6009' }
+    ]);
+
+    await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '6001', status: 'correct' });
+    await saveTagWithoutAnimal({ tag: assignments[1].tagNumber, assignment: assignments[1] });
+    await saveAnimalWithoutEarTag({ tag: assignments[2].tagNumber, assignment: assignments[2] });
+    await markPendingTagsNotFound(AUDIT_ID);
+    await saveConfirmed({ tag: '984000099999999', assignment: null, observed: '6018', status: 'new_tag' });
+
+    const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
+    const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
+    const rows = buildAuditReportRows(audit, records, [], effective, [], assignments);
+
+    expect(rows.metrics.baseResolvedCount).toBe(4);
+    expect(rows.metrics.basePhysicallyFoundCount).toBe(3);
+    expect(rows.metrics.baseNotLocatedCount).toBe(1);
+    expect(rows.metrics.newTagsCount).toBe(1);
+    expect(conferenceConfirmedFor(rows, assignments[1].tagNumber)).toBe('SIM');
+    expect(conferenceConfirmedFor(rows, assignments[2].tagNumber)).toBe('SIM');
+    expect(conferenceConfirmedFor(rows, assignments[3].tagNumber)).toBe('NAO');
+  });
+
+  it('Report 12. WhatsApp uses final Nedap action rows instead of stale operationalAction', async () => {
+    const { audit, assignments } = await seedAudit([{ tag: '984000012350004', animal: '6004' }]);
+
+    await saveReading({
+      auditId: AUDIT_ID,
+      tagNumber: assignments[0].tagNumber,
+      assignment: assignments[0],
+      expectedAnimal: assignments[0].expectedAnimal,
+      observedAnimal: '6204',
+      status: 'animal_not_in_base',
+      fieldDecision: 'confirmed_physical_animal',
+      source: 'manual',
+      existingRecord: null,
+      operationalAction: 'investigate'
+    });
+
+    const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
+    const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
+    const text = buildAuditWhatsAppText(audit, records, [], effective, [], assignments);
+
+    expect(text).toContain('Tags da base com resultado: 1/1');
+    expect(text).toContain('MOVER TAG: 6004 -> 6204, tag 984000012350004');
+    expect(text).not.toContain('INVESTIGAR: animal 6204');
+  });
+
+  it('Report 13. SmartTag cells are exported as text without scientific notation in every sheet', async () => {
     const { audit, assignments } = await seedAudit([{ tag: '984000012350001', animal: '6001' }]);
 
     await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '6001', status: 'correct' });
@@ -766,14 +825,24 @@ describe('BIPTAG audit rules', () => {
     const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
     const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
     const workbook = createAuditWorkbook(audit, records, [], effective, [], assignments);
-    const sheet = workbook.Sheets['RESULTADO FINAL'];
-    const smartTagCell = Object.values(sheet).find((cell) => typeof cell === 'object' && 'v' in cell && cell.v === assignments[0].tagNumber);
+    const smartTagCells = workbook.SheetNames.flatMap((sheetName) =>
+      Object.values(workbook.Sheets[sheetName]).filter((cell) =>
+        typeof cell === 'object' &&
+        cell !== null &&
+        'v' in cell &&
+        String(cell.v).includes(assignments[0].tagNumber)
+      )
+    );
 
-    expect(smartTagCell?.t).toBe('s');
-    expect(smartTagCell?.z).toBe('@');
+    expect(smartTagCells.length).toBeGreaterThan(0);
+    for (const cell of smartTagCells) {
+      expect(cell.t).toBe('s');
+      expect(cell.z).toBe('@');
+      expect(String(cell.v)).not.toMatch(/e\+|E\+/);
+    }
   });
 
-  it('Report 12. Corrigir no Nedap contains only the final state', async () => {
+  it('Report 14. Corrigir no Nedap contains only the final state', async () => {
     const { audit, assignments } = await seedAudit([{ tag: '984000012350004', animal: '6004' }]);
 
     const first = await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '6104' });

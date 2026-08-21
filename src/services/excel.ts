@@ -287,6 +287,28 @@ type ResultFinalRow = {
   tone: ResultTone;
 };
 
+type StyledCell = XLSX.CellObject & { s?: Record<string, unknown> };
+
+function mergeCellStyle(cell: XLSX.CellObject | undefined, style: Record<string, unknown>) {
+  if (!cell) return;
+  const styled = cell as StyledCell;
+  styled.s = {
+    ...(styled.s ?? {}),
+    ...style
+  };
+}
+
+function asTextCell(cell: XLSX.CellObject | undefined) {
+  if (!cell || cell.v === undefined || cell.v === null || cell.v === '') return;
+  cell.t = 's';
+  cell.z = '@';
+  cell.v = String(cell.v);
+}
+
+function containsSmartTagValue(value: SheetValue | undefined) {
+  return /\d{12,}/.test(String(value ?? ''));
+}
+
 function appendSheet(workbook: XLSX.WorkBook, rows: SheetRows, name: string, options: { tableHeader?: string[]; freezeAtRow?: number; textColumns?: string[]; statusColors?: boolean } = {}) {
   const sheet = XLSX.utils.aoa_to_sheet(rows);
   applyWorksheetPresentation(sheet, rows, options);
@@ -302,10 +324,13 @@ function applyWorksheetPresentation(sheet: XLSX.WorkSheet, rows: SheetRows, opti
         ...rows.map((row) => String(row[columnIndex] ?? '').length),
         10
       ) + 2,
-      columnIndex === 6 ? 58 : 34
+      columnIndex === 6 ? 58 : columnIndex === 1 ? 38 : 34
     );
     return { wch: width };
   });
+  sheet['!rows'] = rows.map((row, index) => ({
+    hpt: index === 0 && String(row[0] ?? '').startsWith('BIPTAG') ? 24 : undefined
+  }));
 
   const headerIndex = options.tableHeader
     ? rows.findIndex((row) => options.tableHeader!.every((header, index) => row[index] === header))
@@ -321,22 +346,68 @@ function applyWorksheetPresentation(sheet: XLSX.WorkSheet, rows: SheetRows, opti
   const freezeAtRow = options.freezeAtRow ?? (headerIndex >= 0 ? headerIndex + 1 : undefined);
   if (freezeAtRow !== undefined) {
     (sheet as XLSX.WorkSheet & { '!freeze'?: unknown })['!freeze'] = { xSplit: 0, ySplit: freezeAtRow };
+    sheet['!views'] = [{ state: 'frozen', ySplit: freezeAtRow }];
   }
 
   const textColumnNames = new Set(options.textColumns ?? ['SMARTTAG', 'TAG']);
   const headers = headerIndex >= 0 ? rows[headerIndex] : [];
   const textColumnIndexes = headers
-    .map((header, index) => textColumnNames.has(String(header)) ? index : -1)
+    .map((header, index) => {
+      const headerText = String(header).toUpperCase();
+      return textColumnNames.has(String(header)) || headerText.includes('SMARTTAG') || headerText === 'TAG' || headerText.includes('TAG ORIGINAL') ? index : -1;
+    })
     .filter((index) => index >= 0);
 
-  for (let rowIndex = headerIndex + 1; rowIndex < rows.length; rowIndex += 1) {
-    for (const columnIndex of textColumnIndexes) {
+  const range = XLSX.utils.decode_range(sheet['!ref'] ?? 'A1:A1');
+  for (let rowIndex = 0; rowIndex <= range.e.r; rowIndex += 1) {
+    const row = rows[rowIndex] ?? [];
+    for (let columnIndex = 0; columnIndex <= range.e.c; columnIndex += 1) {
       const cellRef = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
       const cell = sheet[cellRef];
-      if (!cell || cell.v === '') continue;
-      cell.t = 's';
-      cell.z = '@';
-      cell.v = String(cell.v);
+      if (!cell) continue;
+      if (textColumnIndexes.includes(columnIndex) || containsSmartTagValue(row[columnIndex])) {
+        asTextCell(cell);
+      }
+      mergeCellStyle(cell, {
+        border: {
+          top: { style: 'thin', color: { rgb: 'E0D6CA' } },
+          right: { style: 'thin', color: { rgb: 'E0D6CA' } },
+          bottom: { style: 'thin', color: { rgb: 'E0D6CA' } },
+          left: { style: 'thin', color: { rgb: 'E0D6CA' } }
+        },
+        alignment: { vertical: 'top', wrapText: true }
+      });
+    }
+  }
+
+  for (let rowIndex = Math.max(headerIndex + 1, 0); rowIndex < rows.length; rowIndex += 1) {
+    for (const columnIndex of textColumnIndexes) {
+      const cellRef = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
+      asTextCell(sheet[cellRef]);
+    }
+  }
+
+  if (String(rows[0]?.[0] ?? '').startsWith('BIPTAG')) {
+    for (let columnIndex = 0; columnIndex < columnCount; columnIndex += 1) {
+      const cellRef = XLSX.utils.encode_cell({ r: 0, c: columnIndex });
+      const cell = sheet[cellRef];
+      if (!cell && columnIndex > 0) continue;
+      mergeCellStyle(cell, {
+        fill: { patternType: 'solid', fgColor: { rgb: '2D2620' } },
+        font: { bold: true, color: { rgb: 'FFFFFF' }, sz: columnIndex === 0 ? 15 : 11 },
+        alignment: { vertical: 'center', wrapText: true }
+      });
+    }
+  }
+
+  if (headerIndex >= 0) {
+    for (let columnIndex = 0; columnIndex < columnCount; columnIndex += 1) {
+      const cellRef = XLSX.utils.encode_cell({ r: headerIndex, c: columnIndex });
+      mergeCellStyle(sheet[cellRef], {
+        fill: { patternType: 'solid', fgColor: { rgb: '8F4425' } },
+        font: { bold: true, color: { rgb: 'FFFFFF' } },
+        alignment: { vertical: 'center', wrapText: true }
+      });
     }
   }
 
@@ -351,10 +422,10 @@ function applyWorksheetPresentation(sheet: XLSX.WorkSheet, rows: SheetRows, opti
           const cellRef = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
           const cell = sheet[cellRef];
           if (!cell) continue;
-          (cell as XLSX.CellObject & { s?: unknown }).s = {
+          mergeCellStyle(cell, {
             fill: { patternType: 'solid', fgColor: { rgb: fill } },
             alignment: { vertical: 'top', wrapText: true }
-          };
+          });
         }
       }
     }
@@ -363,10 +434,10 @@ function applyWorksheetPresentation(sheet: XLSX.WorkSheet, rows: SheetRows, opti
 
 function statusFillColor(status: string) {
   if (['CORRETA'].includes(status)) return 'E5F4EC';
-  if (['MOVER', 'VINCULAR', 'NOVA', 'SUBSTITUIR', 'CADASTRAR TAG', 'VINCULAR TAG', 'MOVER TAG'].includes(status)) return 'E8F0F7';
-  if (['TROCA', 'TROCAR TAGS', 'POSSIVEL ERRO CADASTRO', 'CADASTRO SUSPEITO'].includes(status)) return 'F8E8D8';
-  if (['SEM ANIMAL', 'TAG FORA DE USO', 'REMOVER VINCULO', 'CADASTRO INVALIDO'].includes(status)) return 'F8E1DE';
-  if (['ANIMAL SEM BRINCO', 'TAG NAO LOCALIZADA', 'ALERTA', 'PROBLEMA CONHECIDO', 'PENDENCIA', 'NAO CONFIRMADA'].includes(status)) return 'FFF0C2';
+  if (['MOVER', 'VINCULAR', 'NOVA', 'SUBSTITUIR', 'CADASTRAR TAG', 'VINCULAR TAG', 'MOVER TAG', 'SUBSTITUIR TAG'].includes(status)) return 'E8F0F7';
+  if (['TROCA', 'TROCAR TAGS', 'POSSIVEL ERRO CADASTRO', 'CADASTRO SUSPEITO', 'CORRIGIR NUMERO DA TAG'].includes(status)) return 'F8E8D8';
+  if (['SEM ANIMAL', 'TAG FORA DE USO', 'REMOVER VINCULO', 'CADASTRO INVALIDO', 'MARCAR TAG FORA DE USO'].includes(status)) return 'F8E1DE';
+  if (['ANIMAL SEM BRINCO', 'TAG NAO LOCALIZADA', 'ALERTA', 'PROBLEMA CONHECIDO', 'PENDENCIA', 'NAO CONFIRMADA', 'VERIFICAR NAO LOCALIZADA'].includes(status)) return 'FFF0C2';
   return '';
 }
 
@@ -511,6 +582,16 @@ function conferenceDecision(record: AuditRecord) {
   if (record.status === 'linked' || record.status === 'tag_without_animal') return 'VINCULAR TAG';
   if (record.status === 'reassignment' || record.status === 'divergence' || record.status === 'animal_not_in_base') return 'MOVER TAG';
   return operationalActionLabel(record.operationalAction) || statusLabel(record.status).toUpperCase();
+}
+
+function isPhysicalTagRead(record: AuditRecord) {
+  return isConfirmedEvidence(record) || record.status === 'animal_without_ear_tag';
+}
+
+function conferenceConfirmedValue(record: AuditRecord) {
+  if (record.status === 'tag_not_found' || record.status === 'unconfirmed') return 'NAO';
+  if (record.status === 'tag_stored' || record.status === 'animal_without_ear_tag') return 'SIM';
+  return record.fieldDecision === 'confirmed_physical_animal' || record.fieldDecision === 'confirmed_match' ? 'SIM' : 'NAO';
 }
 
 function actionForResultState(input: {
@@ -681,7 +762,6 @@ export function buildAuditReportRows(
   const importIssuesByTag = groupByTag(issues.filter((item) => item.tagNumber).map((item) => ({ ...item, tagNumber: item.tagNumber! })));
   const tagNotFoundByTag = latestCurrentByStatus(records, 'tag_not_found');
   const animalWithoutEarTagByTag = latestCurrentByStatus(records, 'animal_without_ear_tag');
-  const baseAnimalSet = new Set(assignments.map((assignment) => assignment.expectedAnimal).filter((animal): animal is string => Boolean(animal)));
   const baseAssignmentTags = new Set(
     assignments
       .filter((assignment) => (assignment.validationStatus ?? 'valid_tag') === 'valid_tag')
@@ -818,9 +898,6 @@ export function buildAuditReportRows(
   for (const issue of issues.filter((item) => ['possible_typo', 'suspicious_tag', 'invalid_tag'].includes(item.type))) {
     pushReview('CADASTRO SUSPEITO', blank(issue.tagNumber), blank(issue.animal), blank(issue.detail), 'REVISAR CADASTRO');
   }
-  for (const state of reconciliation.states.filter((item) => hasPhysicalEvidence(item) && item.finalAnimal && !baseAnimalSet.has(item.finalAnimal))) {
-    pushReview('ANIMAL FORA DA BASE', blank(state.tagNumber), blank(state.finalAnimal), 'Animal confirmado em campo nao constava na base importada.', 'ALERTA INFORMATIVO', 'A evidencia fisica final continua valida.');
-  }
 
   const conferenceRows: SheetRows = [
     ['SEQUENCIA', 'DATA/HORA', 'TAG', 'ANIMAL NEDAP', 'ANIMAL OBSERVADO', 'CONFIRMADO?', 'ORIGEM', 'DECISAO', 'EVENTO RELACIONADO'],
@@ -830,17 +907,17 @@ export function buildAuditReportRows(
       blank(record.tagNumber),
       blank(record.expectedAnimal),
       blank(record.observedAnimal),
-      record.fieldDecision === 'confirmed_physical_animal' || record.fieldDecision === 'confirmed_match' ? 'SIM' : 'NAO',
+      conferenceConfirmedValue(record),
       record.source === 'nfc' ? 'NFC' : 'Manual',
       conferenceDecision(record),
       blank(record.relatedRecordId)
     ])
   ];
 
-  const basePhysicallyFoundCount = reconciliation.states.filter((state) =>
-    baseAssignmentTags.has(state.tagNumber) &&
-    hasPhysicalEvidence(state)
-  ).length;
+  const basePhysicallyFoundCount = new Set(current
+    .filter((record) => baseAssignmentTags.has(record.tagNumber) && isPhysicalTagRead(record))
+    .map((record) => record.tagNumber)
+  ).size;
   const baseNotLocatedTags = new Set([
     ...baseEffective.filter((item) => item.status === 'not_found').map((item) => item.tagNumber),
     ...[...tagNotFoundByTag.keys()].filter((tagNumber) => baseAssignmentTags.has(tagNumber))
@@ -887,9 +964,8 @@ export function buildAuditReportRows(
       const effective = effectiveByTag.get(state.tagNumber);
       const knownAlerts = (knownIssuesByTag.get(state.tagNumber) ?? []).map((issue) => `PROBLEMA CONHECIDO: ${knownIssueLabel(issue.type)}${issue.note ? ` - ${issue.note}` : ''}`);
       const importAlerts = (importIssuesByTag.get(state.tagNumber) ?? []).map((issue) => issue.detail);
-      const finalAnimalOutsideBase = state.finalAnimal && !baseAnimalSet.has(state.finalAnimal) ? 'ANIMAL NAO CONSTAVA NA BASE IMPORTADA' : '';
       const unresolvedAnimalWithoutEarTag = animalWithoutEarTagByTag.has(state.tagNumber) && hasPhysicalEvidence(state) ? 'ANIMAL SEM BRINCO REGISTRADO DEPOIS DA ULTIMA EVIDENCIA FISICA' : '';
-      const alert = formatIssueList([...knownAlerts, ...importAlerts, finalAnimalOutsideBase, unresolvedAnimalWithoutEarTag]);
+      const alert = formatIssueList([...knownAlerts, ...importAlerts, unresolvedAnimalWithoutEarTag]);
       const result = actionForResultState({
         state,
         effective,
@@ -955,6 +1031,62 @@ export function buildAuditReportRows(
   };
 
   return { resultRows, resultFinalRows, actionRows, animalGapRows, reviewRows, conferenceRows, summaryRows, metrics };
+}
+
+function whatsappActionLine(row: SheetRows[number]) {
+  const [action, tag, current, target, animal] = row.map((value) => blank(value));
+  if (action === 'MOVER TAG') return `- MOVER TAG: ${current} -> ${target}, tag ${tag}`;
+  if (action === 'TROCAR TAGS') return `- TROCAR TAGS: ${animal}, tags ${tag}`;
+  if (action === 'VINCULAR TAG') return `- VINCULAR TAG: ${target}, tag ${tag}`;
+  if (action === 'CADASTRAR TAG') return `- CADASTRAR TAG: ${target}, tag ${tag}`;
+  if (action === 'REMOVER VINCULO') return `- REMOVER VINCULO: ${current}, tag ${tag}`;
+  if (action === 'SUBSTITUIR TAG') return `- SUBSTITUIR TAG: ${current}, tag ${tag}`;
+  return `- ${action}: ${target || animal || current}, tag ${tag}`;
+}
+
+export function buildAuditWhatsAppText(
+  audit: Audit,
+  records: AuditRecord[],
+  issues: ImportIssue[],
+  effectiveAssignments: EffectiveTagAssignment[] = [],
+  knownIssues: KnownIssue[] = [],
+  assignments: TagAssignment[] = []
+) {
+  const report = buildAuditReportRows(audit, records, issues, effectiveAssignments, knownIssues, assignments);
+  const actionRows = report.actionRows.slice(1);
+  const reviewRows = report.reviewRows.slice(1);
+  const swapCount = actionRows.filter((row) => row[0] === 'TROCAR TAGS').length;
+  const lines = [
+    `BIPTAG - Auditoria ${audit.farmName}`,
+    '',
+    'Resumo:',
+    `- Tags da base com resultado: ${report.metrics.baseResolvedCount}/${report.metrics.totalValid}`,
+    `- Encontradas fisicamente: ${report.metrics.basePhysicallyFoundCount}`,
+    `- Nao localizadas: ${report.metrics.baseNotLocatedCount}`,
+    `- Tags novas: ${report.metrics.newTagsCount}`,
+    '',
+    `- Corretas: ${report.metrics.correctCount}`,
+    `- Trocas confirmadas: ${swapCount}`,
+    `- Acoes no Nedap: ${report.metrics.actionCount}`
+  ];
+
+  if (actionRows.length) {
+    lines.push('', 'Acoes principais:');
+    lines.push(...actionRows.slice(0, 12).map(whatsappActionLine));
+    if (actionRows.length > 12) lines.push(`- mais ${actionRows.length - 12} acao(oes) no relatorio`);
+  }
+
+  if (reviewRows.length) {
+    lines.push('', 'Alertas e pendencias:');
+    for (const row of reviewRows.slice(0, 8)) {
+      const [type, tag, context, description, action] = row.map((value) => blank(value));
+      lines.push(`- ${type}: ${tag || context}${description ? ` - ${description}` : ''}${action ? ` (${action})` : ''}`);
+    }
+    if (reviewRows.length > 8) lines.push(`- mais ${reviewRows.length - 8} item(ns) no relatorio`);
+  }
+
+  lines.push('', 'Correcoes devem ser executadas no Nedap somente apos revisar o relatorio completo.');
+  return lines.join('\n');
 }
 
 function buildAuditReportRowsLegacy(

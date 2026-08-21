@@ -22,7 +22,7 @@ import {
   TagIcon,
   TrashIcon
 } from './icons/Icons';
-import { parseNedapWorkbook, exportAuditWorkbook, validateSmartTag } from './services/excel';
+import { parseNedapWorkbook, exportAuditWorkbook, validateSmartTag, buildAuditWhatsAppText } from './services/excel';
 import { knownIssueActionLabel, knownIssueLabel, operationalActionLabel, statusLabel } from './services/audit-labels';
 import { feedbackCorrect, feedbackWarning, primeFeedbackAudio } from './services/feedback';
 import { isWebNfcSupported, startNfcReader } from './services/nfc';
@@ -1665,6 +1665,7 @@ function AuditView({
       .slice(0, 3),
     [auditRecords]
   );
+  const manualRecentRecords = latestConfirmedRecords.slice(0, 2);
 
   const fieldMetrics = useMemo(() => {
     const current = auditRecords.filter((record) => record.isCurrent !== false);
@@ -2329,14 +2330,14 @@ function AuditView({
               </div>
             )}
 
-            {latestConfirmedRecords.length > 0 && (
+            {manualRecentRecords.length > 0 && (
               <div className="manual-recent">
                 <div className="manual-recent__head">
                   <span>Ultimas conferencias</span>
-                  <button type="button" onClick={() => openCorrection(latestConfirmedRecords[0])}>Corrigir</button>
+                  <button type="button" onClick={() => openCorrection(manualRecentRecords[0])}>Corrigir</button>
                 </div>
                 <div className="manual-recent__list">
-                  {latestConfirmedRecords.map((record) => (
+                  {manualRecentRecords.map((record) => (
                     <button key={record.id} type="button" className="manual-recent__item" onClick={() => openCorrection(record)}>
                       <strong>{record.observedAnimal}</strong>
                       <span>...{record.tagNumber.slice(-4)} · {record.source === 'nfc' ? 'NFC' : 'Manual'}</span>
@@ -2419,7 +2420,7 @@ function AuditView({
         </div>
       )}
 
-      {!isWebNfcSupported() && !scan && (
+      {!isWebNfcSupported() && !scan && !manualMode && (
         <div className="alert alert--warning"><IssuesIcon /><span>Web NFC indisponível neste acesso. Para a leitura real, use a versão HTTPS no Chrome Android.</span></div>
       )}
 
@@ -2958,47 +2959,7 @@ function IssuesView({
   }
 
   function buildWhatsAppReviewText() {
-    const percentDone = totalValid ? Math.round((processedCount / totalValid) * 100) : 0;
-    const conflictCount = conflictPairs.length + newTagConflictRecords.length;
-    const lines = [
-      `BIPTAG - Auditoria ${activeAudit.farmName}`,
-      '',
-      'Resumo:',
-      `- Conferidas: ${processedCount}/${totalValid} (${percentDone}%)`,
-      `- Corretas: ${correctCount}`,
-      `- Trocas confirmadas: ${swapPairs.length}`,
-      `- Trocas pendentes: ${pendingSwapRecords.length}`,
-      `- Conflitos: ${conflictCount}`,
-      `- Acoes no Nedap: ${actionCount}`,
-      `- Tags nao localizadas: ${notFoundRecords.length + notFoundTags.length}`
-    ];
-
-    if (swapPairs.length) {
-      lines.push('', 'Trocas confirmadas:');
-      for (const pair of swapPairs.slice(0, 12)) {
-        lines.push(`- ${pair.left.originalAnimal ?? 'sem animal'} <-> ${pair.left.finalAnimal ?? 'sem animal'}`);
-      }
-      if (swapPairs.length > 12) lines.push(`- mais ${swapPairs.length - 12} troca(s) no relatorio`);
-    }
-
-    const primaryActions = actionRecords
-      .filter((record) => record.status !== 'possible_swap')
-      .slice(0, 10)
-      .map((record) => {
-        const action = operationalActionLabel(record.operationalAction) || statusLabel(record.status);
-        const animal = record.observedAnimal ?? record.expectedAnimal ?? 'sem animal';
-        return `- ${action}: animal ${animal}, tag ${record.tagNumber}`;
-      });
-    if (primaryActions.length) {
-      lines.push('', 'Acoes principais:');
-      lines.push(...primaryActions);
-    }
-
-    if (conflictCount) {
-      lines.push('', 'Atencao: existem conflitos. Revisar antes de alterar o Nedap.');
-    }
-    lines.push('', 'Correcoes devem ser executadas no Nedap somente apos revisar o relatorio completo.');
-    return lines.join('\n');
+    return buildAuditWhatsAppText(activeAudit, records, issues, effectiveAssignments, knownIssues, assignments);
   }
 
   function shareReviewWhatsApp() {

@@ -155,7 +155,6 @@ export async function classifyReading(
   observedAnimal: string | null
 ): Promise<RecordStatus> {
   if (!observedAnimal) return 'unconfirmed';
-  const animalExists = await observedAnimalExists(auditId, observedAnimal);
   if (!assignment) {
     // Tag not found in registry. Check for possible registry typo before classifying as new.
     const suspiciousMatch = await findSuspiciousMatch(auditId, tagNumber);
@@ -167,7 +166,7 @@ export async function classifyReading(
   }
   if (!assignment.expectedAnimal) return 'linked';
   if (assignment.expectedAnimal === observedAnimal) return 'correct';
-  return animalExists ? 'reassignment' : 'animal_not_in_base';
+  return 'reassignment';
 }
 
 async function getNextSequence(auditId: string) {
@@ -177,7 +176,7 @@ async function getNextSequence(auditId: string) {
 
 function statusForEffectiveRecord(status: RecordStatus): EffectiveTagStatus {
   if (status === 'correct') return 'confirmed';
-  if (status === 'reassignment' || status === 'divergence' || status === 'possible_swap') return 'reassigned';
+  if (status === 'reassignment' || status === 'divergence' || status === 'possible_swap' || status === 'animal_not_in_base') return 'reassigned';
   if (status === 'linked' || status === 'tag_without_animal') return 'linked';
   if (status === 'tag_stored') return 'without_animal';
   if (status === 'new_tag' || status === 'tag_not_registered' || status === 'possible_typo') return 'new_tag';
@@ -194,7 +193,7 @@ function reviewForStatus(status: RecordStatus): AuditRecord['reviewStatus'] {
 export function defaultOperationalAction(status: RecordStatus): OperationalAction {
   if (status === 'correct') return 'keep_tag';
   if (status === 'possible_swap') return 'swap_tags';
-  if (status === 'reassignment' || status === 'divergence') return 'move_tag';
+  if (status === 'reassignment' || status === 'divergence' || status === 'animal_not_in_base') return 'move_tag';
   if (status === 'tag_stored') return 'remove_tag';
   if (status === 'new_tag' || status === 'tag_not_registered' || status === 'possible_typo') return 'register_new_tag';
   if (status === 'linked' || status === 'tag_without_animal') return 'link_tag';
