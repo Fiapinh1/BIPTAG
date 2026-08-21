@@ -1,4 +1,5 @@
 import { db, newId } from '../db/db';
+import { chronologicalRecords, deriveReconciliation } from './reconciliation';
 import type { AuditRecord, EffectiveTagAssignment, EffectiveTagStatus, OperationalAction, RecordStatus, TagAssignment } from '../types/domain';
 
 export type RelatedContext = {
@@ -178,10 +179,11 @@ function statusForEffectiveRecord(status: RecordStatus): EffectiveTagStatus {
   if (status === 'correct') return 'confirmed';
   if (status === 'reassignment' || status === 'divergence' || status === 'possible_swap') return 'reassigned';
   if (status === 'linked' || status === 'tag_without_animal') return 'linked';
-  if (status === 'new_tag' || status === 'tag_not_registered') return 'new_tag';
+  if (status === 'tag_stored') return 'without_animal';
+  if (status === 'new_tag' || status === 'tag_not_registered' || status === 'possible_typo') return 'new_tag';
   if (status === 'tag_not_found') return 'not_found';
-  if (status === 'suspicious_tag' || status === 'possible_typo') return 'suspicious';
-  if (status === 'unconfirmed' || status === 'audit_conflict' || status === 'new_tag_conflict') return 'unresolved';
+  if (status === 'suspicious_tag') return 'suspicious';
+  if (status === 'animal_without_ear_tag' || status === 'unconfirmed' || status === 'audit_conflict' || status === 'new_tag_conflict') return 'unresolved';
   return 'unresolved';
 }
 
@@ -193,7 +195,8 @@ export function defaultOperationalAction(status: RecordStatus): OperationalActio
   if (status === 'correct') return 'keep_tag';
   if (status === 'possible_swap') return 'swap_tags';
   if (status === 'reassignment' || status === 'divergence') return 'move_tag';
-  if (status === 'new_tag' || status === 'tag_not_registered') return 'register_new_tag';
+  if (status === 'tag_stored') return 'remove_tag';
+  if (status === 'new_tag' || status === 'tag_not_registered' || status === 'possible_typo') return 'register_new_tag';
   if (status === 'linked' || status === 'tag_without_animal') return 'link_tag';
   return 'investigate';
 }
@@ -237,6 +240,67 @@ async function upsertEffective(input: {
   return id;
 }
 
+function statusForReconciledState(input: {
+  assignment: TagAssignment | null;
+  record: AuditRecord | null;
+  finalAnimal: string | null;
+  wasMarkedNotFound: boolean;
+}): EffectiveTagStatus {
+  if (input.wasMarkedNotFound && !input.record) return 'not_found';
+  if (!input.record) {
+    if (input.assignment?.validationStatus === 'invalid_tag') return 'invalid';
+    if (input.assignment?.validationStatus === 'suspicious_tag') return 'suspicious';
+    return 'pending';
+  }
+  if (input.record.status === 'tag_stored') return 'without_animal';
+  if (!input.finalAnimal) return 'displaced';
+  return statusForEffectiveRecord(input.record.status);
+}
+
+export async function rebuildEffectiveState(auditId: string) {
+  const now = new Date().toISOString();
+  const [assignments, records] = await Promise.all([
+    db.tagAssignments.where('auditId').equals(auditId).toArray(),
+    db.auditRecords.where('auditId').equals(auditId).toArray()
+  ]);
+  const reconciliation = deriveReconciliation(assignments, records);
+  const latestAnimalWithoutEarTagByTag = new Map<string, AuditRecord>();
+  for (const record of chronologicalRecords(records).filter((item) => item.status === 'animal_without_ear_tag' && item.isCurrent !== false)) {
+    latestAnimalWithoutEarTagByTag.set(record.tagNumber, record);
+  }
+  const notFoundTags = new Set(
+    records
+      .filter((record) => record.status === 'tag_not_found' && record.isCurrent !== false)
+      .map((record) => record.tagNumber)
+  );
+
+  await db.transaction('rw', db.effectiveTagAssignments, async () => {
+    for (const state of reconciliation.states) {
+      const unresolvedPhysicalRecord = state.record ? null : latestAnimalWithoutEarTagByTag.get(state.tagNumber) ?? null;
+      await upsertEffective({
+        auditId,
+        tagNumber: state.tagNumber,
+        originalAnimal: state.originalAnimal,
+        effectiveAnimal: unresolvedPhysicalRecord ? state.originalAnimal : state.finalAnimal,
+        status: unresolvedPhysicalRecord
+          ? 'unresolved'
+          : statusForReconciledState({
+              assignment: state.assignment,
+              record: state.record,
+              finalAnimal: state.finalAnimal,
+              wasMarkedNotFound: notFoundTags.has(state.tagNumber)
+            }),
+        sourceAssignmentId: state.assignment?.id ?? null,
+        currentRecordId: state.record?.id ?? unresolvedPhysicalRecord?.id ?? null,
+        relatedRecordId: state.record?.relatedRecordId ?? unresolvedPhysicalRecord?.relatedRecordId ?? null,
+        now
+      });
+    }
+  });
+
+  return reconciliation;
+}
+
 export async function saveReading(input: {
   auditId: string;
   tagNumber: string;
@@ -250,8 +314,6 @@ export async function saveReading(input: {
   note?: string | null;
   operationalAction?: OperationalAction | null;
   actionNote?: string | null;
-  preserveEffective?: boolean;
-  keepExistingCurrent?: boolean;
 }) {
   const now = new Date().toISOString();
   const id = newId('record');
@@ -259,7 +321,7 @@ export async function saveReading(input: {
   let relatedRecordId: string | null = null;
   const isConfirmedReading = !['unconfirmed', 'audit_conflict', 'new_tag_conflict'].includes(input.status);
   const existingRecord = input.existingRecord;
-  const shouldSupersedeCurrent = Boolean(existingRecord?.isCurrent && isConfirmedReading && !input.keepExistingCurrent);
+  const shouldSupersedeCurrent = Boolean(existingRecord?.isCurrent && isConfirmedReading);
   const effectiveAnimal = input.observedAnimal ?? null;
 
   await db.transaction('rw', db.auditRecords, db.audits, async () => {
@@ -279,7 +341,7 @@ export async function saveReading(input: {
       fieldDecision: input.fieldDecision,
       reviewStatus: reviewForStatus(input.status),
       note: input.note ?? null,
-      operationalAction: input.operationalAction ?? defaultOperationalAction(input.status),
+      operationalAction: input.operationalAction !== undefined ? input.operationalAction : defaultOperationalAction(input.status),
       actionNote: input.actionNote ?? null,
       scannedAt: now,
       createdAt: now,
@@ -306,58 +368,9 @@ export async function saveReading(input: {
   try {
     // CRITICAL RULE: Unconfirmed readings MUST preserve existing effective state.
     // They are saved to history only, never alter effective assignments.
-    const shouldUpdateEffective = input.status !== 'unconfirmed' && !input.preserveEffective;
+    const shouldUpdateEffective = input.status !== 'unconfirmed';
     if (!shouldUpdateEffective) return (await db.auditRecords.get(id))!;
-
-    await db.transaction('rw', db.auditRecords, db.effectiveTagAssignments, async () => {
-      if (input.observedAnimal && isConfirmedReading) {
-        const candidates = await db.effectiveTagAssignments.where('[auditId+effectiveAnimal]').equals([input.auditId, input.observedAnimal]).toArray();
-
-        // Only displace tags that were physically confirmed in some location.
-        // Tags never read in field (status='pending') must not be displaced.
-        let occupied: EffectiveTagAssignment | undefined;
-        for (const candidate of candidates) {
-          if (candidate.tagNumber === input.tagNumber || ['pending', 'displaced', 'not_found', 'suspicious', 'invalid', 'unresolved'].includes(candidate.status)) {
-            continue;
-          }
-          if (candidate.currentRecordId) {
-            const currentRecord = await db.auditRecords.get(candidate.currentRecordId);
-            if (currentRecord?.observedAnimal) {
-              occupied = candidate;
-              break;
-            }
-          }
-        }
-
-        if (occupied) {
-          relatedRecordId = occupied.currentRecordId;
-          await db.effectiveTagAssignments.update(occupied.id, {
-            status: 'displaced',
-            effectiveAnimal: null,
-            relatedRecordId: id,
-            updatedAt: now,
-            syncStatus: 'pending'
-          });
-          await db.auditRecords.update(id, {
-            relatedRecordId,
-            updatedAt: now,
-            syncStatus: 'pending'
-          });
-        }
-      }
-
-      await upsertEffective({
-        auditId: input.auditId,
-        tagNumber: input.tagNumber,
-        originalAnimal: input.expectedAnimal,
-        effectiveAnimal,
-        status: statusForEffectiveRecord(input.status),
-        sourceAssignmentId: input.assignment?.id ?? null,
-        currentRecordId: id,
-        relatedRecordId,
-        now
-      });
-    });
+    if (isConfirmedReading) await rebuildEffectiveState(input.auditId);
   } catch (err) {
     console.warn('Evidencia salva, mas a interpretacao efetiva falhou.', err);
   }
@@ -431,56 +444,6 @@ export async function detectReciprocalSwap(record: AuditRecord) {
   const pair = candidates.sort((a, b) => recordOrder(b) - recordOrder(a) || b.scannedAt.localeCompare(a.scannedAt))[0];
   if (!pair) return null;
 
-  const allRecords = await db.auditRecords.where('auditId').equals(record.auditId).toArray();
-  const conflict = findSwapConflict(record, pair, allRecords);
-  if (conflict) {
-    const now = new Date().toISOString();
-    const conflictId = newId('conflict');
-    const note = conflictMessage(record, pair, conflict);
-
-    await db.transaction('rw', db.auditRecords, db.effectiveTagAssignments, async () => {
-      await db.auditRecords.update(record.id, {
-        status: 'audit_conflict',
-        pairId: conflictId,
-        relatedRecordId: conflict.record.id,
-        reviewStatus: 'open',
-        note,
-        operationalAction: 'investigate',
-        actionNote: note,
-        updatedAt: now,
-        syncStatus: 'pending'
-      });
-      await db.auditRecords.update(pair.id, {
-        status: 'audit_conflict',
-        pairId: conflictId,
-        relatedRecordId: conflict.record.id,
-        reviewStatus: 'open',
-        note,
-        operationalAction: 'investigate',
-        actionNote: note,
-        updatedAt: now,
-        syncStatus: 'pending'
-      });
-      for (const item of [record, pair]) {
-        await db.effectiveTagAssignments.where('[auditId+tagNumber]').equals([item.auditId, item.tagNumber]).modify({
-          status: 'unresolved',
-          currentRecordId: item.id,
-          relatedRecordId: conflict.record.id,
-          updatedAt: now,
-          syncStatus: 'pending'
-        });
-      }
-    });
-
-    return {
-      kind: 'conflict' as const,
-      current: (await db.auditRecords.get(record.id))!,
-      other: (await db.auditRecords.get(pair.id))!,
-      existing: conflict.record,
-      message: note
-    };
-  }
-
   const pairId = pair.pairId ?? newId('swap');
   const now = new Date().toISOString();
   await db.transaction('rw', db.auditRecords, db.effectiveTagAssignments, async () => {
@@ -517,55 +480,13 @@ export async function detectReciprocalSwap(record: AuditRecord) {
       syncStatus: 'pending'
     });
   });
+  await rebuildEffectiveState(record.auditId);
 
   return {
     kind: 'swap' as const,
     current: (await db.auditRecords.get(record.id))!,
     other: (await db.auditRecords.get(pair.id))!
   };
-}
-
-function findSwapConflict(record: AuditRecord, pair: AuditRecord, allRecords: AuditRecord[]) {
-  const attemptedAnimals = new Set([record.expectedAnimal, record.observedAnimal, pair.expectedAnimal, pair.observedAnimal].filter(Boolean));
-  const attemptedTags = new Set([record.tagNumber, pair.tagNumber]);
-  const currentPairId = pair.pairId ?? record.pairId ?? null;
-
-  const confirmedSwapRecords = allRecords.filter(
-    (candidate) =>
-      candidate.isCurrent &&
-      candidate.status === 'possible_swap' &&
-      candidate.pairId &&
-      candidate.pairId !== currentPairId &&
-      candidate.id !== record.id &&
-      candidate.id !== pair.id
-  );
-
-  for (const candidate of confirmedSwapRecords) {
-    const candidateAnimals = [candidate.expectedAnimal, candidate.observedAnimal].filter(Boolean);
-    const animalConflict = candidateAnimals.find((animal) => attemptedAnimals.has(animal));
-    const tagConflict = attemptedTags.has(candidate.tagNumber) ? candidate.tagNumber : null;
-    if (animalConflict || tagConflict) {
-      const sibling = confirmedSwapRecords.find((item) => item.pairId === candidate.pairId && item.id !== candidate.id) ?? null;
-      return { record: candidate, sibling, animal: animalConflict ?? null, tag: tagConflict };
-    }
-  }
-
-  return null;
-}
-
-function conflictMessage(record: AuditRecord, pair: AuditRecord, conflict: NonNullable<ReturnType<typeof findSwapConflict>>) {
-  const existingLeft = conflict.record.expectedAnimal ?? conflict.record.observedAnimal ?? '?';
-  const existingRight =
-    conflict.sibling?.expectedAnimal === existingLeft
-      ? conflict.sibling?.observedAnimal
-      : conflict.sibling?.expectedAnimal ?? conflict.record.observedAnimal ?? '?';
-  const attemptedLeft = record.expectedAnimal ?? pair.observedAnimal ?? '?';
-  const attemptedRight = record.observedAnimal ?? pair.expectedAnimal ?? '?';
-  const subject = conflict.animal
-    ? `Animal ${conflict.animal} ja participa de uma troca confirmada.`
-    : `Tag ${conflict.tag} ja participa de uma troca confirmada.`;
-
-  return `${subject} Troca existente: ${existingLeft} <-> ${existingRight}. Nova ocorrencia detectada: ${attemptedLeft} <-> ${attemptedRight}. Revise as leituras antes de corrigir o cadastro.`;
 }
 
 export async function markPendingTagsNotFound(auditId: string) {

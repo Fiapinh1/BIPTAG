@@ -207,5 +207,7 @@ function defaultOperationalAction(status: AuditRecord['status'] | undefined) {
   if (status === 'possible_swap') return 'swap_tags';
   if (status === 'new_tag') return 'register_new_tag';
   if (status === 'linked' || status === 'tag_without_animal') return 'link_tag';
+  if (status === 'tag_stored') return 'remove_tag';
+  if (status === 'animal_without_ear_tag') return null;
   return status ? 'investigate' : null;
 }

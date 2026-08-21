@@ -26,6 +26,7 @@ import { parseNedapWorkbook, exportAuditWorkbook, validateSmartTag } from './ser
 import { knownIssueActionLabel, knownIssueLabel, operationalActionLabel, statusLabel } from './services/audit-labels';
 import { feedbackCorrect, feedbackWarning, primeFeedbackAudio } from './services/feedback';
 import { isWebNfcSupported, startNfcReader } from './services/nfc';
+import { deriveReconciliation, hasPhysicalEvidence, type ReconciledAnimalGap } from './services/reconciliation';
 import { isSupabaseConfigured, isUsingBundledSupabaseConfig, supabase } from './services/supabase';
 import { deleteAuditEverywhere, pullAuditsFromSupabase, syncAllAuditsToSupabase, syncAuditToSupabase } from './services/cloud-sync';
 import {
@@ -1775,19 +1776,6 @@ function AuditView({
     feedbackCorrect();
   }
 
-  async function findPreviousNewTagRecord(tagNumber: string, observed: string | null) {
-    if (!observed) return null;
-    const records = await db.auditRecords.where('[auditId+tagNumber]').equals([activeAudit.id, tagNumber]).toArray();
-    return records
-      .filter(
-        (record) =>
-          record.observedAnimal &&
-          record.observedAnimal !== observed &&
-          ['new_tag', 'tag_not_registered', 'new_tag_conflict'].includes(record.status)
-      )
-      .sort((a, b) => (a.sequence ?? Number.MAX_SAFE_INTEGER) - (b.sequence ?? Number.MAX_SAFE_INTEGER))[0] ?? null;
-  }
-
   async function activateReader() {
     try {
       primeFeedbackAudio();
@@ -1819,15 +1807,11 @@ function AuditView({
     if (!scan) return;
     const observed = observedAnimal.trim() || null;
     if (!observed) {
-      setToast('Digite o número do brinco ou use “Não consegui confirmar”.');
+      setToast('Digite o brinco visto ou escolha Tag sem animal / Animal sem brinco.');
       return;
     }
 
-    let status = await classifyReading(activeAudit.id, scan.tagNumber, scan.assignment, observed);
-    const previousNewTagRecord = !scan.assignment ? await findPreviousNewTagRecord(scan.tagNumber, observed) : null;
-    if (previousNewTagRecord) {
-      status = 'new_tag_conflict';
-    }
+    const status = await classifyReading(activeAudit.id, scan.tagNumber, scan.assignment, observed);
     if (status === 'correct') {
       const saved = await saveReading({
         auditId: activeAudit.id,
@@ -1852,17 +1836,10 @@ function AuditView({
 
   async function confirmPhysicalFact() {
     if (!scan || !decision) return;
-    const previousNewTagRecord = decision.status === 'new_tag_conflict'
-      ? await findPreviousNewTagRecord(scan.tagNumber, decision.observedAnimal)
-      : null;
-    const firstNewTagAnimal = previousNewTagRecord?.observedAnimal ?? scan.existingRecord?.observedAnimal ?? 'nao informado';
     const movementOrigin = scan.existingRecord?.operationalAction === 'remove_tag'
       ? scan.existingRecord.observedAnimal ?? scan.existingRecord.expectedAnimal ?? scan.assignment?.expectedAnimal ?? null
       : null;
     const isTagMovement = Boolean(movementOrigin && decision.observedAnimal && movementOrigin !== decision.observedAnimal);
-    const newTagConflictNote = decision.status === 'new_tag_conflict'
-      ? `A mesma SmartTag nao cadastrada ja foi registrada anteriormente. Primeiro animal: ${firstNewTagAnimal}. Novo animal: ${decision.observedAnimal ?? 'nao informado'}.`
-      : null;
     const movementNote = isTagMovement
       ? `Movimentacao de tag: remover vinculo do animal ${movementOrigin} e vincular a SmartTag ${scan.tagNumber} ao animal ${decision.observedAnimal}.`
       : null;
@@ -1877,32 +1854,15 @@ function AuditView({
       fieldDecision: 'confirmed_physical_animal',
       source: scan.source,
       existingRecord: scan.existingRecord,
-      note: newTagConflictNote,
-      actionNote: newTagConflictNote
-        ? `Validar manualmente. Primeiro animal: ${firstNewTagAnimal}; novo animal: ${decision.observedAnimal ?? 'nao informado'}.`
-        : movementNote,
-      preserveEffective: decision.status === 'new_tag_conflict',
-      keepExistingCurrent: decision.status === 'new_tag_conflict' || scan.existingRecord?.status === 'possible_swap',
+      actionNote: movementNote,
       operationalAction
     });
 
     if (saved.status === 'divergence' || saved.status === 'reassignment') {
       const swap = await detectReciprocalSwap(saved);
       if (swap) {
-        if (swap.kind === 'conflict') {
-          setScan((currentScan) => currentScan ? { ...currentScan, existingRecord: swap.current } : currentScan);
-          setOutcome({
-            kind: 'issue',
-            title: 'Ocorrencia relacionada',
-            message: 'Esta leitura possui informacoes conflitantes com uma ocorrencia anterior. Registramos para revisao.',
-            tagNumber: swap.current.tagNumber,
-            expectedAnimal: swap.current.expectedAnimal,
-            observedAnimal: swap.current.observedAnimal
-          });
-        } else {
-          setScan((currentScan) => currentScan ? { ...currentScan, existingRecord: swap.current } : currentScan);
-          setOutcome({ kind: 'swap', title: 'Troca relacionada identificada', current: swap.current, other: swap.other });
-        }
+        setScan((currentScan) => currentScan ? { ...currentScan, existingRecord: swap.current } : currentScan);
+        setOutcome({ kind: 'swap', title: 'Troca relacionada identificada', current: swap.current, other: swap.other });
         setDecision(null);
         feedbackWarning();
         onAuditChanged(activeAudit.id);
@@ -1947,6 +1907,70 @@ function AuditView({
       expectedAnimal: scan.assignment?.expectedAnimal ?? null,
       observedAnimal: observedAnimal.trim() || null
     });
+    onAuditChanged(activeAudit.id);
+  }
+
+  async function markTagWithoutAnimal() {
+    if (!scan) return;
+    const hasNedapLink = Boolean(scan.assignment?.expectedAnimal);
+    const saved = await saveReading({
+      auditId: activeAudit.id,
+      tagNumber: scan.tagNumber,
+      assignment: scan.assignment,
+      expectedAnimal: scan.assignment?.expectedAnimal ?? null,
+      observedAnimal: null,
+      status: 'tag_stored',
+      fieldDecision: 'tag_without_animal',
+      source: scan.source,
+      existingRecord: scan.existingRecord,
+      operationalAction: hasNedapLink ? 'remove_tag' : null,
+      actionNote: hasNedapLink
+        ? 'Tag lida fisicamente sem animal. Remover vinculo no Nedap depois da auditoria.'
+        : 'Tag ja estava sem animal no Nedap. Nenhuma correcao necessaria.'
+    });
+    setDecision(null);
+    setScan({ ...scan, existingRecord: saved });
+    setOutcome({
+      kind: 'action',
+      title: 'Tag sem animal',
+      message: hasNedapLink
+        ? 'A tag foi registrada como guardada/sem animal. O relatorio vai pedir remover o vinculo no Nedap.'
+        : 'A tag foi registrada como guardada/sem animal e ja estava sem vinculo no Nedap.',
+      actionLabel: hasNedapLink ? 'REMOVER VINCULO' : 'SEM ACAO NEDAP',
+      tagNumber: scan.tagNumber,
+      animal: scan.assignment?.expectedAnimal ?? null
+    });
+    feedbackWarning();
+    onAuditChanged(activeAudit.id);
+  }
+
+  async function markAnimalWithoutEarTag() {
+    if (!scan) return;
+    const saved = await saveReading({
+      auditId: activeAudit.id,
+      tagNumber: scan.tagNumber,
+      assignment: scan.assignment,
+      expectedAnimal: scan.assignment?.expectedAnimal ?? null,
+      observedAnimal: null,
+      status: 'animal_without_ear_tag',
+      fieldDecision: 'animal_without_ear_tag',
+      source: scan.source,
+      existingRecord: scan.existingRecord,
+      operationalAction: null,
+      note: 'SmartTag lida em animal sem brinco visual. Nao foi criado vinculo novo.',
+      actionNote: 'Ocorrencia registrada sem alterar vinculo efetivo para outro animal.'
+    });
+    setDecision(null);
+    setScan({ ...scan, existingRecord: saved });
+    setOutcome({
+      kind: 'issue',
+      title: 'Animal sem brinco',
+      message: 'Ocorrencia salva. O BIPTAG nao inventou numero de animal nem criou movimento para esta SmartTag.',
+      tagNumber: scan.tagNumber,
+      expectedAnimal: scan.assignment?.expectedAnimal ?? null,
+      observedAnimal: null
+    });
+    feedbackWarning();
     onAuditChanged(activeAudit.id);
   }
 
@@ -2497,11 +2521,12 @@ function AuditView({
                 onKeyDown={(event) => { if (event.key === 'Enter') void evaluateObserved(); }}
               />
               <button className="button button--primary button--full button--field" onClick={() => void evaluateObserved()}>Conferir brinco</button>
-              <button className="button button--ghost button--full" onClick={() => void couldNotConfirm()}>Não consegui confirmar o brinco</button>
+              <button className="button button--secondary button--full" onClick={() => void markTagWithoutAnimal()}>Tag sem animal</button>
+              <button className="button button--ghost button--full" onClick={() => void markAnimalWithoutEarTag()}>Animal sem brinco</button>
               <button className="button button--ghost button--full" onClick={cancelCurrentRead}>Ler outra tag</button>
             </div>
           ) : (
-            <GuidedDecision scan={scan} decision={decision} onConfirm={() => void confirmPhysicalFact()} onCorrect={correctObservedNumber} onUnconfirmed={() => void couldNotConfirm()} onCancel={cancelCurrentRead} />
+            <GuidedDecision scan={scan} decision={decision} onConfirm={() => void confirmPhysicalFact()} onCorrect={correctObservedNumber} onUnconfirmed={() => void markAnimalWithoutEarTag()} onCancel={cancelCurrentRead} />
           )}
         </div>
         )
@@ -2745,7 +2770,7 @@ function GuidedDecision({
       <div className="decision-number">{observed}</div>
       <button className="button button--primary button--full button--field" onClick={onConfirm}>{content.confirmLabel}</button>
       <button className="button button--secondary button--full" onClick={onCorrect}>Digitei o brinco errado</button>
-      <button className="button button--ghost button--full" onClick={onUnconfirmed}>Não consegui confirmar</button>
+      <button className="button button--ghost button--full" onClick={onUnconfirmed}>Animal sem brinco</button>
       <button className="button button--ghost button--full" onClick={onCancel}>Ler outra tag</button>
       <small className="decision-hint">O BIPTAG decide a classificação e cruza possíveis trocas depois. Você só confirma o fato físico.</small>
     </div>
@@ -2820,6 +2845,8 @@ function issueSavedTitle(status: RecordStatus) {
   if (status === 'tag_not_registered') return 'Registrado para revisao';
   if (status === 'divergence' || status === 'reassignment') return 'Registrado';
   if (status === 'audit_conflict' || status === 'new_tag_conflict') return 'Conflito para revisao';
+  if (status === 'tag_stored') return 'Tag sem animal';
+  if (status === 'animal_without_ear_tag') return 'Animal sem brinco';
   if (status === 'linked') return 'Registrado';
   if (status === 'new_tag') return 'Registrado';
   if (status === 'animal_not_in_base') return 'Animal fora da base';
@@ -2832,6 +2859,8 @@ function issueSavedMessage(status: RecordStatus, observed: string | null) {
   if (status === 'tag_not_registered') return `Evidencia salva no brinco ${observed ?? ''}. A acao fica para revisao.`;
   if (status === 'divergence' || status === 'reassignment') return 'Evidencia salva. O BIPTAG vai organizar a acao na Revisao.';
   if (status === 'audit_conflict' || status === 'new_tag_conflict') return 'Esta leitura possui informacoes conflitantes com uma ocorrencia anterior. Registramos para revisao.';
+  if (status === 'tag_stored') return 'Tag registrada como guardada/sem animal.';
+  if (status === 'animal_without_ear_tag') return 'Ocorrencia registrada sem criar vinculo novo.';
   if (status === 'linked' || status === 'new_tag' || status === 'tag_without_animal') return `Evidencia salva no brinco ${observed ?? ''}.`;
   if (status === 'animal_not_in_base') return `O brinco ${observed ?? ''} foi confirmado em campo e ficara separado para revisao.`;
   if (status === 'tag_not_found') return `Evidencia salva no brinco ${observed ?? ''}. A acao fica para revisao.`;
@@ -2849,6 +2878,7 @@ function IssuesView({
 }) {
   const issues = useLiveQuery(() => audit ? db.importIssues.where('auditId').equals(audit.id).toArray() : Promise.resolve<ImportIssue[]>([]), [audit?.id], [] as ImportIssue[]);
   const records = useLiveQuery(() => audit ? db.auditRecords.where('auditId').equals(audit.id).toArray() : Promise.resolve<AuditRecord[]>([]), [audit?.id], [] as AuditRecord[]);
+  const assignments = useLiveQuery(() => audit ? db.tagAssignments.where('auditId').equals(audit.id).toArray() : Promise.resolve<TagAssignment[]>([]), [audit?.id], [] as TagAssignment[]);
   const effectiveAssignments = useLiveQuery(() => audit ? db.effectiveTagAssignments.where('auditId').equals(audit.id).toArray() : Promise.resolve<EffectiveTagAssignment[]>([]), [audit?.id], [] as EffectiveTagAssignment[]);
   const knownIssues = useLiveQuery(() => audit ? db.knownIssues.where('auditId').equals(audit.id).toArray() : Promise.resolve<KnownIssue[]>([]), [audit?.id], [] as KnownIssue[]);
 
@@ -2857,17 +2887,23 @@ function IssuesView({
   }
 
   const activeAudit = audit;
+  const reconciliation = deriveReconciliation(assignments, records);
   const current = records.filter((record) => record.isCurrent !== false);
   const nonCorrect = current.filter((record) => record.status !== 'correct');
   const swapRecords = records.filter((record) => record.status === 'possible_swap');
   const conflictRecords = records.filter((record) => record.status === 'audit_conflict');
   const newTagConflictRecords = nonCorrect.filter((record) => record.status === 'new_tag_conflict');
-  const seenPairs = new Set<string>();
-  const swapPairs = swapRecords.filter((record) => {
-    if (!record.pairId || seenPairs.has(record.pairId)) return false;
-    seenPairs.add(record.pairId);
-    return true;
-  });
+  const swapPairs = reconciliation.swapPairs;
+  const swapTagNumbers = new Set(swapPairs.flatMap((pair) => [pair.left.tagNumber, pair.right.tagNumber]));
+  const finalActionRecords = reconciliation.states
+    .filter((state) =>
+      hasPhysicalEvidence(state) &&
+      state.action &&
+      state.action !== 'keep_tag' &&
+      !swapTagNumbers.has(state.tagNumber) &&
+      state.record
+    )
+    .map((state) => state.record!);
   const seenConflictPairs = new Set<string>();
   const conflictPairs = conflictRecords.filter((record) => {
     const key = record.pairId ?? record.id;
@@ -2876,11 +2912,11 @@ function IssuesView({
     return true;
   });
   const pendingSwapRecords = nonCorrect.filter((record) => ['reassignment', 'divergence'].includes(record.status) && record.operationalAction !== 'move_tag');
-  const movementRecords = nonCorrect.filter((record) => record.operationalAction === 'move_tag');
-  const removedRecords = current.filter((record) => record.operationalAction === 'remove_tag');
-  const replacementRecords = current.filter((record) => record.operationalAction === 'replace_tag');
-  const newTagRecords = nonCorrect.filter((record) => ['new_tag', 'tag_not_registered'].includes(record.status) || record.operationalAction === 'register_new_tag');
-  const unlinkedRecords = nonCorrect.filter((record) => ['linked', 'tag_without_animal'].includes(record.status) || record.operationalAction === 'link_tag');
+  const movementRecords = finalActionRecords.filter((record) => record.operationalAction === 'move_tag');
+  const removedRecords = finalActionRecords.filter((record) => record.operationalAction === 'remove_tag');
+  const replacementRecords = finalActionRecords.filter((record) => record.operationalAction === 'replace_tag');
+  const newTagRecords = finalActionRecords.filter((record) => ['new_tag', 'tag_not_registered', 'possible_typo'].includes(record.status) || record.operationalAction === 'register_new_tag');
+  const unlinkedRecords = finalActionRecords.filter((record) => ['linked', 'tag_without_animal'].includes(record.status) || record.operationalAction === 'link_tag');
   const latestUnconfirmedByTag = new Map<string, AuditRecord>();
   for (const record of records
     .filter((item) => item.status === 'unconfirmed')
@@ -2889,7 +2925,8 @@ function IssuesView({
   }
   const unconfirmedRecords = [...latestUnconfirmedByTag.values()];
   const notFoundRecords = nonCorrect.filter((record) => record.status === 'tag_not_found');
-  const actionRecords = current.filter((record) => record.operationalAction && record.operationalAction !== 'keep_tag');
+  const animalWithoutEarTagRecords = nonCorrect.filter((record) => record.status === 'animal_without_ear_tag');
+  const actionRecords = finalActionRecords;
   const groupedIds = new Set([
     ...swapRecords,
     ...conflictPairs,
@@ -2900,20 +2937,13 @@ function IssuesView({
     ...replacementRecords,
     ...newTagRecords,
     ...unlinkedRecords,
+    ...animalWithoutEarTagRecords,
     ...unconfirmedRecords,
     ...notFoundRecords
   ].map((record) => record.id));
   const otherIssues = nonCorrect.filter((record) => !groupedIds.has(record.id));
   const pendingTags = effectiveAssignments.filter((item) => item.status === 'pending');
-  const displacedTags = effectiveAssignments.filter((item) => item.status === 'displaced');
-  const displacedAnimals = new Set(displacedTags.map((item) => item.originalAnimal).filter(Boolean));
-  const movedAnimalWithoutTags = movementRecords.filter(
-    (record) =>
-      record.expectedAnimal &&
-      record.observedAnimal &&
-      record.expectedAnimal !== record.observedAnimal &&
-      !displacedAnimals.has(record.expectedAnimal)
-  );
+  const animalGaps = reconciliation.animalsWithoutConfirmedTag;
   const notFoundTags = effectiveAssignments.filter((item) => item.status === 'not_found');
   const validEffective = effectiveAssignments.filter((item) => !['suspicious', 'invalid'].includes(item.status));
   const processedCount = validEffective.length
@@ -2921,7 +2951,7 @@ function IssuesView({
     : new Set(current.map((record) => record.tagNumber)).size;
   const totalValid = activeAudit.validTags ?? activeAudit.totalTags;
   const correctCount = current.filter((record) => record.status === 'correct').length;
-  const actionCount = actionRecords.length + displacedTags.length + movedAnimalWithoutTags.length + notFoundTags.length;
+  const actionCount = actionRecords.length;
   const reviewSummaryStats = [
     { label: 'Trocas', value: swapPairs.length, tone: 'warning' as const },
     { label: 'Pendentes', value: pendingSwapRecords.length, tone: 'warning' as const },
@@ -2936,8 +2966,8 @@ function IssuesView({
     newTagRecords.length +
     removedRecords.length +
     unlinkedRecords.length +
-    displacedTags.length +
-    movedAnimalWithoutTags.length +
+    animalGaps.length +
+    animalWithoutEarTagRecords.length +
     conflictPairs.length +
     newTagConflictRecords.length +
     unconfirmedRecords.length +
@@ -2971,11 +3001,8 @@ function IssuesView({
 
     if (swapPairs.length) {
       lines.push('', 'Trocas confirmadas:');
-      for (const record of swapPairs.slice(0, 12)) {
-        const other = swapRecords.find((candidate) => candidate.id === record.relatedRecordId);
-        const left = record.expectedAnimal ?? other?.observedAnimal ?? record.observedAnimal ?? 'sem animal';
-        const right = record.observedAnimal ?? other?.expectedAnimal ?? other?.observedAnimal ?? 'sem animal';
-        lines.push(`- ${left} ↔ ${right}`);
+      for (const pair of swapPairs.slice(0, 12)) {
+        lines.push(`- ${pair.left.originalAnimal ?? 'sem animal'} ↔ ${pair.left.finalAnimal ?? 'sem animal'}`);
       }
       if (swapPairs.length > 12) lines.push(`- mais ${swapPairs.length - 12} troca(s) no relatorio`);
     }
@@ -2988,9 +3015,6 @@ function IssuesView({
         const animal = record.observedAnimal ?? record.expectedAnimal ?? 'sem animal';
         return `- ${action}: animal ${animal}, tag ${record.tagNumber}`;
       });
-    for (const item of notFoundTags.slice(0, Math.max(0, 10 - primaryActions.length))) {
-      primaryActions.push(`- INVESTIGAR: tag ${item.tagNumber} nao localizada`);
-    }
     if (primaryActions.length) {
       lines.push('', 'Acoes principais:');
       lines.push(...primaryActions);
@@ -3060,9 +3084,9 @@ function IssuesView({
 
       <div className="review-groups">
         <ReviewSection eyebrow="TROCAS" title="Trocas confirmadas" emptyText="Nenhuma troca identificada.">
-          {swapPairs.map((record) => {
-            const other = swapRecords.find((candidate) => candidate.id === record.relatedRecordId);
-            return <ReviewSwapCard key={record.id} record={record} other={other ?? null} />;
+          {swapPairs.map((pair) => {
+            if (!pair.left.record) return null;
+            return <ReviewSwapCard key={`${pair.left.tagNumber}-${pair.right.tagNumber}`} record={pair.left.record} other={pair.right.record ?? null} />;
           })}
         </ReviewSection>
 
@@ -3091,8 +3115,7 @@ function IssuesView({
         </ReviewSection>
 
         <ReviewSection eyebrow="ANIMAIS" title="Animais sem tag" emptyText="Nenhum animal sem tag confirmado.">
-          {movedAnimalWithoutTags.map((record) => <ReviewMovedAnimalCard key={`moved-${record.id}`} record={record} />)}
-          {displacedTags.map((item) => <ReviewEffectiveCard key={item.id} item={item} />)}
+          {animalGaps.map((gap) => <ReviewAnimalGapCard key={`${gap.animal}-${gap.originalTag}`} gap={gap} />)}
         </ReviewSection>
 
         <ReviewSection eyebrow="CONFLITOS AUDITORIA" title="Conflitos de auditoria" emptyText="Nenhum conflito de auditoria registrado.">
@@ -3105,6 +3128,10 @@ function IssuesView({
 
         <ReviewSection eyebrow="NAO CONFIRMADAS" title="Nao confirmadas" emptyText="Nenhuma leitura nao confirmada.">
           {unconfirmedRecords.map((record) => <ReviewRecordCard key={record.id} record={record} tone="warning" />)}
+        </ReviewSection>
+
+        <ReviewSection eyebrow="OCORRENCIAS" title="Animais sem brinco" emptyText="Nenhum animal sem brinco registrado.">
+          {animalWithoutEarTagRecords.map((record) => <ReviewRecordCard key={record.id} record={record} tone="warning" />)}
         </ReviewSection>
 
         <ReviewSection eyebrow="NAO LOCALIZADAS" title="Tags nao localizadas" emptyText="Nenhuma tag marcada como nao localizada.">
@@ -3126,8 +3153,6 @@ function IssuesView({
 
         <ReviewSection eyebrow="ACOES NEDAP" title="Acoes para executar no Nedap" emptyText="Nenhuma acao operacional pendente.">
           {actionRecords.map((record) => <ReviewRecordCard key={record.id} record={record} />)}
-          {displacedTags.map((item) => <ReviewEffectiveCard key={`action-${item.id}`} item={item} />)}
-          {notFoundTags.map((item) => <ReviewEffectiveCard key={`action-${item.id}`} item={item} />)}
         </ReviewSection>
       </div>
 
@@ -3211,19 +3236,40 @@ function ReviewRecordCard({ record, tone = 'default' }: { record: AuditRecord; t
 }
 
 function ReviewEffectiveCard({ item }: { item: EffectiveTagAssignment }) {
+  const label = item.status === 'not_found' ? 'Tag nao localizada' : 'Animal sem tag';
+  const action = item.status === 'not_found' ? 'TAG NAO LOCALIZADA' : 'INFORMACAO OPERACIONAL';
   return (
     <div className="review-card review-card--danger">
       <span className="issue-row__icon"><IssuesIcon /></span>
       <div className="review-card__body">
-        <strong>Animal sem tag</strong>
+        <strong>{label}</strong>
         <span>{`${item.originalAnimal ?? '-'} -> sem tag confirmada`}</span>
         <div className="review-card__meta">
           <small>Animal: {item.originalAnimal ?? '-'}</small>
           <small>Tag anterior: {item.tagNumber}</small>
-          <small>Acao sugerida: INVESTIGAR</small>
+          <small>{action}</small>
           <small>Origem: Auditoria</small>
         </div>
         <button className="button button--ghost button--full" onClick={() => showEffectiveDetails(item)}>Ver detalhes</button>
+      </div>
+    </div>
+  );
+}
+
+function ReviewAnimalGapCard({ gap }: { gap: ReconciledAnimalGap }) {
+  return (
+    <div className="review-card review-card--warning">
+      <span className="issue-row__icon"><IssuesIcon /></span>
+      <div className="review-card__body">
+        <strong>Animal sem tag confirmada</strong>
+        <span>{`${gap.animal} -> sem tag confirmada`}</span>
+        <div className="review-card__meta">
+          <small>Animal: {gap.animal}</small>
+          <small>Tag original: {gap.originalTag}</small>
+          <small>Informacao operacional para a fazenda</small>
+          <small>Origem: Estado efetivo final</small>
+        </div>
+        <button className="button button--ghost button--full" onClick={() => showAnimalGapDetails(gap)}>Ver detalhes</button>
       </div>
     </div>
   );
@@ -3270,6 +3316,19 @@ function showMovedAnimalDetails(record: AuditRecord) {
       `Tag ${record.tagNumber} foi confirmada no animal ${record.observedAnimal ?? '-'}.`,
       'Acao sugerida: revisar o animal antigo antes de executar no Nedap.'
     ].join('\n'),
+    tone: 'warning'
+  });
+}
+
+function showAnimalGapDetails(gap: ReconciledAnimalGap) {
+  void appDialog.alert({
+    title: 'Animal sem tag confirmada',
+    message: [
+      `Animal: ${gap.animal}`,
+      `Tag original: ${gap.originalTag}`,
+      gap.record ? `Ultima evidencia da tag: ${gap.record.tagNumber} -> ${gap.record.observedAnimal ?? '-'}` : '',
+      'Esse item foi calculado pelo estado efetivo final, nao por uma pendencia historica.'
+    ].filter(Boolean).join('\n'),
     tone: 'warning'
   });
 }

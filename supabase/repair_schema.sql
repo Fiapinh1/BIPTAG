@@ -31,6 +31,7 @@ alter table if exists public.audit_records add column if not exists pair_id text
 alter table if exists public.audit_records add column if not exists related_record_id text;
 alter table if exists public.audit_records add column if not exists synced_at timestamptz;
 alter table if exists public.audit_records add column if not exists sync_status text not null default 'pending';
+alter table if exists public.audit_records add column if not exists sequence integer not null default 0;
 
 create table if not exists public.effective_tag_assignments (
   id text primary key,
@@ -39,7 +40,7 @@ create table if not exists public.effective_tag_assignments (
   tag_number text not null,
   original_animal text,
   effective_animal text,
-  status text not null check (status in ('pending','confirmed','reassigned','linked','new_tag','displaced','not_found','suspicious','invalid','unresolved')),
+  status text not null check (status in ('pending','confirmed','reassigned','linked','new_tag','without_animal','displaced','not_found','suspicious','invalid','unresolved')),
   source_assignment_id text references public.tag_assignments(id) on delete set null,
   current_record_id text,
   related_record_id text,
@@ -48,6 +49,55 @@ create table if not exists public.effective_tag_assignments (
   sync_status text not null default 'pending' check (sync_status in ('pending','synced','error')),
   unique (audit_id, tag_number)
 );
+
+alter table if exists public.audit_records
+  drop constraint if exists audit_records_status_check;
+
+alter table if exists public.audit_records
+  add constraint audit_records_status_check
+  check (
+    status in (
+      'correct',
+      'divergence',
+      'reassignment',
+      'linked',
+      'new_tag',
+      'new_tag_conflict',
+      'possible_swap',
+      'audit_conflict',
+      'replacement_chain',
+      'tag_not_registered',
+      'tag_not_found',
+      'tag_without_animal',
+      'tag_stored',
+      'animal_without_ear_tag',
+      'animal_not_in_base',
+      'unconfirmed',
+      'suspicious_tag',
+      'possible_typo'
+    )
+  );
+
+alter table if exists public.effective_tag_assignments
+  drop constraint if exists effective_tag_assignments_status_check;
+
+alter table if exists public.effective_tag_assignments
+  add constraint effective_tag_assignments_status_check
+  check (
+    status in (
+      'pending',
+      'confirmed',
+      'reassigned',
+      'linked',
+      'new_tag',
+      'without_animal',
+      'displaced',
+      'not_found',
+      'suspicious',
+      'invalid',
+      'unresolved'
+    )
+  );
 
 create table if not exists public.known_issues (
   id text primary key,

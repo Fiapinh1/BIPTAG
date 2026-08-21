@@ -13,6 +13,8 @@ export type RecordStatus =
   | 'tag_not_registered'
   | 'tag_not_found'
   | 'tag_without_animal'
+  | 'tag_stored'
+  | 'animal_without_ear_tag'
   | 'animal_not_in_base'
   | 'unconfirmed'
   | 'suspicious_tag'
@@ -22,6 +24,8 @@ export type FieldDecision =
   | 'confirmed_match'
   | 'confirmed_physical_animal'
   | 'could_not_confirm'
+  | 'tag_without_animal'
+  | 'animal_without_ear_tag'
   | 'review_later';
 
 export type ReviewStatus = 'open' | 'resolved' | 'not_required';
@@ -50,6 +54,7 @@ export type EffectiveTagStatus =
   | 'reassigned'
   | 'linked'
   | 'new_tag'
+  | 'without_animal'
   | 'displaced'
   | 'not_found'
   | 'suspicious'

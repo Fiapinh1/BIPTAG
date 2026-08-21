@@ -53,6 +53,8 @@ export function statusLabel(status: RecordStatus) {
     tag_not_registered: 'Tag nao cadastrada',
     tag_not_found: 'Tag nao localizada',
     tag_without_animal: 'Tag sem vinculo',
+    tag_stored: 'Tag sem animal',
+    animal_without_ear_tag: 'Animal sem brinco',
     animal_not_in_base: 'Animal fora da base',
     unconfirmed: 'Nao confirmada',
     suspicious_tag: 'Tag suspeita',
@@ -66,6 +68,8 @@ export function fieldDecisionLabel(decision: AuditRecord['fieldDecision']) {
     confirmed_match: 'Brinco e cadastro conferem',
     confirmed_physical_animal: 'Tecnico confirmou o brinco fisico',
     could_not_confirm: 'Tecnico nao conseguiu confirmar',
+    tag_without_animal: 'Tecnico confirmou tag sem animal',
+    animal_without_ear_tag: 'Tecnico confirmou animal sem brinco',
     review_later: 'Revisar depois'
   };
   return labels[decision];
