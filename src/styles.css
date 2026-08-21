@@ -6502,3 +6502,33 @@ body:has(.import-prep-overlay) {
     min-height: 54px;
   }
 }
+
+.review-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-action--whatsapp {
+  color: #FFFDF8;
+  border-color: rgba(197,106,53,.28);
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255,255,255,.24), transparent 28px),
+    linear-gradient(145deg, #C56A35, #8F4425);
+}
+
+.review-export-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.review-export-actions .button {
+  min-height: 56px;
+}
+
+@media (min-width: 720px) {
+  .review-export-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+}

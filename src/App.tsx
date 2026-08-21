@@ -17,6 +17,7 @@ import {
   PlusIcon,
   ReportIcon,
   ScanIcon,
+  ShareIcon,
   SwapIcon,
   TagIcon,
   TrashIcon
@@ -2914,11 +2915,18 @@ function IssuesView({
       !displacedAnimals.has(record.expectedAnimal)
   );
   const notFoundTags = effectiveAssignments.filter((item) => item.status === 'not_found');
+  const validEffective = effectiveAssignments.filter((item) => !['suspicious', 'invalid'].includes(item.status));
+  const processedCount = validEffective.length
+    ? validEffective.filter((item) => item.status !== 'pending').length
+    : new Set(current.map((record) => record.tagNumber)).size;
+  const totalValid = activeAudit.validTags ?? activeAudit.totalTags;
+  const correctCount = current.filter((record) => record.status === 'correct').length;
+  const actionCount = actionRecords.length + displacedTags.length + movedAnimalWithoutTags.length + notFoundTags.length;
   const reviewSummaryStats = [
     { label: 'Trocas', value: swapPairs.length, tone: 'warning' as const },
     { label: 'Pendentes', value: pendingSwapRecords.length, tone: 'warning' as const },
     { label: 'Conflitos', value: conflictPairs.length + newTagConflictRecords.length, tone: 'danger' as const },
-    { label: 'Acoes', value: actionRecords.length + displacedTags.length + movedAnimalWithoutTags.length + notFoundTags.length, tone: 'danger' as const }
+    { label: 'Acoes', value: actionCount, tone: 'danger' as const }
   ].filter((item) => item.value > 0);
   const reviewItemCount =
     swapPairs.length +
@@ -2945,6 +2953,62 @@ function IssuesView({
     exportAuditWorkbook(activeAudit, records, issues, effectiveAssignments, knownIssues, assignments);
   }
 
+  function buildWhatsAppReviewText() {
+    const percentDone = totalValid ? Math.round((processedCount / totalValid) * 100) : 0;
+    const conflictCount = conflictPairs.length + newTagConflictRecords.length;
+    const lines = [
+      `BIPTAG - Auditoria ${activeAudit.farmName}`,
+      '',
+      'Resumo:',
+      `- Conferidas: ${processedCount}/${totalValid} (${percentDone}%)`,
+      `- Corretas: ${correctCount}`,
+      `- Trocas confirmadas: ${swapPairs.length}`,
+      `- Trocas pendentes: ${pendingSwapRecords.length}`,
+      `- Conflitos: ${conflictCount}`,
+      `- Acoes no Nedap: ${actionCount}`,
+      `- Tags nao localizadas: ${notFoundRecords.length + notFoundTags.length}`
+    ];
+
+    if (swapPairs.length) {
+      lines.push('', 'Trocas confirmadas:');
+      for (const record of swapPairs.slice(0, 12)) {
+        const other = swapRecords.find((candidate) => candidate.id === record.relatedRecordId);
+        const left = record.expectedAnimal ?? other?.observedAnimal ?? record.observedAnimal ?? 'sem animal';
+        const right = record.observedAnimal ?? other?.expectedAnimal ?? other?.observedAnimal ?? 'sem animal';
+        lines.push(`- ${left} ↔ ${right}`);
+      }
+      if (swapPairs.length > 12) lines.push(`- mais ${swapPairs.length - 12} troca(s) no relatorio`);
+    }
+
+    const primaryActions = actionRecords
+      .filter((record) => record.status !== 'possible_swap')
+      .slice(0, 10)
+      .map((record) => {
+        const action = operationalActionLabel(record.operationalAction) || statusLabel(record.status);
+        const animal = record.observedAnimal ?? record.expectedAnimal ?? 'sem animal';
+        return `- ${action}: animal ${animal}, tag ${record.tagNumber}`;
+      });
+    for (const item of notFoundTags.slice(0, Math.max(0, 10 - primaryActions.length))) {
+      primaryActions.push(`- INVESTIGAR: tag ${item.tagNumber} nao localizada`);
+    }
+    if (primaryActions.length) {
+      lines.push('', 'Acoes principais:');
+      lines.push(...primaryActions);
+    }
+
+    if (conflictCount) {
+      lines.push('', 'Atencao: existem conflitos. Revisar antes de alterar o Nedap.');
+    }
+    lines.push('', 'Correcoes devem ser executadas no Nedap somente apos revisar o relatorio completo.');
+    return lines.join('\n');
+  }
+
+  function shareReviewWhatsApp() {
+    const url = `https://wa.me/?text=${encodeURIComponent(buildWhatsAppReviewText())}`;
+    const opened = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!opened) window.location.href = url;
+  }
+
   async function markMissingTags() {
     const count = await markPendingTagsNotFound(activeAudit.id);
     if (count) {
@@ -2961,7 +3025,10 @@ function IssuesView({
     <section className="page">
       <div className="section-heading section-heading--with-action">
         <div><span className="eyebrow">REVISÃO</span><h1>Revisão da auditoria</h1><p>O campo registra fatos. Aqui o BIPTAG organiza o que precisa ser corrigido depois.</p></div>
-        <button className="icon-action" onClick={exportReport} title="Exportar Excel"><ReportIcon /></button>
+        <div className="review-header-actions">
+          <button className="icon-action icon-action--whatsapp" onClick={shareReviewWhatsApp} title="Compartilhar WhatsApp"><ShareIcon /></button>
+          <button className="icon-action" onClick={exportReport} title="Exportar Excel"><ReportIcon /></button>
+        </div>
       </div>
 
       {reviewSummaryStats.length > 0 && (
@@ -3064,7 +3131,10 @@ function IssuesView({
         </ReviewSection>
       </div>
 
-      <button className="button button--secondary button--full" onClick={exportReport}><ReportIcon /> Exportar relatório Excel</button>
+      <div className="review-export-actions">
+        <button className="button button--primary button--full" onClick={shareReviewWhatsApp}><ShareIcon /> Compartilhar resumo no WhatsApp</button>
+        <button className="button button--secondary button--full" onClick={exportReport}><ReportIcon /> Exportar relatório Excel</button>
+      </div>
     </section>
   );
 }

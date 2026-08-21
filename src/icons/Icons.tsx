@@ -93,6 +93,18 @@ export function ReportIcon({ size = 22, ...props }: IconProps) {
   );
 }
 
+export function ShareIcon({ size = 22, ...props }: IconProps) {
+  return (
+    <svg {...base(size)} {...props}>
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <path d="m8.6 10.7 6.8-4.4" />
+      <path d="m8.6 13.3 6.8 4.4" />
+    </svg>
+  );
+}
+
 export function ChevronRightIcon({ size = 18, ...props }: IconProps) {
   return (
     <svg {...base(size)} {...props}>

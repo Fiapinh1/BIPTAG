@@ -529,8 +529,12 @@ export function exportAuditWorkbook(
   appendSheet(workbook, conferenceRows, 'CONFERÊNCIA');
   appendSheet(workbook, summaryRows, 'RESUMO');
 
-  const safeFarm = audit.farmName.replace(/[^a-zA-Z0-9_-]+/g, '_');
-  XLSX.writeFile(workbook, `BIPTAG_${safeFarm}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  const safeFarm = audit.farmName
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, '')
+    .replace(/\s+/g, ' ')
+    .slice(0, 80) || 'fazenda';
+  XLSX.writeFile(workbook, `Auditoria_${safeFarm}.xlsx`);
 }
 
 export function reviewLabel(reviewStatus: AuditRecord['reviewStatus']) {
