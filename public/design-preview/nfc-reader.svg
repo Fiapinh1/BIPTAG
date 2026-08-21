@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 512 512"
+     role="img"
+     aria-labelledby="title desc"
+     fill="none">
+
+  <title id="title">Leitor NFC Nedap</title>
+  <desc id="desc">Icone vetorial de um leitor NFC com ondas de comunicacao sem fio.</desc>
+
+  <path d="M170 92
+           C218 50 294 50 342 92"
+        stroke="currentColor"
+        stroke-width="16"
+        stroke-linecap="round"/>
+
+  <path d="M202 132
+           C232 105 280 105 310 132"
+        stroke="currentColor"
+        stroke-width="16"
+        stroke-linecap="round"/>
+
+  <path d="M92 218
+           C92 190 112 170 142 165
+           C216 152 296 152 370 165
+           C400 170 420 190 420 218
+           L420 328
+           C420 356 400 376 370 381
+           C296 394 216 394 142 381
+           C112 376 92 356 92 328
+           Z"
+        stroke="currentColor"
+        stroke-width="16"
+        stroke-linejoin="round"/>
+
+  <path d="M136 218
+           C136 205 145 197 158 195
+           C222 185 290 185 354 195
+           C367 197 376 205 376 218
+           L376 328
+           C376 341 367 349 354 351
+           C290 361 222 361 158 351
+           C145 349 136 341 136 328
+           Z"
+        stroke="currentColor"
+        stroke-width="7"
+        stroke-linejoin="round"
+        opacity=".28"/>
+
+  <rect x="188" y="250" width="136" height="46" rx="9"
+        fill="currentColor"/>
+
+  <path d="M123 230 V316"
+        stroke="currentColor"
+        stroke-width="12"
+        stroke-linecap="round"/>
+
+  <path d="M389 230 V316"
+        stroke="currentColor"
+        stroke-width="12"
+        stroke-linecap="round"/>
+
+  <path d="M226 225 C244 210 268 210 286 225"
+        stroke="currentColor"
+        stroke-width="7"
+        stroke-linecap="round"
+        opacity=".55"/>
+</svg>
