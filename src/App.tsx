@@ -9,12 +9,12 @@ import {
   CheckIcon,
   ChevronRightIcon,
   CloudIcon,
+  CowIcon,
   HomeIcon,
   ImportIcon,
   IssuesIcon,
   PauseIcon,
   PlusIcon,
-  PlayIcon,
   ReportIcon,
   ScanIcon,
   SwapIcon,
@@ -56,6 +56,27 @@ import type {
 import type { Session } from '@supabase/supabase-js';
 
 type View = 'home' | 'import' | 'audit' | 'lookup' | 'issues' | 'knownIssues' | 'settings';
+
+const VIEW_STORAGE_KEY = 'biptag-current-view';
+const SELECTED_AUDIT_STORAGE_KEY = 'biptag-selected-audit';
+const RESTORABLE_VIEWS: View[] = ['home', 'import', 'audit', 'lookup', 'issues', 'knownIssues', 'settings'];
+
+function readStoredView(): View {
+  try {
+    const value = localStorage.getItem(VIEW_STORAGE_KEY) as View | null;
+    return value && RESTORABLE_VIEWS.includes(value) ? value : 'home';
+  } catch {
+    return 'home';
+  }
+}
+
+function readStoredAuditId() {
+  try {
+    return localStorage.getItem(SELECTED_AUDIT_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
 
 type DialogTone = 'default' | 'danger' | 'warning' | 'success';
 
@@ -175,6 +196,10 @@ function BiptagLogo({ className = '' }: { className?: string }) {
   return <img className={className} src="/icons/biptag-logo-192.png" alt="BIPTAG" />;
 }
 
+function NfcReaderGlyph({ className = '' }: { className?: string }) {
+  return <span className={`nfc-reader-glyph ${className}`} aria-hidden="true" />;
+}
+
 function formatDate(value: string) {
   return new Date(value).toLocaleString('pt-BR', {
     day: '2-digit',
@@ -205,13 +230,13 @@ function formatRelativeTime(value: string) {
 }
 
 function App() {
-  const [view, setView] = useState<View>('home');
+  const [view, setView] = useState<View>(() => readStoredView());
   const [online, setOnline] = useState(navigator.onLine);
   const [toast, setToast] = useState<string | null>(null);
   const [dialog, setDialog] = useState<AppDialogRequest | null>(null);
   const [cloudSession, setCloudSession] = useState<Session | null>(null);
   const [pulledCloudUserId, setPulledCloudUserId] = useState<string | null>(null);
-  const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
+  const [selectedAuditId, setSelectedAuditId] = useState<string | null>(() => readStoredAuditId());
   const autoSyncBusy = useRef(false);
 
   const audits = useLiveQuery(() => db.audits.orderBy('createdAt').reverse().toArray(), [], []);
@@ -241,11 +266,21 @@ function App() {
 
   useEffect(() => {
     if (selectedAuditId) {
-      localStorage.setItem('biptag-selected-audit', selectedAuditId);
+      localStorage.setItem(SELECTED_AUDIT_STORAGE_KEY, selectedAuditId);
     } else {
-      localStorage.removeItem('biptag-selected-audit');
+      localStorage.removeItem(SELECTED_AUDIT_STORAGE_KEY);
     }
   }, [selectedAuditId]);
+
+  useEffect(() => {
+    localStorage.setItem(VIEW_STORAGE_KEY, view);
+  }, [view]);
+
+  useEffect(() => {
+    if (!selectedAuditId && ['audit', 'lookup', 'issues', 'knownIssues'].includes(view)) {
+      setView('home');
+    }
+  }, [selectedAuditId, view]);
 
   useEffect(() => {
     const handleOnline = () => setOnline(true);
@@ -495,8 +530,8 @@ function App() {
         {auditNavActive ? (
           <>
             <NavButton active={view === 'home'} label="Resumo" icon={<HomeIcon />} onClick={() => setView('home')} />
-            <NavButton active={view === 'audit'} label="Auditar" icon={<ScanIcon />} onClick={() => setView('audit')} />
-            <NavButton active={view === 'lookup'} label="Consultar" icon={<AnimalIcon />} onClick={() => setView('lookup')} />
+            <NavButton active={view === 'audit'} label="Auditar" icon={<NfcReaderGlyph />} onClick={() => setView('audit')} />
+            <NavButton active={view === 'lookup'} label="Consultar" icon={<CowIcon />} onClick={() => setView('lookup')} />
             <NavButton active={view === 'issues' || view === 'knownIssues'} label="Revisao" icon={<IssuesIcon />} onClick={() => setView('issues')} />
           </>
         ) : (
@@ -873,7 +908,7 @@ function HomeView({
       {activeAudit.status !== 'finished' && (
         <div className="home-action-grid">
           <button className="field-action field-action--primary" onClick={onAudit}>
-            <span className="field-action__icon"><PlayIcon size={30} /></span>
+            <span className="field-action__icon"><NfcReaderGlyph /></span>
             <span>
               <strong>{activeAudit.status === 'paused' ? 'Retomar auditoria' : 'Auditar'}</strong>
               <small>Leitura NFC ou digitação manual</small>
@@ -881,7 +916,7 @@ function HomeView({
             <ChevronRightIcon />
           </button>
           <button className="field-action field-action--lookup" onClick={onLookup}>
-            <span className="field-action__icon"><AnimalIcon size={30} /></span>
+            <span className="field-action__icon"><CowIcon size={30} /></span>
             <span>
               <strong>Consultar brinco</strong>
               <small>Buscar SmartTag pela base importada</small>
@@ -995,7 +1030,7 @@ function LookupView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
     return (
       <section className="page page--centered">
         <EmptyState
-          icon={<AnimalIcon size={42} />}
+          icon={<CowIcon size={42} />}
           title="Sem fazenda aberta"
           text="Abra uma fazenda para consultar a SmartTag pelo numero do brinco."
           action={<button className="button button--primary" onClick={onNeedImport}>Criar auditoria</button>}
@@ -1016,7 +1051,7 @@ function LookupView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
 
       <div className="animal-lookup-card animal-lookup-card--page">
         <div className="animal-lookup-card__header">
-          <AnimalIcon size={28} />
+          <CowIcon size={28} />
           <div>
             <span className="eyebrow">BRINCO DO ANIMAL</span>
             <h2>Digite o numero visto no animal</h2>
@@ -2012,6 +2047,7 @@ function AuditView({
   const fieldPageClass = [
     'page field-page',
     scan ? 'field-page--scanned' : '',
+    readerActive && !scan && !outcome && !manualMode ? 'field-page--reader-active' : '',
     manualMode && !scan && !outcome ? 'field-page--manual' : '',
     decision ? 'field-page--decision' : '',
     outcome ? `field-page--outcome-active field-page--outcome-${outcome.kind}` : ''
@@ -2105,29 +2141,6 @@ function AuditView({
         </div>
       )}
 
-      {!scan && !outcome && !manualMode && latestConfirmedRecords.length > 0 && (
-        <section className="latest-conferences" aria-labelledby="latest-conferences-title">
-          <div className="section-heading section-heading--compact">
-            <div><span className="eyebrow">REGISTROS CONFIRMADOS</span><h2 id="latest-conferences-title">Últimas conferências</h2></div>
-          </div>
-          <div className="latest-conferences__list">
-            {latestConfirmedRecords.map((record) => (
-              <button key={record.id} className="latest-conference" onClick={() => openCorrection(record)}>
-                <span className="latest-conference__animal">{record.observedAnimal}</span>
-                <span className="latest-conference__details">
-                  <strong>Tag ...{record.tagNumber.slice(-4)}</strong>
-                  <small>{formatRelativeTime(record.scannedAt)} · {record.source === 'nfc' ? 'NFC' : 'Manual'}</small>
-                </span>
-                <ChevronRightIcon size={18} />
-              </button>
-            ))}
-          </div>
-          <button className="link-button latest-conferences__correct" onClick={() => openCorrection(latestConfirmedRecords[0])}>
-            Corrigir última leitura
-          </button>
-        </section>
-      )}
-
       {manualMode && !scan && !outcome && (
         <div className="manual-field-screen">
           <div className="manual-field-screen__header">
@@ -2196,7 +2209,7 @@ function AuditView({
             <p>{readerMessage}</p>
           </div>
           {!readerActive ? (
-            <button className="button button--primary button--full button--field" onClick={activateReader} disabled={!isWebNfcSupported()}><ScanIcon /> Ativar leitor NFC</button>
+            <button className="button button--primary button--full button--field" onClick={activateReader} disabled={!isWebNfcSupported()}><NfcReaderGlyph className="nfc-reader-glyph--inline" /> Ativar leitor NFC</button>
           ) : (
             <button className="button button--ghost button--full" onClick={deactivateReader}>Parar leitor</button>
           )}
@@ -2208,6 +2221,29 @@ function AuditView({
 
       {!isWebNfcSupported() && !scan && (
         <div className="alert alert--warning"><IssuesIcon /><span>Web NFC indisponível neste acesso. Para a leitura real, use a versão HTTPS no Chrome Android.</span></div>
+      )}
+
+      {!scan && !outcome && !manualMode && latestConfirmedRecords.length > 0 && (
+        <section className="latest-conferences latest-conferences--bottom" aria-labelledby="latest-conferences-title-bottom">
+          <div className="section-heading section-heading--compact">
+            <div><span className="eyebrow">REGISTROS CONFIRMADOS</span><h2 id="latest-conferences-title-bottom">Ultimas conferencias</h2></div>
+          </div>
+          <div className="latest-conferences__list">
+            {latestConfirmedRecords.map((record) => (
+              <button key={record.id} className="latest-conference" onClick={() => openCorrection(record)}>
+                <span className="latest-conference__animal">{record.observedAnimal}</span>
+                <span className="latest-conference__details">
+                  <strong>Tag ...{record.tagNumber.slice(-4)}</strong>
+                  <small>{formatRelativeTime(record.scannedAt)} - {record.source === 'nfc' ? 'NFC' : 'Manual'}</small>
+                </span>
+                <ChevronRightIcon size={18} />
+              </button>
+            ))}
+          </div>
+          <button className="link-button latest-conferences__correct" onClick={() => openCorrection(latestConfirmedRecords[0])}>
+            Corrigir ultima leitura
+          </button>
+        </section>
       )}
 
       {scan && !outcome && (

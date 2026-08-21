@@ -150,6 +150,20 @@ export function AnimalIcon({ size = 22, ...props }: IconProps) {
   );
 }
 
+export function CowIcon({ size = 22, ...props }: IconProps) {
+  return (
+    <svg {...base(size)} {...props}>
+      <path d="M7.2 8.2 4.4 5.8c-.7-.6-1.6.1-1.3 1l1 3c.2.7.9 1.1 1.6 1" />
+      <path d="m16.8 8.2 2.8-2.4c.7-.6 1.6.1 1.3 1l-1 3c-.2.7-.9 1.1-1.6 1" />
+      <path d="M6.2 12.2c0-3.6 2.3-6.1 5.8-6.1s5.8 2.5 5.8 6.1v1.9c0 3.1-2.3 5.5-5.8 5.5s-5.8-2.4-5.8-5.5Z" />
+      <path d="M9.2 8.4c.8-.6 1.7-.9 2.8-.9s2 .3 2.8.9" />
+      <path d="M9.4 12.6h.01M14.6 12.6h.01" />
+      <path d="M10.1 15.3c.8.6 3 .6 3.8 0" />
+      <path d="M10.5 17.4h3" />
+    </svg>
+  );
+}
+
 export function ActionIcon({ size = 22, ...props }: IconProps) {
   return (
     <svg {...base(size)} {...props}>

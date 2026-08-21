@@ -5108,3 +5108,335 @@ body {
     width: calc(100% - 24px);
   }
 }
+
+/* Field-first polish: compact home, focused reader and softer farm icons. */
+.nfc-reader-glyph {
+  width: 24px;
+  height: 24px;
+  display: inline-block;
+  flex: 0 0 auto;
+  background: currentColor;
+  -webkit-mask: url("/design-preview/nfc-reader.svg") center / contain no-repeat;
+  mask: url("/design-preview/nfc-reader.svg") center / contain no-repeat;
+}
+
+.field-action__icon .nfc-reader-glyph {
+  width: 32px;
+  height: 32px;
+}
+
+.nfc-reader-glyph--inline {
+  width: 20px;
+  height: 20px;
+}
+
+.nav-button .nfc-reader-glyph {
+  width: 25px;
+  height: 25px;
+}
+
+.home-page {
+  gap: 14px;
+}
+
+.home-page::after {
+  opacity: .035;
+}
+
+.home-toolbar {
+  min-height: 0;
+  border-color: rgba(191,101,51,.22);
+  background:
+    linear-gradient(135deg, rgba(255,253,248,.92), rgba(255,253,248,.72)),
+    radial-gradient(circle at top right, rgba(191,101,51,.12), transparent 210px);
+}
+
+.home-toolbar::before {
+  background: linear-gradient(90deg, rgba(191,101,51,.82), rgba(221,189,119,.30), transparent);
+}
+
+.home-toolbar .eyebrow {
+  color: var(--copper-dark);
+}
+
+.home-add-button {
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255,255,255,.32), transparent 34px),
+    linear-gradient(145deg, #C56A35 0%, #8F4425 100%);
+  box-shadow:
+    0 16px 30px rgba(143,68,37,.24),
+    0 7px 0 rgba(68,37,24,.22),
+    inset 0 0 0 1px rgba(255,255,255,.16);
+}
+
+.home-page:not(:has(.home-dashboard)) .home-toolbar {
+  min-height: 150px;
+  align-items: center;
+}
+
+.home-page:not(:has(.home-dashboard)) .audit-picker {
+  width: min(100%, 720px);
+  margin-top: 4px;
+  max-width: none;
+}
+
+.audit-history__item,
+.audit-history__item--picker {
+  min-height: 78px;
+  border-color: rgba(191,101,51,.18);
+  background:
+    linear-gradient(90deg, rgba(255,253,248,.96) 0%, rgba(255,253,248,.92) 76%, rgba(191,101,51,.06) 100%);
+}
+
+.audit-history__open {
+  min-height: 78px;
+}
+
+.audit-history__open strong {
+  color: var(--graphite);
+}
+
+.audit-history__open small {
+  color: var(--muted);
+}
+
+.home-page:has(.home-dashboard) .home-toolbar {
+  padding: 14px 16px;
+  border-radius: 18px;
+}
+
+.home-page:has(.home-dashboard) .field-hero {
+  min-height: 150px;
+  padding: 18px;
+  border-radius: 18px;
+}
+
+.home-page:has(.home-dashboard) .field-hero h1 {
+  margin-top: 8px;
+  font-size: clamp(28px, 4.8vw, 42px);
+}
+
+.home-page:has(.home-dashboard) .progress-ring {
+  width: 82px;
+  height: 82px;
+}
+
+.home-page:has(.home-dashboard) .progress-ring strong {
+  font-size: 22px;
+}
+
+.home-page:has(.home-dashboard) .field-stats {
+  gap: 10px;
+}
+
+.home-page:has(.home-dashboard) .stat-card {
+  min-height: 82px;
+  padding: 13px;
+}
+
+.home-page:has(.home-dashboard) .stat-card__value {
+  font-size: 27px;
+}
+
+.home-page:has(.home-dashboard) .field-action {
+  min-height: 78px;
+}
+
+.home-page .field-action--lookup .field-action__icon,
+.bottom-nav--audit .nav-button:nth-child(3).is-active {
+  color: #8F4425;
+}
+
+.home-page .field-action--lookup .field-action__icon {
+  background: #F2E3D8;
+}
+
+.field-page {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.field-session-bar {
+  min-height: 70px;
+  margin-bottom: 0;
+  border-radius: 18px;
+}
+
+.field-progress-strip {
+  margin: 0;
+}
+
+.field-save-banner {
+  margin: 0 0 2px;
+  min-height: 38px;
+  padding: 9px 11px;
+}
+
+.field-page--reader-active .field-progress-strip,
+.field-page--reader-active .field-progress-bar,
+.field-page--reader-active .field-save-banner {
+  display: none;
+}
+
+.field-page--reader-active .nfc-panel--field {
+  min-height: calc(100dvh - 190px - env(safe-area-inset-bottom));
+}
+
+.nfc-panel--field {
+  margin-top: 0;
+}
+
+.latest-conferences--bottom {
+  margin-top: 6px;
+  margin-bottom: 8px;
+  padding: 12px;
+  background: rgba(255,253,248,.74);
+}
+
+.latest-conferences--bottom .section-heading {
+  margin-bottom: 8px;
+}
+
+.latest-conferences--bottom .section-heading h2 {
+  font-size: 16px;
+}
+
+.latest-conferences--bottom .latest-conferences__list {
+  gap: 6px;
+}
+
+.latest-conferences--bottom .latest-conference {
+  min-height: 50px;
+  grid-template-columns: minmax(50px, auto) 1fr auto;
+}
+
+.latest-conferences--bottom .latest-conference__animal {
+  font-size: 22px;
+}
+
+.latest-conferences--bottom .latest-conferences__correct {
+  min-height: 38px;
+}
+
+@media (min-width: 900px) {
+  .home-page:not(:has(.home-dashboard)) {
+    grid-template-columns: minmax(360px, .9fr) minmax(360px, 1fr);
+    align-items: start;
+  }
+
+  .home-page:not(:has(.home-dashboard)) .home-toolbar {
+    min-height: 220px;
+  }
+
+  .home-page:not(:has(.home-dashboard)) .audit-picker,
+  .home-page:not(:has(.home-dashboard)) .home-empty-state {
+    margin-top: 0;
+    align-self: stretch;
+  }
+
+  .home-page:not(:has(.home-dashboard)) .audit-picker {
+    grid-template-columns: 1fr;
+  }
+
+  .field-page {
+    width: min(860px, 100%);
+  }
+}
+
+@media (max-width: 680px) {
+  .home-page:not(:has(.home-dashboard)) .home-toolbar {
+    min-height: 156px;
+  }
+
+  .home-page:has(.home-dashboard) {
+    gap: 10px;
+  }
+
+  .home-page:has(.home-dashboard) .home-toolbar {
+    padding: 13px;
+  }
+
+  .home-page:has(.home-dashboard) .field-hero {
+    min-height: 128px;
+    grid-template-columns: 1fr auto;
+    padding: 14px;
+  }
+
+  .home-page:has(.home-dashboard) .progress-ring {
+    width: 66px;
+    height: 66px;
+  }
+
+  .home-page:has(.home-dashboard) .progress-ring strong {
+    font-size: 17px;
+  }
+
+  .home-page:has(.home-dashboard) .field-stats {
+    gap: 8px;
+  }
+
+  .home-page:has(.home-dashboard) .stat-card {
+    min-height: 76px;
+    padding: 11px;
+  }
+
+  .home-page:has(.home-dashboard) .field-action {
+    min-height: 72px;
+  }
+
+  .audit-history__item,
+  .audit-history__item--picker,
+  .audit-history__open {
+    min-height: 82px;
+  }
+
+  .field-progress-strip {
+    gap: 6px;
+  }
+
+  .field-progress-strip div {
+    min-height: 58px;
+    padding: 8px 5px;
+  }
+
+  .field-progress-strip span {
+    font-size: 9px;
+  }
+
+  .field-progress-strip strong {
+    font-size: 23px;
+  }
+
+  .field-session-bar {
+    min-height: 66px;
+    padding: 10px;
+  }
+
+  .field-session-bar strong {
+    font-size: 24px;
+  }
+
+  .field-session-actions .compact-action {
+    width: 48px;
+    height: 48px;
+    min-height: 48px;
+    font-size: 0;
+  }
+
+  .field-save-banner {
+    font-size: 10.5px;
+  }
+
+  .nfc-panel--field {
+    min-height: 382px;
+  }
+
+  .field-page--reader-active .nfc-panel--field {
+    min-height: calc(100dvh - 156px - env(safe-area-inset-bottom));
+  }
+}
+
+.bottom-nav--audit .nav-button:nth-child(3).is-active {
+  color: #FFFDF8;
+}
