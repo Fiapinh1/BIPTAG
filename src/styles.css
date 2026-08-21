@@ -5440,3 +5440,575 @@ body {
 .bottom-nav--audit .nav-button:nth-child(3).is-active {
   color: #FFFDF8;
 }
+
+body:has(.field-page--reader-flow) {
+  overflow: hidden;
+  background: #171411;
+}
+
+body:has(.field-page--reader-flow) .topbar,
+body:has(.field-page--reader-flow) .bottom-nav {
+  display: none;
+}
+
+body:has(.field-page--reader-flow) .app-shell {
+  min-height: 100dvh;
+  padding-bottom: 0;
+  background: #171411;
+}
+
+body:has(.field-page--reader-flow) .main-content {
+  width: 100%;
+  max-width: none;
+  min-height: 100dvh;
+  padding: 0;
+}
+
+.field-page--reader-flow {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  width: 100vw;
+  max-width: none;
+  height: 100dvh;
+  margin: 0;
+  padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
+  overflow: hidden;
+  display: grid;
+  align-items: stretch;
+  background:
+    radial-gradient(circle at 50% -15%, rgba(184,100,50,.34), transparent 32%),
+    radial-gradient(circle at 110% 100%, rgba(226,171,54,.18), transparent 30%),
+    #171411;
+}
+
+.field-page--reader-active > :not(.nfc-panel--field) {
+  display: none;
+}
+
+.field-page--reader-active .nfc-panel--field {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: clamp(12px, 2.8vh, 22px);
+  border-radius: 22px;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(88px, 1fr) auto auto auto;
+  align-content: stretch;
+  gap: clamp(8px, 1.4vh, 13px);
+  overflow: hidden;
+  border-color: rgba(226,171,54,.72);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 20px 48px rgba(0,0,0,.42);
+}
+
+.nfc-panel__field-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.nfc-panel__field-meta div {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 14px;
+  background: rgba(255,255,255,.07);
+}
+
+.nfc-panel__field-meta span {
+  display: block;
+  margin-bottom: 3px;
+  color: rgba(255,255,255,.58);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+
+.nfc-panel__field-meta strong {
+  display: block;
+  color: #FFFDF8;
+  font-size: clamp(15px, 4.5vw, 21px);
+  line-height: 1.05;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nfc-panel__field-meta div:last-child {
+  min-width: 94px;
+  text-align: right;
+}
+
+.nfc-panel__mini-progress {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255,255,255,.12);
+}
+
+.nfc-panel__mini-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #E2AB36, #B86432);
+  box-shadow: 0 0 18px rgba(226,171,54,.38);
+}
+
+.field-page--reader-active .nfc-panel__status {
+  justify-self: center;
+  min-height: 34px;
+  padding: 8px 13px;
+}
+
+.field-page--reader-active .nfc-panel__visual {
+  align-self: center;
+  justify-self: center;
+  width: min(32vh, 156px);
+  height: min(32vh, 156px);
+  min-width: 112px;
+  min-height: 112px;
+}
+
+.field-page--reader-active .nfc-panel__visual svg {
+  width: clamp(48px, 13vw, 68px);
+  height: clamp(48px, 13vw, 68px);
+}
+
+.field-page--reader-active .nfc-panel__text {
+  align-self: center;
+  padding: 0 2px;
+}
+
+.field-page--reader-active .nfc-panel__text .eyebrow {
+  font-size: 11px;
+}
+
+.field-page--reader-active .nfc-panel--field h1 {
+  margin: 1px 0 3px;
+  font-size: clamp(34px, 10vw, 58px);
+  line-height: .98;
+}
+
+.field-page--reader-active .nfc-panel__text p {
+  max-width: 34ch;
+  margin: 0 auto;
+  font-size: clamp(14px, 3.8vw, 18px);
+  line-height: 1.25;
+}
+
+.nfc-panel__recent {
+  min-height: 0;
+  padding: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 16px;
+  background: rgba(255,255,255,.08);
+}
+
+.nfc-panel__recent-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.nfc-panel__recent-head span {
+  color: rgba(255,255,255,.66);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+
+.nfc-panel__recent-head button {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(226,171,54,.42);
+  border-radius: 999px;
+  color: #F4C964;
+  background: rgba(226,171,54,.10);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.nfc-panel__recent-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.nfc-panel__recent-item {
+  min-width: 0;
+  min-height: 56px;
+  padding: 8px 7px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 13px;
+  color: #FFFDF8;
+  background: rgba(15,13,11,.50);
+  font: inherit;
+  text-align: left;
+}
+
+.nfc-panel__recent-item strong,
+.nfc-panel__recent-item span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfc-panel__recent-item strong {
+  font-size: clamp(20px, 6vw, 30px);
+  line-height: 1;
+}
+
+.nfc-panel__recent-item span {
+  margin-top: 5px;
+  color: rgba(255,255,255,.58);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.field-page--reader-active .button {
+  min-height: 48px;
+}
+
+.field-page--reader-active .button--ghost {
+  background: rgba(255,255,255,.10);
+}
+
+.field-page--reader-flow.field-page--scanned > :not(.field-conference):not(.field-outcome):not(.app-modal),
+.field-page--reader-flow.field-page--outcome-active > :not(.field-outcome):not(.app-modal) {
+  display: none;
+}
+
+.field-page--reader-flow.field-page--scanned,
+.field-page--reader-flow.field-page--outcome-active {
+  align-items: stretch;
+}
+
+.field-page--reader-flow .field-conference {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+  overflow: hidden;
+}
+
+.field-page--reader-flow .field-identifiers {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(118px, .85fr);
+  gap: 8px;
+}
+
+.field-page--reader-flow .field-id-block {
+  min-height: 0;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: #FFFDF8;
+}
+
+.field-page--reader-flow .field-id-block span {
+  font-size: 9px;
+}
+
+.field-page--reader-flow .field-id-block--tag strong {
+  font-size: clamp(20px, 7vw, 34px);
+  line-height: 1;
+  word-break: break-all;
+}
+
+.field-page--reader-flow .field-id-block--animal strong {
+  font-size: clamp(36px, 13vw, 58px);
+  line-height: .95;
+}
+
+.field-page--reader-flow .context-alert {
+  min-height: 0;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 14px;
+}
+
+.field-page--reader-flow .context-alert svg {
+  width: 20px;
+  height: 20px;
+}
+
+.field-page--reader-flow .context-alert strong {
+  font-size: 13px;
+}
+
+.field-page--reader-flow .context-alert span {
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.field-page--reader-flow .field-question,
+.field-page--reader-flow .guided-decision,
+.field-page--reader-flow .field-outcome {
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  margin: 0;
+  padding: clamp(12px, 2.4vh, 18px);
+  overflow: hidden;
+  border-radius: 20px;
+  box-shadow: 0 18px 42px rgba(0,0,0,.26);
+}
+
+.field-page--reader-flow .field-question {
+  display: grid;
+  grid-template-rows: auto auto minmax(84px, 1fr) auto auto auto;
+  align-content: stretch;
+  gap: clamp(7px, 1.3vh, 11px);
+}
+
+.field-page--reader-flow .field-question .eyebrow {
+  align-self: end;
+}
+
+.field-page--reader-flow .field-question h2 {
+  margin: 0;
+  font-size: clamp(28px, 8.5vw, 48px);
+  line-height: 1.03;
+}
+
+.field-page--reader-flow .animal-input--field {
+  width: 100%;
+  height: 100%;
+  min-height: 84px;
+  max-height: 150px;
+  padding: 6px 10px;
+  font-size: clamp(42px, 17vw, 84px);
+  line-height: 1;
+}
+
+.field-page--reader-flow .field-question .button,
+.field-page--reader-flow .guided-decision .button,
+.field-page--reader-flow .field-outcome .button {
+  min-height: 48px;
+  border-radius: 14px;
+  font-size: clamp(14px, 4vw, 18px);
+}
+
+.field-page--reader-flow .guided-decision {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 9px;
+}
+
+.field-page--reader-flow .guided-decision h2 {
+  margin: 0;
+  font-size: clamp(26px, 8vw, 44px);
+  line-height: 1.04;
+}
+
+.field-page--reader-flow .guided-decision p {
+  margin: 0;
+  font-size: clamp(13px, 3.4vw, 16px);
+  line-height: 1.3;
+}
+
+.field-page--reader-flow .field-outcome {
+  display: grid;
+  align-content: center;
+  gap: clamp(8px, 1.5vh, 12px);
+}
+
+.field-page--reader-flow .field-outcome__icon {
+  width: clamp(56px, 14vw, 78px);
+  height: clamp(56px, 14vw, 78px);
+  margin: 0 auto;
+}
+
+.field-page--reader-flow .field-outcome h1 {
+  margin: 0;
+  font-size: clamp(29px, 9vw, 50px);
+  line-height: 1.02;
+}
+
+.field-page--reader-flow .field-outcome p {
+  max-width: 36ch;
+  margin: 0 auto;
+  font-size: clamp(13px, 3.7vw, 17px);
+  line-height: 1.32;
+}
+
+.field-page--reader-flow .outcome-summary,
+.field-page--reader-flow .action-result {
+  display: grid;
+  gap: 7px;
+}
+
+.field-page--reader-flow .outcome-summary div,
+.field-page--reader-flow .action-result div {
+  min-height: 0;
+  padding: 8px 10px;
+  border-radius: 13px;
+}
+
+.field-page--reader-flow .outcome-summary strong,
+.field-page--reader-flow .action-result strong {
+  font-size: clamp(20px, 6vw, 32px);
+}
+
+.field-page--reader-flow .outcome-action-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.field-page--reader-flow .outcome-action-button {
+  min-height: 54px;
+  padding: 9px 11px;
+  border-radius: 14px;
+}
+
+.field-page--reader-flow .outcome-action-button small {
+  display: none;
+}
+
+@media (min-width: 820px) {
+  .field-page--reader-flow {
+    place-items: center;
+    padding: 22px;
+  }
+
+  .field-page--reader-active .nfc-panel--field,
+  .field-page--reader-flow .field-conference,
+  .field-page--reader-flow .field-outcome {
+    width: min(720px, 100%);
+    max-height: min(780px, 100%);
+    border-radius: 26px;
+  }
+}
+
+@media (max-height: 720px) {
+  .field-page--reader-active .nfc-panel--field {
+    padding: 10px;
+    gap: 7px;
+    border-radius: 18px;
+    grid-template-rows: auto auto auto minmax(74px, .8fr) auto auto auto;
+  }
+
+  .nfc-panel__field-meta div {
+    padding: 8px 10px;
+  }
+
+  .field-page--reader-active .nfc-panel__status {
+    min-height: 30px;
+    padding: 6px 11px;
+  }
+
+  .field-page--reader-active .nfc-panel__visual {
+    width: 108px;
+    height: 108px;
+    min-width: 98px;
+    min-height: 98px;
+  }
+
+  .field-page--reader-active .nfc-panel--field h1 {
+    font-size: clamp(30px, 9vw, 42px);
+  }
+
+  .field-page--reader-active .nfc-panel__text p {
+    font-size: 13px;
+  }
+
+  .nfc-panel__recent {
+    padding: 8px;
+  }
+
+  .nfc-panel__recent-item {
+    min-height: 48px;
+    padding: 7px 6px;
+  }
+
+  .nfc-panel__recent-item strong {
+    font-size: 21px;
+  }
+
+  .field-page--reader-flow .field-conference {
+    gap: 6px;
+  }
+
+  .field-page--reader-flow .field-identifiers {
+    gap: 6px;
+  }
+
+  .field-page--reader-flow .field-id-block {
+    padding: 8px 9px;
+    border-radius: 13px;
+  }
+
+  .field-page--reader-flow .field-id-block--tag strong {
+    font-size: clamp(18px, 6.2vw, 28px);
+  }
+
+  .field-page--reader-flow .field-id-block--animal strong {
+    font-size: clamp(30px, 10vw, 46px);
+  }
+
+  .field-page--reader-flow .context-alert {
+    padding: 7px 9px;
+  }
+
+  .field-page--reader-flow .field-question,
+  .field-page--reader-flow .guided-decision,
+  .field-page--reader-flow .field-outcome {
+    padding: 10px;
+    gap: 7px;
+    border-radius: 16px;
+  }
+
+  .field-page--reader-flow .field-question h2,
+  .field-page--reader-flow .guided-decision h2 {
+    font-size: clamp(25px, 7.4vw, 36px);
+  }
+
+  .field-page--reader-flow .animal-input--field {
+    min-height: 72px;
+    max-height: 112px;
+    font-size: clamp(38px, 15vw, 64px);
+  }
+
+  .field-page--reader-flow .field-question .button,
+  .field-page--reader-flow .guided-decision .button,
+  .field-page--reader-flow .field-outcome .button {
+    min-height: 44px;
+  }
+
+  .field-page--reader-flow .field-outcome h1 {
+    font-size: clamp(27px, 8vw, 40px);
+  }
+
+  .field-page--reader-flow .field-outcome__icon {
+    width: 54px;
+    height: 54px;
+  }
+}
+
+@media (max-width: 380px) {
+  .field-page--reader-active {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .nfc-panel__recent-list {
+    gap: 5px;
+  }
+
+  .nfc-panel__recent-item span {
+    font-size: 9px;
+  }
+}

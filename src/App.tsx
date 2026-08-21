@@ -1537,7 +1537,7 @@ function AuditView({
         (record.fieldDecision === 'confirmed_physical_animal' || record.fieldDecision === 'confirmed_match')
       )
       .sort((a, b) => (b.sequence ?? 0) - (a.sequence ?? 0) || b.scannedAt.localeCompare(a.scannedAt))
-      .slice(0, 2),
+      .slice(0, 3),
     [auditRecords]
   );
 
@@ -2044,9 +2044,11 @@ function AuditView({
     onPaused();
   }
 
+  const isNfcFieldFlow = readerActive && !manualMode;
   const fieldPageClass = [
     'page field-page',
     scan ? 'field-page--scanned' : '',
+    isNfcFieldFlow ? 'field-page--reader-flow' : '',
     readerActive && !scan && !outcome && !manualMode ? 'field-page--reader-active' : '',
     manualMode && !scan && !outcome ? 'field-page--manual' : '',
     decision ? 'field-page--decision' : '',
@@ -2198,6 +2200,23 @@ function AuditView({
 
       {!manualMode && !scan && !outcome && (
         <div className={`nfc-panel nfc-panel--field ${readerActive ? 'is-active' : ''}`}>
+          {readerActive && (
+            <div className="nfc-panel__field-meta">
+              <div>
+                <span>Fazenda</span>
+                <strong>{activeAudit.farmName}</strong>
+              </div>
+              <div>
+                <span>Progresso</span>
+                <strong>{fieldMetrics.auditedUnique}/{activeAudit.validTags ?? activeAudit.totalTags}</strong>
+              </div>
+            </div>
+          )}
+          {readerActive && (
+            <div className="nfc-panel__mini-progress" aria-label={`${fieldMetrics.percent}% concluido`}>
+              <span style={{ width: `${fieldMetrics.percent}%` }} />
+            </div>
+          )}
           <div className="nfc-panel__status">
             <span />
             {readerActive ? 'Leitor NFC ativo' : 'Leitor NFC pronto'}
@@ -2208,6 +2227,22 @@ function AuditView({
             <h1>{readerActive ? 'Aproxime a tag' : 'Pronto para conferir'}</h1>
             <p>{readerMessage}</p>
           </div>
+          {readerActive && latestConfirmedRecords.length > 0 && (
+            <div className="nfc-panel__recent" aria-label="Ultimas conferencias">
+              <div className="nfc-panel__recent-head">
+                <span>Ultimas conferencias</span>
+                <button type="button" onClick={() => openCorrection(latestConfirmedRecords[0])}>Corrigir</button>
+              </div>
+              <div className="nfc-panel__recent-list">
+                {latestConfirmedRecords.map((record) => (
+                  <button key={record.id} type="button" className="nfc-panel__recent-item" onClick={() => openCorrection(record)}>
+                    <strong>{record.observedAnimal}</strong>
+                    <span>...{record.tagNumber.slice(-4)} · {record.source === 'nfc' ? 'NFC' : 'Manual'}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {!readerActive ? (
             <button className="button button--primary button--full button--field" onClick={activateReader} disabled={!isWebNfcSupported()}><NfcReaderGlyph className="nfc-reader-glyph--inline" /> Ativar leitor NFC</button>
           ) : (
@@ -2223,7 +2258,7 @@ function AuditView({
         <div className="alert alert--warning"><IssuesIcon /><span>Web NFC indisponível neste acesso. Para a leitura real, use a versão HTTPS no Chrome Android.</span></div>
       )}
 
-      {!scan && !outcome && !manualMode && latestConfirmedRecords.length > 0 && (
+      {!readerActive && !scan && !outcome && !manualMode && latestConfirmedRecords.length > 0 && (
         <section className="latest-conferences latest-conferences--bottom" aria-labelledby="latest-conferences-title-bottom">
           <div className="section-heading section-heading--compact">
             <div><span className="eyebrow">REGISTROS CONFIRMADOS</span><h2 id="latest-conferences-title-bottom">Ultimas conferencias</h2></div>
