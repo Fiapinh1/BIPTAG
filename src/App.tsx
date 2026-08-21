@@ -1,4 +1,4 @@
-import { Children, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Children, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, newId } from './db/db';
 import { EmptyState } from './components/EmptyState';
@@ -158,6 +158,13 @@ type DecisionState = {
   status: Exclude<RecordStatus, 'correct'>;
   observedAnimal: string | null;
   animalTagContext: AnimalTagContext | null;
+};
+
+type KnownIssueDraft = {
+  id: string;
+  tagNumber: string;
+  type: KnownIssueType;
+  note: string;
 };
 
 type OutcomeState =
@@ -1117,6 +1124,11 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [patternDraft, setPatternDraft] = useState<SmartTagPattern | null>(null);
   const [patternConfirmed, setPatternConfirmed] = useState(false);
+  const [draggingFile, setDraggingFile] = useState(false);
+  const [knownIssueTag, setKnownIssueTag] = useState('');
+  const [knownIssueType, setKnownIssueType] = useState<KnownIssueType>('reversed_collar');
+  const [knownIssueNote, setKnownIssueNote] = useState('');
+  const [knownIssueDrafts, setKnownIssueDrafts] = useState<KnownIssueDraft[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -1125,6 +1137,9 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
     setPreview(null);
     setPatternDraft(null);
     setPatternConfirmed(false);
+    setKnownIssueDrafts([]);
+    setKnownIssueTag('');
+    setKnownIssueNote('');
     setError(null);
     if (!selected) return;
     setBusy(true);
@@ -1137,6 +1152,54 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
     } finally {
       setBusy(false);
     }
+  }
+
+  function handleFileDrag(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    setDraggingFile(event.type === 'dragover' || event.type === 'dragenter');
+  }
+
+  function handleFileDrop(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    setDraggingFile(false);
+    const dropped = event.dataTransfer.files?.[0] ?? null;
+    if (!dropped) return;
+    if (!/\.(xlsx|xls)$/i.test(dropped.name)) {
+      setError('Arraste uma planilha .xlsx ou .xls exportada do Nedap.');
+      return;
+    }
+    void handleFile(dropped);
+  }
+
+  function addKnownIssueDraft() {
+    const normalizedTag = knownIssueTag.replace(/[^0-9]/g, '').trim();
+    if (!normalizedTag) {
+      setError('Informe a SmartTag do problema conhecido.');
+      return;
+    }
+
+    const nextDraft: KnownIssueDraft = {
+      id: newId('known_draft'),
+      tagNumber: normalizedTag,
+      type: knownIssueType,
+      note: knownIssueNote.trim()
+    };
+    setKnownIssueDrafts((current) => {
+      const existing = current.find((item) => item.tagNumber === normalizedTag);
+      if (existing) {
+        return current.map((item) => item.tagNumber === normalizedTag ? { ...nextDraft, id: item.id } : item);
+      }
+      return [nextDraft, ...current];
+    });
+    setKnownIssueTag('');
+    setKnownIssueNote('');
+    setError(null);
+  }
+
+  function removeKnownIssueDraft(id: string) {
+    setKnownIssueDrafts((current) => current.filter((item) => item.id !== id));
   }
 
   async function applyPattern() {
@@ -1177,7 +1240,7 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
         invalidTags: preview.stats.invalidTags,
         tagPattern: preview.pattern,
         linkedTags: preview.stats.linkedTags,
-        issueCount: preview.issues.length
+        issueCount: preview.issues.length + knownIssueDrafts.length
       };
 
       const assignmentRows = preview.assignments.map((assignment) => ({ ...assignment, id: newId('tag'), auditId }));
@@ -1199,14 +1262,25 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
         syncedAt: null,
         syncStatus: 'pending' as const
       }));
+      const knownIssueRows: KnownIssue[] = knownIssueDrafts.map((issue) => ({
+        id: newId('known_issue'),
+        auditId,
+        tagNumber: issue.tagNumber,
+        type: issue.type,
+        note: issue.note || null,
+        createdAt: now,
+        updatedAt: now,
+        syncStatus: 'pending'
+      }));
 
-      await db.transaction('rw', db.audits, db.tagAssignments, db.effectiveTagAssignments, db.importIssues, async () => {
+      await db.transaction('rw', db.audits, db.tagAssignments, db.effectiveTagAssignments, db.importIssues, db.knownIssues, async () => {
         await db.audits.add(audit);
         await db.tagAssignments.bulkAdd(assignmentRows);
         await db.effectiveTagAssignments.bulkAdd(effectiveRows);
         if (preview.issues.length) {
           await db.importIssues.bulkAdd(preview.issues.map((issue) => ({ ...issue, id: newId('issue'), auditId })));
         }
+        if (knownIssueRows.length) await db.knownIssues.bulkAdd(knownIssueRows);
       });
       onCreated(auditId);
     } catch (err) {
@@ -1222,7 +1296,7 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
         <div>
           <span className="eyebrow">NOVA AUDITORIA</span>
           <h1>{embedded ? 'Planejar auditoria' : 'Criar nova auditoria'}</h1>
-          <p>Nomeie a fazenda, importe o <strong>Tags.xlsx original</strong> e confirme o padrao das SmartTags antes de ir para o campo.</p>
+          <p>Crie a fazenda, carregue o Tags.xlsx e prepare os avisos antes de iniciar a conferencia.</p>
         </div>
       </div>
 
@@ -1233,14 +1307,20 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
       </div>
 
       <div className="form-card import-plan-card">
-        <label className="field-label" htmlFor="farm">Fazenda</label>
+        <label className="field-label" htmlFor="farm">Nome da fazenda</label>
         <input id="farm" className="text-input" placeholder="Ex.: Fazenda Santa Juliana" value={farmName} onChange={(event) => setFarmName(event.target.value)} />
 
-        <label className="file-drop">
-          <input type="file" accept=".xlsx,.xls" onChange={(event) => handleFile(event.target.files?.[0] ?? null)} />
+        <label
+          className={`file-drop ${draggingFile ? 'is-dragging' : ''}`}
+          onDragEnter={handleFileDrag}
+          onDragOver={handleFileDrag}
+          onDragLeave={handleFileDrag}
+          onDrop={handleFileDrop}
+        >
+          <input key={file?.name ?? 'empty-file'} type="file" accept=".xlsx,.xls" onChange={(event) => handleFile(event.target.files?.[0] ?? null)} />
           <span className="file-drop__icon"><ImportIcon size={30} /></span>
-          <strong>{file ? file.name : 'Selecionar Tags.xlsx'}</strong>
-          <small>{file ? 'Toque para trocar o arquivo' : 'Arquivo exportado diretamente do Nedap Now'}</small>
+          <strong>{file ? file.name : 'Selecionar ou arrastar Tags.xlsx'}</strong>
+          <small>{file ? 'Arquivo carregado. Confira o preparo.' : 'No PC, arraste a planilha aqui. No celular, toque para escolher.'}</small>
         </label>
       </div>
 
@@ -1248,40 +1328,105 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
       {error && <div className="alert alert--danger"><IssuesIcon /> <span>{error}</span></div>}
 
       {preview && (
-        <>
-          <div className="section-heading section-heading--compact"><div><span className="eyebrow">PRÉ-VALIDAÇÃO</span><h2>Base reconhecida</h2></div></div>
-          <div className="stats-grid">
-            <StatCard label="Total de tags" value={preview.stats.totalTags} />
-            <StatCard label="Animais vinculados" value={preview.stats.linkedTags} />
-            <StatCard label="Tags sem vínculo" value={preview.stats.tagsWithoutAnimal} tone={preview.stats.tagsWithoutAnimal ? 'warning' : 'default'} />
-            <StatCard label="Animais multitag" value={preview.stats.animalsWithMultipleTags} tone={preview.stats.animalsWithMultipleTags ? 'warning' : 'default'} />
-          </div>
-          {patternDraft && (
-            <div className="pattern-card">
+        <div className="import-prep-overlay" role="dialog" aria-modal="true" aria-labelledby="import-prep-title">
+          <div className="import-prep-panel">
+            <div className="import-prep-header">
               <div>
-                <span className="eyebrow">PADRAO DAS SMARTTAGS</span>
-                <h2>{patternDraft.prefix}</h2>
-                <p>Comprimento: {patternDraft.length} digitos. Formato: somente numeros.</p>
+                <span className="eyebrow">PREPARO DA AUDITORIA</span>
+                <h2 id="import-prep-title">{farmName.trim() || 'Nova fazenda'}</h2>
+                <p>{file?.name}</p>
               </div>
-              <div className="pattern-card__fields">
-                <label>
-                  <span>Prefixo</span>
-                  <input className="text-input" inputMode="numeric" value={patternDraft.prefix} onChange={(event) => { setPatternDraft({ ...patternDraft, prefix: event.target.value.replace(/[^0-9]/g, '') }); setPatternConfirmed(false); }} />
-                </label>
-                <label>
-                  <span>Digitos</span>
-                  <input className="text-input" inputMode="numeric" value={patternDraft.length} onChange={(event) => { setPatternDraft({ ...patternDraft, length: Number(event.target.value.replace(/[^0-9]/g, '')) || 0 }); setPatternConfirmed(false); }} />
-                </label>
+              <button className="app-modal__close" onClick={() => void handleFile(null)} aria-label="Trocar arquivo">×</button>
+            </div>
+
+            <div className="import-prep-body">
+              <section className="import-prep-section import-prep-section--farm">
+                <label className="field-label" htmlFor="prep-farm">Nome da fazenda</label>
+                <input id="prep-farm" className="text-input" placeholder="Ex.: Fazenda Santa Juliana" value={farmName} onChange={(event) => setFarmName(event.target.value)} />
+              </section>
+
+              <section className="import-prep-section import-prep-section--summary">
+                <div className="import-prep-title-row">
+                  <div><span className="eyebrow">BASE NEDAP</span><h3>Resumo reconhecido</h3></div>
+                  <span className="import-prep-file">{file?.name}</span>
+                </div>
+                <div className="stats-grid import-prep-stats">
+                  <StatCard label="Total de tags" value={preview.stats.totalTags} />
+                  <StatCard label="Animais vinculados" value={preview.stats.linkedTags} />
+                  <StatCard label="Tags sem vinculo" value={preview.stats.tagsWithoutAnimal} tone={preview.stats.tagsWithoutAnimal ? 'warning' : 'default'} />
+                  <StatCard label="Animais multitag" value={preview.stats.animalsWithMultipleTags} tone={preview.stats.animalsWithMultipleTags ? 'warning' : 'default'} />
+                </div>
+              </section>
+
+              {patternDraft && (
+                <section className={`pattern-card import-prep-section import-prep-pattern ${patternConfirmed ? 'is-confirmed' : ''}`}>
+                  <div>
+                    <span className="eyebrow">PADRAO DAS SMARTTAGS</span>
+                    <h2>{patternDraft.prefix || 'Sem prefixo'}</h2>
+                  </div>
+                  <div className="pattern-card__fields">
+                    <label>
+                      <span>Prefixo</span>
+                      <input className="text-input" inputMode="numeric" value={patternDraft.prefix} onChange={(event) => { setPatternDraft({ ...patternDraft, prefix: event.target.value.replace(/[^0-9]/g, '') }); setPatternConfirmed(false); }} />
+                    </label>
+                    <label>
+                      <span>Digitos</span>
+                      <input className="text-input" inputMode="numeric" value={patternDraft.length} onChange={(event) => { setPatternDraft({ ...patternDraft, length: Number(event.target.value.replace(/[^0-9]/g, '')) || 0 }); setPatternConfirmed(false); }} />
+                    </label>
+                  </div>
+                  <button className="button button--secondary button--full" disabled={busy || !patternDraft.prefix || !patternDraft.length} onClick={() => void applyPattern()}>
+                    {patternConfirmed ? 'Padrao confirmado' : 'Confirmar padrao'}
+                  </button>
+                </section>
+              )}
+
+              <section className="import-prep-section prep-known-issues">
+                <div className="import-prep-title-row">
+                  <div><span className="eyebrow">ANTES DA ORDENHA</span><h3>Problemas com SmartTag</h3></div>
+                  <strong>{knownIssueDrafts.length}</strong>
+                </div>
+                <div className="prep-known-issues__form">
+                  <input className="text-input" inputMode="numeric" placeholder="SmartTag com problema" value={knownIssueTag} onChange={(event) => setKnownIssueTag(event.target.value.replace(/[^0-9]/g, ''))} />
+                  <select className="text-input" value={knownIssueType} onChange={(event) => setKnownIssueType(event.target.value as KnownIssueType)}>
+                    {KNOWN_ISSUE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                  <input className="text-input" placeholder="Observacao opcional" value={knownIssueNote} onChange={(event) => setKnownIssueNote(event.target.value)} />
+                  <button className="button button--secondary button--full" onClick={addKnownIssueDraft}>Adicionar problema</button>
+                </div>
+                {knownIssueDrafts.length > 0 ? (
+                  <div className="prep-known-issues__list">
+                    {knownIssueDrafts.map((issue) => (
+                      <div className="prep-known-issue" key={issue.id}>
+                        <IssuesIcon size={18} />
+                        <div>
+                          <strong>{knownIssueLabel(issue.type)}</strong>
+                          <span>{issue.tagNumber}</span>
+                          {issue.note && <small>{issue.note}</small>}
+                        </div>
+                        <button type="button" onClick={() => removeKnownIssueDraft(issue.id)} aria-label="Remover problema">×</button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="prep-known-issues__empty">Cadastre aqui tags invertidas, fora de uso ou com falha conhecida antes de entrar no campo.</p>
+                )}
+              </section>
+            </div>
+
+            <div className="import-prep-footer">
+              {error && <div className="alert alert--danger"><IssuesIcon /> <span>{error}</span></div>}
+              <div className="summary-strip">
+                <span><CheckIcon /> Estrutura Nedap reconhecida</span>
+                <span>{preview.stats.duplicateTags} duplicadas · {preview.issues.length} alertas · {knownIssueDrafts.length} conhecidos</span>
               </div>
-              <button className="button button--secondary button--full" disabled={busy || !patternDraft.prefix || !patternDraft.length} onClick={() => void applyPattern()}>
-                {patternConfirmed ? 'Padrao confirmado' : 'Confirmar padrao'}
+              <button className="button button--primary button--full button--large" disabled={!farmName.trim() || busy || !patternConfirmed} onClick={saveImport}>
+                Salvar e iniciar auditoria
               </button>
             </div>
-          )}
-          <div className="summary-strip"><span><CheckIcon /> Estrutura Nedap reconhecida</span><span>{preview.stats.duplicateTags} tags duplicadas</span></div>
-          <button className="button button--primary button--full button--large" disabled={!farmName.trim() || busy || !patternConfirmed} onClick={saveImport}>Salvar e iniciar auditoria</button>
-        </>
+          </div>
+        </div>
       )}
+
     </section>
   );
 }
@@ -2148,7 +2293,10 @@ function AuditView({
           <div className="manual-field-screen__header">
             <span className="eyebrow">MODO MANUAL</span>
             <h1>Digitar SmartTag</h1>
-            <p>Use o padrao definido da fazenda. Digite somente os digitos finais quando o prefixo aparecer abaixo.</p>
+            <div className="manual-field-meta">
+              <div><span>Fazenda</span><strong>{activeAudit.farmName}</strong></div>
+              <div><span>Progresso</span><strong>{fieldMetrics.auditedUnique}/{activeAudit.validTags ?? activeAudit.totalTags}</strong></div>
+            </div>
           </div>
 
           <div className="manual-field-card">
@@ -2159,7 +2307,7 @@ function AuditView({
               </div>
             )}
 
-            <label className="field-label" htmlFor="manual-tag">Digitos da tag</label>
+            <label className="field-label" htmlFor="manual-tag">{manualPrefix ? 'Digitos finais' : 'SmartTag'}</label>
             <input
               id="manual-tag"
               className={`text-input manual-field-input ${manualTooLong ? 'is-invalid' : ''}`}
@@ -2178,6 +2326,23 @@ function AuditView({
                 <span>Tag montada</span>
                 <strong>{manualPreviewTag}</strong>
                 <small>{manualPreviewTag.length}/{manualExpectedLength} digitos</small>
+              </div>
+            )}
+
+            {latestConfirmedRecords.length > 0 && (
+              <div className="manual-recent">
+                <div className="manual-recent__head">
+                  <span>Ultimas conferencias</span>
+                  <button type="button" onClick={() => openCorrection(latestConfirmedRecords[0])}>Corrigir</button>
+                </div>
+                <div className="manual-recent__list">
+                  {latestConfirmedRecords.map((record) => (
+                    <button key={record.id} type="button" className="manual-recent__item" onClick={() => openCorrection(record)}>
+                      <strong>{record.observedAnimal}</strong>
+                      <span>...{record.tagNumber.slice(-4)} · {record.source === 'nfc' ? 'NFC' : 'Manual'}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
