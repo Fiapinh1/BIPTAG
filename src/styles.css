@@ -7241,3 +7241,169 @@ body:has(.field-page--reader-flow) .bottom-nav {
     font-size: clamp(34px, 10vw, 52px);
   }
 }
+
+/* Corrections: NFC standby icon placement, active reader menu, compact lookup cards. */
+.nfc-panel--field.is-standby {
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 14px;
+}
+
+.nfc-panel--field.is-standby .nfc-panel__status {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+
+.nfc-panel--field.is-standby .nfc-panel__text {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.nfc-panel--field.is-standby .nfc-panel__visual {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: end;
+  width: clamp(104px, 25vw, 142px);
+  height: clamp(84px, 20vw, 118px);
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  color: #171411;
+  background: transparent;
+  box-shadow: none;
+  filter: drop-shadow(0 12px 18px rgba(45,38,32,.14));
+}
+
+.nfc-panel--field.is-standby .nfc-panel__visual::before {
+  width: 100%;
+  height: 100%;
+  opacity: .92;
+}
+
+.nfc-panel--field.is-standby .nfc-panel__visual::after {
+  content: "";
+  position: absolute;
+  inset: -6px -2px auto auto;
+  width: 58%;
+  height: 44%;
+  border: 2px solid currentColor;
+  border-color: currentColor transparent transparent;
+  border-radius: 999px;
+  opacity: .18;
+  animation: smarttagWave 2.8s ease-out infinite;
+}
+
+body:has(.field-page--reader-flow) .bottom-nav {
+  display: none;
+}
+
+.field-page--reader-flow {
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+}
+
+.animal-lookup-result--answer {
+  min-height: 0;
+  padding: 14px;
+  gap: 11px;
+  border-radius: 16px;
+}
+
+.animal-lookup-result__content {
+  gap: 7px;
+}
+
+.animal-lookup-result__status {
+  font-size: 10px;
+}
+
+.animal-lookup-result__primary > span,
+.animal-lookup-result__secondary > span {
+  font-size: 10px;
+}
+
+.animal-lookup-result__primary > strong {
+  font-size: clamp(30px, 8vw, 44px);
+  line-height: 1;
+}
+
+.animal-lookup-result--animal-query .animal-lookup-result__primary > strong {
+  font-size: clamp(23px, 6vw, 34px);
+}
+
+.animal-lookup-result__secondary {
+  padding: 7px 9px;
+  border-radius: 11px;
+}
+
+.animal-lookup-result__secondary > strong {
+  font-size: 14px;
+}
+
+.animal-lookup-result.is-empty-link .animal-lookup-result__primary > strong,
+.animal-lookup-empty--answer strong {
+  font-size: clamp(20px, 5.8vw, 30px);
+}
+
+.animal-lookup-result--answer small {
+  font-size: 11px;
+}
+
+@media (max-width: 420px) {
+  .nfc-panel--field.is-standby {
+    grid-template-columns: minmax(0, 1fr) 104px;
+  }
+
+  .nfc-panel--field.is-standby .nfc-panel__visual {
+    width: 104px;
+    height: 86px;
+  }
+
+  .animal-lookup-result--answer {
+    padding: 12px;
+  }
+
+  .animal-lookup-result__primary > strong {
+    font-size: clamp(28px, 8vw, 38px);
+  }
+}
+
+/* Final correction: show audit nav before NFC activation and balance the tag art. */
+.app-shell--audit:not(:has(.field-page--reader-flow)) .bottom-nav {
+  display: grid;
+}
+
+.app-shell--audit:has(.field-page--reader-flow) .bottom-nav {
+  display: none;
+}
+
+.app-shell--audit:not(:has(.field-page--reader-flow)) .field-page {
+  padding-bottom: calc(104px + env(safe-area-inset-bottom));
+}
+
+.nfc-panel--field.is-standby {
+  grid-template-columns: minmax(0, 1fr) minmax(118px, 150px);
+  column-gap: 4px;
+  padding-right: clamp(30px, 8vw, 52px);
+}
+
+.nfc-panel--field.is-standby .nfc-panel__visual {
+  justify-self: start;
+  transform: translateX(-14px);
+  width: clamp(126px, 31vw, 166px);
+  height: clamp(100px, 24vw, 134px);
+  opacity: .96;
+  filter: drop-shadow(0 16px 22px rgba(45,38,32,.16));
+}
+
+@media (max-width: 420px) {
+  .nfc-panel--field.is-standby {
+    grid-template-columns: minmax(0, 1fr) 118px;
+    padding-right: 28px;
+  }
+
+  .nfc-panel--field.is-standby .nfc-panel__visual {
+    width: 122px;
+    height: 98px;
+    transform: translateX(-16px);
+  }
+}
