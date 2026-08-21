@@ -1006,17 +1006,30 @@ function LookupView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
               {lookupResult.tags.map(({ tagNumber, assignment, effective, record }) => {
                 const action = operationalActionLabel(record?.operationalAction) || (record ? statusLabel(record.status) : '');
                 const status = action || (effective && effective.status !== 'pending' ? 'Alterado na auditoria' : 'Cadastro Nedap');
+                const animalAnswer = effective?.effectiveAnimal ?? record?.effectiveAnimal ?? assignment?.expectedAnimal ?? record?.observedAnimal ?? record?.expectedAnimal ?? null;
+                const isTagSearch = lookupMode === 'tag';
+                const primaryLabel = isTagSearch ? 'ANIMAL' : 'SMARTTAG';
+                const primaryValue = isTagSearch ? (animalAnswer ?? 'SEM ANIMAL VINCULADO') : tagNumber;
+                const secondaryLabel = isTagSearch ? 'SmartTag' : 'Animal';
+                const secondaryValue = isTagSearch ? tagNumber : lookupResult.query;
                 const detail = record
                   ? `Nedap ${record.expectedAnimal ?? 'sem vinculo'} | campo ${record.observedAnimal ?? 'nao informado'}`
                   : effective?.effectiveAnimal && effective.effectiveAnimal !== assignment?.expectedAnimal
                     ? `Cadastro ${effective.originalAnimal ?? 'sem vinculo'} | atual ${effective.effectiveAnimal}`
                     : `Animal ${assignment?.expectedAnimal ?? effective?.originalAnimal ?? 'sem vinculo'}`;
                 return (
-                  <div className="animal-lookup-result animal-lookup-result--large" key={tagNumber}>
-                    <TagIcon size={26} />
-                    <div>
-                      <span>{status}</span>
-                      <strong>{tagNumber}</strong>
+                  <div className={`animal-lookup-result animal-lookup-result--answer ${isTagSearch ? 'animal-lookup-result--tag-query' : 'animal-lookup-result--animal-query'} ${isTagSearch && !animalAnswer ? 'is-empty-link' : ''}`} key={tagNumber}>
+                    {isTagSearch ? <AnimalIcon size={26} /> : <TagIcon size={26} />}
+                    <div className="animal-lookup-result__content">
+                      <span className="animal-lookup-result__status">{status}</span>
+                      <div className="animal-lookup-result__primary">
+                        <span>{primaryLabel}</span>
+                        <strong>{primaryValue}</strong>
+                      </div>
+                      <div className="animal-lookup-result__secondary">
+                        <span>{secondaryLabel}</span>
+                        <strong>{secondaryValue}</strong>
+                      </div>
                       <small>{detail}</small>
                     </div>
                   </div>
@@ -1024,9 +1037,12 @@ function LookupView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
               })}
             </div>
           ) : (
-            <div className="animal-lookup-empty">
+            <div className="animal-lookup-empty animal-lookup-empty--answer">
               <IssuesIcon size={22} />
-              <span>Nenhum resultado para {lookupMode === 'animal' ? 'animal' : 'tag'} {lookupResult.query} nesta base.</span>
+              <div>
+                <strong>{lookupMode === 'animal' ? 'SEM SMARTTAG VINCULADA' : 'TAG NAO ENCONTRADA'}</strong>
+                <span>Nenhum resultado para {lookupMode === 'animal' ? 'animal' : 'tag'} {lookupResult.query} nesta base.</span>
+              </div>
             </div>
           )
         )}

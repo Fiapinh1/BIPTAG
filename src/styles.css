@@ -7031,3 +7031,213 @@ body:has(.import-prep-overlay) {
 .summary-metrics small {
   letter-spacing: 0;
 }
+
+/* Targeted UX adjustments: NFC visual cue, field navigation, lookup hierarchy. */
+@keyframes smarttagBreathe {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+    opacity: .86;
+  }
+  50% {
+    transform: translateY(-1px) scale(1.025);
+    opacity: 1;
+  }
+}
+
+@keyframes smarttagWave {
+  0% {
+    transform: scale(.86);
+    opacity: .26;
+  }
+  100% {
+    transform: scale(1.22);
+    opacity: 0;
+  }
+}
+
+.nfc-panel--field.is-standby {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.nfc-panel--field.is-standby .nfc-panel__status,
+.nfc-panel--field.is-standby .button {
+  grid-column: 1 / -1;
+}
+
+.nfc-panel--field.is-standby .nfc-panel__visual {
+  grid-column: 1;
+  display: grid;
+  width: 76px;
+  height: 76px;
+  min-width: 76px;
+  min-height: 76px;
+  margin: 0;
+  border-radius: 23px;
+  color: #8E4725;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.94), rgba(242,227,216,.92)),
+    radial-gradient(circle at 30% 18%, rgba(197,106,53,.18), transparent 42px);
+  box-shadow: inset 0 0 0 1px rgba(143,68,37,.16), 0 12px 26px rgba(45,38,32,.10);
+  animation: smarttagBreathe 3.2s ease-in-out infinite;
+}
+
+.nfc-panel--field.is-standby .nfc-panel__visual::before {
+  width: 52px;
+  height: 52px;
+  background: currentColor;
+  opacity: .88;
+}
+
+.nfc-panel--field.is-standby .nfc-panel__visual::after {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border: 1px solid rgba(143,68,37,.22);
+  border-radius: 18px;
+  animation: smarttagWave 2.7s ease-out infinite;
+}
+
+.nfc-panel--field.is-standby .nfc-panel__text {
+  grid-column: 2;
+}
+
+.field-page--reader-active .nfc-panel__visual {
+  animation: smarttagBreathe 2.4s ease-in-out infinite;
+}
+
+body:has(.field-page--reader-flow) .bottom-nav {
+  z-index: 1100;
+  display: grid;
+}
+
+.field-page--reader-flow {
+  padding-bottom: calc(88px + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 820px) {
+  .field-page--reader-flow {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+}
+
+.animal-lookup-result--answer {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: stretch;
+  padding: clamp(14px, 3vw, 18px);
+  gap: 13px;
+}
+
+.animal-lookup-result--answer > svg {
+  align-self: start;
+  margin-top: 4px;
+}
+
+.animal-lookup-result__content {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.animal-lookup-result__status {
+  color: var(--copper-dark);
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.animal-lookup-result__primary,
+.animal-lookup-result__secondary {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.animal-lookup-result__primary > span,
+.animal-lookup-result__secondary > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.animal-lookup-result__primary > strong {
+  color: var(--graphite);
+  font-size: clamp(38px, 11vw, 66px);
+  line-height: .96;
+  overflow-wrap: anywhere;
+}
+
+.animal-lookup-result--animal-query .animal-lookup-result__primary > strong {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: clamp(25px, 7vw, 42px);
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+
+.animal-lookup-result__secondary {
+  width: fit-content;
+  max-width: 100%;
+  padding: 9px 11px;
+  border: 1px solid rgba(221,209,195,.86);
+  border-radius: 13px;
+  background: rgba(255,253,248,.72);
+}
+
+.animal-lookup-result__secondary > strong {
+  color: var(--graphite);
+  font-size: 15px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.animal-lookup-result.is-empty-link .animal-lookup-result__primary > strong,
+.animal-lookup-empty--answer strong {
+  color: var(--warning);
+  font-size: clamp(25px, 7vw, 40px);
+  line-height: 1.05;
+}
+
+.animal-lookup-result--answer small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.32;
+}
+
+.animal-lookup-empty--answer {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  text-align: left;
+}
+
+.animal-lookup-empty--answer strong,
+.animal-lookup-empty--answer span {
+  display: block;
+}
+
+.animal-lookup-empty--answer span {
+  margin-top: 6px;
+}
+
+@media (max-width: 420px) {
+  .nfc-panel--field.is-standby {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+
+  .nfc-panel--field.is-standby .nfc-panel__visual {
+    width: 64px;
+    height: 64px;
+    min-width: 64px;
+    min-height: 64px;
+    border-radius: 20px;
+  }
+
+  .nfc-panel--field.is-standby .nfc-panel__visual::before {
+    width: 44px;
+    height: 44px;
+  }
+
+  .animal-lookup-result__primary > strong {
+    font-size: clamp(34px, 10vw, 52px);
+  }
+}
