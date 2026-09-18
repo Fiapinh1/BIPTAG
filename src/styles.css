@@ -274,6 +274,108 @@ p { color: var(--muted); line-height: 1.55; font-size: 14px; }
 .nfc-panel__text h2 { margin: 3px 0 5px; }
 .nfc-panel__text p { min-height: 21px; margin-bottom: 16px; font-size: 12px; }
 
+.hhr5000-connector {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 8px;
+  background: rgba(255,255,255,.08);
+  text-align: left;
+}
+
+.hhr5000-connector__head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.hhr5000-connector__icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: #F4C964;
+  background: rgba(226,171,54,.13);
+}
+
+.hhr5000-connector__head strong,
+.hhr5000-connector__last strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hhr5000-connector__head .eyebrow {
+  color: rgba(255,255,255,.62);
+  font-size: 9px;
+}
+
+.hhr5000-connector__head strong {
+  color: #FFFDF8;
+  font-size: 13px;
+}
+
+.hhr5000-connector__status {
+  min-width: 84px;
+  padding: 6px 8px;
+  border: 1px solid rgba(255,255,255,.17);
+  border-radius: 999px;
+  color: rgba(255,255,255,.76);
+  background: rgba(15,13,11,.34);
+  font-size: 10px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.hhr5000-connector--conectado .hhr5000-connector__status {
+  border-color: rgba(77,160,112,.45);
+  color: #9BE0B8;
+  background: rgba(77,160,112,.12);
+}
+
+.hhr5000-connector--erro .hhr5000-connector__status {
+  border-color: rgba(193,83,68,.45);
+  color: #FFB7AE;
+  background: rgba(193,83,68,.12);
+}
+
+.hhr5000-connector__last {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 8px;
+  color: rgba(255,255,255,.72);
+  background: rgba(15,13,11,.30);
+  font-size: 11px;
+}
+
+.hhr5000-connector__last strong {
+  color: #FFFDF8;
+  font-size: 12px;
+  text-align: right;
+}
+
+.hhr5000-connector p {
+  min-height: 0;
+  margin: 0;
+  color: rgba(255,255,255,.68);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.hhr5000-connector__actions .button {
+  min-height: 42px;
+}
+
 .scan-result { margin-top: 16px; padding: 18px; border-radius: 20px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }
 .scan-result__header { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 16px; }
 .tag-number { display: block; margin-top: 4px; font-size: clamp(17px,4.7vw,23px); letter-spacing: -.03em; word-break: break-all; }

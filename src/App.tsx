@@ -2,6 +2,7 @@ import { Children, useEffect, useMemo, useRef, useState, type DragEvent, type Re
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, newId } from './db/db';
 import { EmptyState } from './components/EmptyState';
+import { HHR5000Connector } from './components/HHR5000Connector';
 import { StatCard } from './components/StatCard';
 import {
   ActionIcon,
@@ -25,6 +26,7 @@ import {
 import { parseNedapWorkbook, exportAuditWorkbook, validateSmartTag, buildAuditWhatsAppText } from './services/excel';
 import { knownIssueActionLabel, knownIssueLabel, operationalActionLabel, statusLabel } from './services/audit-labels';
 import { feedbackCorrect, feedbackWarning, primeFeedbackAudio } from './services/feedback';
+import { useHHR5000 } from './hooks/useHHR5000';
 import { isWebNfcSupported, startNfcReader } from './services/nfc';
 import { deriveReconciliation, hasPhysicalEvidence, type ReconciledAnimalGap } from './services/reconciliation';
 import { isSupabaseConfigured, isUsingBundledSupabaseConfig, supabase } from './services/supabase';
@@ -1621,6 +1623,9 @@ function AuditView({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const stopReader = useRef<null | (() => void)>(null);
   const lastRead = useRef<{ tag: string; at: number } | null>(null);
+  const hhrAuditRef = useRef<Audit | null>(null);
+  hhrAuditRef.current = audit;
+  const hhr5000 = useHHR5000(handleHHR5000Read);
 
   useEffect(() => () => stopReader.current?.(), []);
   useEffect(() => {
@@ -1697,6 +1702,11 @@ function AuditView({
   }
 
   const activeAudit = audit;
+
+  function handleHHR5000Read(tagNumber: string, rawValue: string) {
+    if (!hhrAuditRef.current) return;
+    void processRead(tagNumber, rawValue, 'nfc');
+  }
 
   async function findPossibleTypo(tagNumber: string) {
     const suffix = tagNumber.slice(7);
@@ -2414,6 +2424,14 @@ function AuditView({
           ) : (
             <button className="button button--ghost button--full" onClick={deactivateReader}>Parar leitor</button>
           )}
+          <HHR5000Connector
+            status={hhr5000.status}
+            message={hhr5000.message}
+            lastTagRead={hhr5000.lastTagRead}
+            isSupported={hhr5000.isSupported}
+            onConnect={() => void hhr5000.connect()}
+            onDisconnect={hhr5000.disconnect}
+          />
           <button className="button button--secondary button--full nfc-manual-button" onClick={() => setManualMode(true)}>
             Digitar tag manualmente
           </button>
