@@ -63,6 +63,18 @@ export function MoreIcon({ size = 22, ...props }: IconProps) {
   return <svg {...base(size)} {...props}><circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" /></svg>;
 }
 
+export function FarmIcon({ size = 22, ...props }: IconProps) {
+  return <svg {...base(size)} {...props}><path d="m3 10 9-7 9 7v11H3zM3 10h18M8 21v-7h8v7M8 14l8 7M16 14l-8 7M10 7h4" /></svg>;
+}
+
+export function SearchIcon({ size = 22, ...props }: IconProps) {
+  return <svg {...base(size)} {...props}><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></svg>;
+}
+
+export function SettingsIcon({ size = 22, ...props }: IconProps) {
+  return <svg {...base(size)} {...props}><path d="m10 3-.5 2a7 7 0 0 0-2 .9l-2-.6-2 3.4 1.5 1.4a8 8 0 0 0 0 2.4L3.5 14l2 3.4 2-.6a7 7 0 0 0 2 .9L10 20h4l.5-2.3a7 7 0 0 0 2-.9l2 .6 2-3.4-1.5-1.5a8 8 0 0 0 0-2.4l1.5-1.4-2-3.4-2 .6a7 7 0 0 0-2-.9L14 3z" /><circle cx="12" cy="11.5" r="3" /></svg>;
+}
+
 export function KeyboardIcon({ size = 22, ...props }: IconProps) {
   return <svg {...base(size)} {...props}><rect x="3" y="5" width="18" height="14" rx="3" /><path d="M7 9h.01M12 9h.01M17 9h.01M7 12h.01M12 12h.01M17 12h.01M8 15h8" /></svg>;
 }

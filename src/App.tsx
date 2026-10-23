@@ -2,8 +2,10 @@ import { Children, useEffect, useMemo, useRef, useState, type DragEvent, type Re
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, newId } from './db/db';
 import { EmptyState } from './components/EmptyState';
+import { FarmDirectory } from './components/FarmDirectory';
 import { HHR5000Connector } from './components/HHR5000Connector';
 import { AuditReadModePicker, AuditReaderStandby, type AuditReadMode } from './components/AuditReaderWorkspace';
+import { AuditScanSummary } from './components/AuditScanSummary';
 import { StatCard } from './components/StatCard';
 import {
   ActionIcon,
@@ -21,6 +23,7 @@ import {
   ReportIcon,
   ScanIcon,
   ShareIcon,
+  SettingsIcon,
   SwapIcon,
   TagIcon,
   TrashIcon
@@ -498,9 +501,9 @@ function App() {
           </span>
         </button>
 
-        <button className={`connection-pill connection-pill--settings ${online ? 'is-online' : 'is-offline'}`} onClick={() => setView('settings')} title="Configuracao">
-          <ActionIcon size={18} />
-          Configuracao
+        <button className={`connection-pill connection-pill--settings ${online ? 'is-online' : 'is-offline'}`} onClick={() => setView('settings')} title="Configurações" aria-label="Abrir configurações">
+          <SettingsIcon size={20} />
+          <span>Configurações</span>
         </button>
       </header>
 
@@ -510,6 +513,7 @@ function App() {
             audits={audits}
             activeAudit={selectedAudit}
             onSelectAudit={(audit) => void chooseAudit(audit)}
+            onResumeAudit={(audit) => { void chooseAudit(audit).then(() => setView('audit')); }}
             onDeleteAudit={(audit) => void deleteAudit(audit)}
             onClearAudit={() => setSelectedAuditId(null)}
             onImportCreated={(auditId) => {
@@ -559,7 +563,7 @@ function App() {
         ) : (
           <>
             <NavButton active={view === 'home'} label="Fazendas" icon={<HomeIcon />} onClick={() => setView('home')} />
-            <NavButton active={view === 'settings'} label="Config." icon={<ActionIcon />} onClick={() => setView('settings')} />
+            <NavButton active={view === 'settings'} label="Configurações" icon={<SettingsIcon />} onClick={() => setView('settings')} />
           </>
         )}
       </nav>
@@ -642,6 +646,7 @@ function HomeView({
   audits,
   activeAudit,
   onSelectAudit,
+  onResumeAudit,
   onDeleteAudit,
   onClearAudit,
   onImportCreated,
@@ -652,6 +657,7 @@ function HomeView({
   audits: Audit[];
   activeAudit: Audit | null;
   onSelectAudit: (audit: Audit) => void;
+  onResumeAudit: (audit: Audit) => void;
   onDeleteAudit: (audit: Audit) => void;
   onClearAudit: () => void;
   onImportCreated: (auditId: string) => void;
@@ -747,47 +753,7 @@ function HomeView({
   if (!activeAudit) {
     return (
       <>
-        <section className="page home-page">
-          <div className="home-toolbar">
-            <div>
-              <span className="eyebrow">INICIO</span>
-              <h1>Fazendas</h1>
-              <p>{audits.length ? 'Escolha uma fazenda para abrir a auditoria.' : 'Nenhuma auditoria neste aparelho.'}</p>
-            </div>
-            {audits.length > 0 && (
-              <button className="home-add-button" onClick={() => setShowCreateFarmModal(true)} aria-label="Criar nova auditoria">
-                <PlusIcon size={18} />
-              </button>
-            )}
-          </div>
-          {audits.length ? (
-            <div className="audit-picker">
-              {audits.map((audit) => (
-                <div key={audit.id} className="audit-history__item audit-history__item--picker">
-                  <button className="audit-history__open" onClick={() => onSelectAudit(audit)}>
-                    <span>
-                      <strong>{audit.farmName}</strong>
-                      <small>{formatShortDate(audit.lastActivityAt || audit.updatedAt)} - {audit.status === 'finished' ? 'Finalizada' : audit.status === 'paused' ? 'Pausada' : 'Em andamento'}</small>
-                    </span>
-                    <ChevronRightIcon />
-                  </button>
-                  <button className="audit-history__delete" onClick={() => onDeleteAudit(audit)} title="Excluir auditoria" aria-label={`Excluir auditoria ${audit.farmName}`}>
-                    <TrashIcon size={19} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="home-empty-state">
-              <span className="home-empty-state__icon"><ImportIcon size={36} /></span>
-              <h2>Nenhuma auditoria</h2>
-              <p>Importe o Tags.xlsx original do Nedap para iniciar uma fazenda.</p>
-              <button className="button button--primary button--full button--large" onClick={() => setShowCreateFarmModal(true)}>
-                <PlusIcon /> Criar nova auditoria
-              </button>
-            </div>
-          )}
-        </section>
+        <FarmDirectory audits={audits} onOpen={onSelectAudit} onResume={onResumeAudit} onCreate={() => setShowCreateFarmModal(true)} onDelete={onDeleteAudit} />
         {createFarmModal}
       </>
     );
@@ -2313,6 +2279,7 @@ function AuditView({
 
   const fieldPageClass = [
     'page field-page audit-workspace',
+    scan || outcome ? 'audit-workspace--confirming' : '',
     scan ? 'field-page--scanned' : '',
     `audit-workspace--${readMode}`,
     decision ? 'field-page--decision' : '',
@@ -2522,26 +2489,11 @@ function AuditView({
           </div>
         ) : (
         <div className="field-conference">
-            <div className="field-identifiers">
-            <div className="field-id-block field-id-block--tag">
-              <TagIcon className="field-id-block__icon" size={24} />
-              <span>TAG LIDA</span>
-              <strong>{scan.tagNumber}</strong>
-            </div>
-            <div className="field-id-block field-id-block--animal">
-              <AnimalIcon className="field-id-block__icon" size={24} />
-              <span>CADASTRO NEDAP</span>
-              <strong>{scan.assignment?.expectedAnimal ?? 'SEM VÍNCULO'}</strong>
-            </div>
-          </div>
-
-          {!scan.assignment && <div className="context-alert context-alert--danger"><IssuesIcon /><div><strong>Tag não cadastrada</strong><span>Ela não aparece no arquivo Nedap importado. Confirme apenas o brinco que está vendo.</span></div></div>}
-          {scan.assignment && !scan.assignment.expectedAnimal && <div className="context-alert context-alert--warning"><IssuesIcon /><div><strong>Tag sem vínculo</strong><span>A tag existe, mas não possui animal cadastrado. Informe somente o brinco físico.</span></div></div>}
+          <AuditScanSummary tagNumber={scan.tagNumber} inBase={Boolean(scan.assignment)} expectedAnimal={scan.assignment?.expectedAnimal ?? null} />
 
           {!decision ? (
             <div className="field-question">
-              <span className="eyebrow">OLHE O ANIMAL</span>
-              <h2>Qual número está no brinco?</h2>
+              <div className="conference-question-heading"><h2 id="observed-title">Brinco do animal</h2><p id="observed-help">Digite o número que você está vendo.</p></div>
               <input
                 ref={inputRef}
                 id="observed"
@@ -2550,15 +2502,19 @@ function AuditView({
                 enterKeyHint="done"
                 pattern="[0-9]*"
                 autoComplete="off"
+                aria-labelledby="observed-title"
+                aria-describedby="observed-help"
                 placeholder="0000"
                 value={observedAnimal}
                 onChange={(event) => setObservedAnimal(event.target.value.replace(/[^0-9A-Za-z_-]/g, ''))}
                 onKeyDown={(event) => { if (event.key === 'Enter') void evaluateObserved(); }}
               />
-              <button className="button button--primary button--full button--field" onClick={() => void evaluateObserved()}>Conferir brinco</button>
-              <button className="button button--secondary button--full" onClick={() => void markTagWithoutAnimal()}>Tag sem animal</button>
-              <button className="button button--ghost button--full" onClick={() => void markAnimalWithoutEarTag()}>Animal sem brinco</button>
-              <button className="button button--ghost button--full" onClick={cancelCurrentRead}>Ler outra tag</button>
+              <button className="button button--primary button--full button--field" disabled={!observedAnimal.trim()} onClick={() => void evaluateObserved()}>Conferir brinco</button>
+              <div className="conference-alternatives"><span>Ou registre uma situação</span><div>
+                <button className="button button--ghost" onClick={() => void markTagWithoutAnimal()}>Tag sem animal</button>
+                <button className="button button--ghost" onClick={() => void markAnimalWithoutEarTag()}>Animal sem brinco</button>
+              </div></div>
+              <button className="conference-cancel" onClick={cancelCurrentRead}><span aria-hidden="true">‹</span> {manualMode ? 'Digitar outra tag' : 'Ler outra tag'}</button>
             </div>
           ) : (
             <GuidedDecision scan={scan} decision={decision} onConfirm={() => void confirmPhysicalFact()} onCorrect={correctObservedNumber} onUnconfirmed={() => void markAnimalWithoutEarTag()} onCancel={cancelCurrentRead} />

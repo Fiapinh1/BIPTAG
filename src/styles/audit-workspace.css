@@ -95,16 +95,52 @@
 .audit-workspace .latest-conferences .section-heading h2 { font-size: 18px; }
 .audit-workspace .latest-conferences .eyebrow { display: none; }
 .audit-workspace .field-conference { height: auto; min-height: 0; padding: 0; }
-.audit-workspace .field-identifiers { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-.audit-workspace .field-id-block { min-width: 0; padding: 14px 12px; border-radius: 16px; box-shadow: none; }
-.audit-workspace .field-id-block--tag strong { font-size: clamp(20px, 5vw, 26px); overflow-wrap: anywhere; }
-.audit-workspace .field-id-block--animal strong { font-size: clamp(30px, 9vw, 44px); overflow-wrap: anywhere; }
 .audit-workspace .field-question,
 .audit-workspace .guided-decision,
 .audit-workspace .field-outcome { height: auto; min-height: 0; padding: 18px; gap: 12px; overflow: visible; border-radius: 20px; box-shadow: none; }
-.audit-workspace .field-question h2 { font-size: 26px; line-height: 1.2; }
-.audit-workspace .field-question .animal-input--field { min-height: 76px; font-size: 48px; }
+.audit-workspace .field-question { border: 1px solid #DED5C9; background: #FFFDF9; text-align: left; }
+.audit-workspace .field-question h2 { margin: 0; font-size: 23px; line-height: 1.25; color: #302A23; }
+.conference-question-heading p { margin: 5px 0 2px; color: #7A7063; font-size: 12px; line-height: 1.5; }
+.audit-workspace .field-question .animal-input--field { width: 100%; height: 68px; min-height: 68px; padding: 10px 14px; border: 1px solid #D5C9B9; border-radius: 13px; background: #FFFFFF; color: #302A23; font-size: 38px; line-height: 1.2; text-align: center; box-shadow: none; }
+.audit-workspace .field-question .animal-input--field:focus { border-color: #B66A43; box-shadow: 0 0 0 3px #B66A431A; }
+.audit-workspace .field-question .animal-input--field::placeholder { color: #C0B8AD; }
 .audit-workspace .field-question .button { min-height: 48px; margin: 0; }
+.audit-workspace .field-question > .button--primary { font-size: 15px; border-radius: 12px; }
+.conference-summary { border: 1px solid #DED5C9; border-radius: 16px; background: #FFFDF9; overflow: hidden; }
+.conference-summary__data { display: grid; gap: 12px; margin: 0; padding: 14px; }
+.conference-summary__data > div { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: center; gap: 12px; }
+.conference-summary__data dt { margin: 0; color: #83786A; font-size: 11px; line-height: 1.4; }
+.conference-summary__data dd { justify-self: end; min-width: 0; max-width: 100%; margin: 0; text-align: right; overflow-wrap: anywhere; }
+.conference-summary__tag { color: #302A23; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: clamp(17px, 4.6vw, 21px); font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
+.conference-summary__animal { color: #27664B; font-size: 24px; font-weight: 800; line-height: 1.2; }
+.conference-summary__unlinked { padding: 5px 8px; border: 1px solid #E5D7BF; border-radius: 6px; color: #8C6C38; background: #FAF4E9; font-size: 12px; font-weight: 700; line-height: 1.3; white-space: nowrap; }
+.conference-summary__notice { display: flex; align-items: flex-start; gap: 8px; padding: 10px 14px; border-top: 1px solid #EAE0D2; background: #FAF4E9; color: #9B7136; }
+.conference-summary__notice > svg { flex-shrink: 0; margin-top: 1px; }
+.conference-summary__notice p { margin: 0; color: #857357; font-size: 11px; line-height: 1.5; }
+.conference-alternatives { display: grid; gap: 8px; margin-top: 3px; padding-top: 12px; border-top: 1px solid #EEE7DE; }
+.conference-alternatives > span { color: #908473; font-size: 11px; }
+.conference-alternatives > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.audit-workspace .conference-alternatives .button { min-width: 0; min-height: 48px; padding: 9px 6px; border: 1px solid #E2D8CA; border-radius: 11px; color: #655B4D; background: #FBF8F2; font-size: 12px; line-height: 1.4; font-weight: 700; box-shadow: none; }
+.conference-cancel { justify-self: center; min-height: 40px; padding: 7px 12px; border: 0; border-radius: 10px; color: #8E6244; background: transparent; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+
+/* The menu follows the form in the document, so it cannot cover a field or the keyboard. */
+.app-shell--audit:has(.audit-workspace--manual) .bottom-nav,
+.app-shell--audit:has(.audit-workspace--confirming) .bottom-nav {
+  position: static;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  transform: none;
+  margin: 0 auto;
+  box-shadow: none;
+}
+.app-shell--audit:has(.audit-workspace--manual),
+.app-shell--audit:has(.audit-workspace--confirming) { display: flex; flex-direction: column; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+.app-shell--audit:has(.audit-workspace--manual) .main-content,
+.app-shell--audit:has(.audit-workspace--confirming) .main-content { flex: 1 0 auto; }
+.app-shell--audit .field-page.audit-workspace.audit-workspace--manual,
+.app-shell--audit .field-page.audit-workspace.audit-workspace--confirming { padding-bottom: 16px; }
+.app-shell--audit .field-page.audit-workspace.audit-workspace--confirming { gap: 12px; }
 .audit-workspace .field-outcome h1 { font-size: 30px; }
 .audit-workspace .outcome-action-grid { grid-template-columns: 1fr; }
 .audit-workspace .outcome-action-button { min-height: 68px; }
