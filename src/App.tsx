@@ -1,8 +1,9 @@
-import { Children, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { Children, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode, type RefObject } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, newId } from './db/db';
 import { EmptyState } from './components/EmptyState';
 import { HHR5000Connector } from './components/HHR5000Connector';
+import { AuditReadModePicker, AuditReaderStandby, type AuditReadMode } from './components/AuditReaderWorkspace';
 import { StatCard } from './components/StatCard';
 import {
   ActionIcon,
@@ -14,6 +15,7 @@ import {
   HomeIcon,
   ImportIcon,
   IssuesIcon,
+  MoreIcon,
   PauseIcon,
   PlusIcon,
   ReportIcon,
@@ -25,8 +27,9 @@ import {
 } from './icons/Icons';
 import { parseNedapWorkbook, exportAuditWorkbook, validateSmartTag, buildAuditWhatsAppText } from './services/excel';
 import { knownIssueActionLabel, knownIssueLabel, operationalActionLabel, statusLabel } from './services/audit-labels';
+import { composeKnownIssueTag, knownIssueTagError } from './services/known-issues';
 import { feedbackCorrect, feedbackWarning, primeFeedbackAudio } from './services/feedback';
-import { useHHR5000 } from './hooks/useHHR5000';
+import { useHHR5000, type HHR5000Reader } from './hooks/useHHR5000';
 import { isWebNfcSupported, startNfcReader } from './services/nfc';
 import { deriveReconciliation, hasPhysicalEvidence, type ReconciledAnimalGap } from './services/reconciliation';
 import { isSupabaseConfigured, isUsingBundledSupabaseConfig, supabase } from './services/supabase';
@@ -259,6 +262,8 @@ function App() {
   const [pulledCloudUserId, setPulledCloudUserId] = useState<string | null>(null);
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(() => readStoredAuditId());
   const autoSyncBusy = useRef(false);
+  const bluetoothReadHandler = useRef<((tagNumber: string, rawValue: string) => void) | null>(null);
+  const hhr5000 = useHHR5000((tag, raw) => bluetoothReadHandler.current?.(tag, raw));
 
   const audits = useLiveQuery(() => db.audits.orderBy('createdAt').reverse().toArray(), [], []);
   const pendingSyncSignal = useLiveQuery(async () => {
@@ -529,7 +534,7 @@ function App() {
           />
         )}
         {view === 'audit' && (
-          <AuditView audit={selectedAudit} onNeedImport={() => setView('import')} setToast={setToast} onPaused={() => setView('home')} onAuditChanged={(auditId) => syncAuditInBackground(auditId)} />
+          <AuditView key={selectedAudit?.id} audit={selectedAudit} hhr5000={hhr5000} bluetoothReadHandler={bluetoothReadHandler} onNeedImport={() => setView('import')} setToast={setToast} onPaused={() => setView('home')} onAuditChanged={(auditId) => syncAuditInBackground(auditId)} />
         )}
         {view === 'lookup' && (
           <LookupView audit={selectedAudit} onNeedImport={() => setView('import')} />
@@ -1069,6 +1074,9 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [patternDraft, setPatternDraft] = useState<SmartTagPattern | null>(null);
   const [patternConfirmed, setPatternConfirmed] = useState(false);
+  const [prepStep, setPrepStep] = useState<'summary' | 'pattern' | 'alerts'>('summary');
+  const prepTitleRef = useRef<HTMLHeadingElement>(null);
+  const prepBodyRef = useRef<HTMLDivElement>(null);
   const [draggingFile, setDraggingFile] = useState(false);
   const [knownIssueTag, setKnownIssueTag] = useState('');
   const [knownIssueType, setKnownIssueType] = useState<KnownIssueType>('reversed_collar');
@@ -1077,11 +1085,23 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    if (!preview) return;
+    prepTitleRef.current?.focus();
+    prepBodyRef.current?.scrollTo({ top: 0 });
+  }, [prepStep, Boolean(preview)]);
+
+  function goToPrepStep(step: typeof prepStep) {
+    setError(null);
+    setPrepStep(step);
+  }
+
   async function handleFile(selected: File | null) {
     setFile(selected);
     setPreview(null);
     setPatternDraft(null);
     setPatternConfirmed(false);
+    setPrepStep('summary');
     setKnownIssueDrafts([]);
     setKnownIssueTag('');
     setKnownIssueNote('');
@@ -1122,15 +1142,13 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
   const knownIssuePrefix = issuePattern?.prefix ?? '';
   const knownIssueExpectedLength = issuePattern?.length ?? MAX_SMARTTAG_DIGITS;
   const knownIssueRestLength = Math.max(knownIssueExpectedLength - knownIssuePrefix.length, 0);
-  const knownIssueDigits = knownIssueTag.replace(/[^0-9]/g, '');
-  const knownIssuePreview = knownIssuePrefix && knownIssueDigits && !knownIssueDigits.startsWith(knownIssuePrefix)
-    ? `${knownIssuePrefix}${knownIssueDigits}`
-    : knownIssueDigits;
+  const knownIssuePreview = composeKnownIssueTag(knownIssueTag, issuePattern);
 
   function addKnownIssueDraft() {
     const normalizedTag = knownIssuePreview.trim();
-    if (!normalizedTag) {
-      setError('Informe a SmartTag do problema conhecido.');
+    const validationError = knownIssueTagError(normalizedTag, preview?.assignments ?? [], issuePattern);
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
@@ -1154,10 +1172,16 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
 
   function removeKnownIssueDraft(id: string) {
     setKnownIssueDrafts((current) => current.filter((item) => item.id !== id));
+    setError(null);
   }
 
   async function applyPattern() {
     if (!file || !patternDraft) return;
+    if (!Number.isInteger(patternDraft.length) || patternDraft.length < 1
+      || patternDraft.length < patternDraft.prefix.length || patternDraft.length > 30) {
+      setError('Confira o padrão: o total deve ser maior ou igual ao prefixo e ter até 30 dígitos.');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -1165,6 +1189,7 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
       setPreview(nextPreview);
       setPatternDraft(nextPreview.pattern);
       setPatternConfirmed(true);
+      setPrepStep('alerts');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Nao foi possivel aplicar o padrao.');
     } finally {
@@ -1173,7 +1198,17 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
   }
 
   async function saveImport() {
-    if (!file || !preview || !farmName.trim() || !patternConfirmed) return;
+    if (!file || !preview || !farmName.trim() || !patternConfirmed || prepStep !== 'alerts' || busy) return;
+    if (knownIssueTag.trim() || knownIssueNote.trim()) {
+      setError('Há um problema em preenchimento. Toque em “Adicionar problema” ou limpe os campos antes de continuar.');
+      return;
+    }
+    const invalidDraft = knownIssueDrafts.find((issue) => knownIssueTagError(issue.tagNumber, preview.assignments, preview.pattern));
+    if (invalidDraft) {
+      setError(`A SmartTag ${invalidDraft.tagNumber} não é válida para esta base. Remova o problema ou revise o padrão antes de continuar.`);
+      return;
+    }
+    setError(null);
     setBusy(true);
     try {
       const auditId = newId('audit');
@@ -1273,21 +1308,48 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
       </div>
 
       {busy && <div className="inline-status">Analisando arquivo…</div>}
-      {error && <div className="alert alert--danger"><IssuesIcon /> <span>{error}</span></div>}
+      {error && !preview && <div className="alert alert--danger" role="alert"><IssuesIcon /> <span>{error}</span></div>}
 
       {preview && (
-        <div className="import-prep-overlay" role="dialog" aria-modal="true" aria-labelledby="import-prep-title">
+        <div
+          className={`import-prep-overlay import-prep-overlay--${prepStep}`}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="import-prep-title"
+          aria-describedby="import-prep-description"
+          onKeyDown={(event) => {
+            if (event.key !== 'Tab') return;
+            const controls = event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled)');
+            const first = controls[0];
+            const last = controls[controls.length - 1];
+            if (event.shiftKey && (document.activeElement === first || document.activeElement === prepTitleRef.current)) {
+              event.preventDefault();
+              last?.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+              event.preventDefault();
+              first?.focus();
+            }
+          }}
+        >
           <div className="import-prep-panel">
             <div className="import-prep-header">
               <div>
-                <span className="eyebrow">PREPARO DA AUDITORIA</span>
-                <h2 id="import-prep-title">{farmName.trim() || 'Nova fazenda'}</h2>
-                <p>{file?.name}</p>
+                <span className="eyebrow">{prepStep === 'summary' ? 'PREPARO DA AUDITORIA' : prepStep === 'pattern' ? 'ETAPA 1 DE 2 · PADRÃO' : 'ETAPA 2 DE 2 · ALERTAS'}</span>
+                <h2 id="import-prep-title" ref={prepTitleRef} tabIndex={-1}>{prepStep === 'summary' ? farmName.trim() || 'Nova fazenda' : prepStep === 'pattern' ? 'Confirmar padrão' : 'Alertas de SmartTag'}</h2>
+                <p>{prepStep === 'summary' ? file?.name : `${farmName.trim()} · ${file?.name}`}</p>
               </div>
-              <button className="app-modal__close" onClick={() => void handleFile(null)} aria-label="Trocar arquivo">×</button>
+              <button className="app-modal__close" disabled={busy} onClick={() => void handleFile(null)} aria-label="Fechar preparo e trocar arquivo">×</button>
             </div>
 
-            <div className="import-prep-body">
+            <div className="import-prep-body" ref={prepBodyRef} key={prepStep}>
+              <p className="import-prep-description" id="import-prep-description">
+                {prepStep === 'summary'
+                  ? 'Confira o resumo da planilha. Ao iniciar, vamos confirmar o padrão e preparar os alertas.'
+                  : prepStep === 'pattern'
+                    ? 'Confira o prefixo e o total de dígitos das tags da planilha antes de continuar.'
+                    : 'Cadastre os problemas já conhecidos. Se não houver nenhum, pode entrar na conferência.'}
+              </p>
+              {prepStep === 'summary' && <>
               <section className="import-prep-section import-prep-section--farm">
                 <label className="field-label" htmlFor="prep-farm">Nome da fazenda</label>
                 <input id="prep-farm" className="text-input" placeholder="Ex.: Fazenda Santa Juliana" value={farmName} onChange={(event) => setFarmName(event.target.value)} />
@@ -1306,56 +1368,50 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
                 </div>
               </section>
 
-              {patternDraft && (
-                patternConfirmed ? (
-                  <section className="pattern-card pattern-card--compact import-prep-section import-prep-pattern is-confirmed">
-                    <div className="pattern-confirmed-row">
-                      <CheckIcon size={20} />
-                      <div>
-                        <span className="eyebrow">PADRAO CONFIRMADO</span>
-                        <strong>{patternDraft.prefix || 'Sem prefixo'} / {patternDraft.length} digitos</strong>
-                      </div>
-                    </div>
-                    <button className="link-button" onClick={() => setPatternConfirmed(false)}>Alterar</button>
-                  </section>
-                ) : (
+              </>}
+
+              {prepStep === 'pattern' && patternDraft && (
                   <section className="pattern-card import-prep-section import-prep-pattern">
                     <div>
-                      <span className="eyebrow">PADRAO DAS SMARTTAGS</span>
+                      <span className="eyebrow">PREFIXO DAS SMARTTAGS</span>
                       <h2>{patternDraft.prefix || 'Sem prefixo'}</h2>
                     </div>
                     <div className="pattern-card__fields">
                       <label>
                         <span>Prefixo</span>
-                        <input className="text-input" inputMode="numeric" value={patternDraft.prefix} onChange={(event) => { setPatternDraft({ ...patternDraft, prefix: event.target.value.replace(/[^0-9]/g, '') }); setPatternConfirmed(false); }} />
+                        <input className="text-input" inputMode="numeric" disabled={busy} value={patternDraft.prefix} onChange={(event) => { setPatternDraft({ ...patternDraft, prefix: event.target.value.replace(/[^0-9]/g, '') }); setPatternConfirmed(false); setError(null); }} />
                       </label>
                       <label>
-                        <span>Digitos</span>
-                        <input className="text-input" inputMode="numeric" value={patternDraft.length} onChange={(event) => { setPatternDraft({ ...patternDraft, length: Number(event.target.value.replace(/[^0-9]/g, '')) || 0 }); setPatternConfirmed(false); }} />
+                        <span>Total de dígitos</span>
+                        <input className="text-input" inputMode="numeric" disabled={busy} value={patternDraft.length} onChange={(event) => { setPatternDraft({ ...patternDraft, length: Number(event.target.value.replace(/[^0-9]/g, '')) || 0 }); setPatternConfirmed(false); setError(null); }} />
                       </label>
                     </div>
-                    <button className="button button--secondary button--full" disabled={busy || !patternDraft.prefix || !patternDraft.length} onClick={() => void applyPattern()}>
-                      Confirmar padrao
-                    </button>
+                    <p className="import-prep-description">{knownIssueRestLength > 0 ? `Com esse padrão, você digitará apenas os ${knownIssueRestLength} dígitos finais da SmartTag.` : 'Com esse padrão, confira o número completo da SmartTag.'}</p>
                   </section>
-                )
               )}
 
+              {prepStep === 'alerts' && <>
+              <div className="import-prep-pattern-summary"><CheckIcon size={18} /><span>Padrão confirmado: {preview.pattern.prefix || 'sem prefixo'} · {preview.pattern.length} dígitos</span></div>
               <section className="import-prep-section prep-known-issues">
                 <div className="import-prep-title-row">
-                  <div><span className="eyebrow">ANTES DA ORDENHA</span><h3>Alertas de SmartTag</h3></div>
+                  <div><span className="eyebrow">ANTES DA ORDENHA</span><h3>Problemas conhecidos</h3></div>
                   <strong>{knownIssueDrafts.length}</strong>
                 </div>
                 <div className="prep-known-issues__form">
+                  <label className="field-label" htmlFor="prep-known-tag">SmartTag da planilha</label>
                   <div className="tag-compose-input">
                     {knownIssuePrefix && <span>{knownIssuePrefix}</span>}
-                    <input className="text-input" inputMode="numeric" placeholder={knownIssueRestLength ? `${knownIssueRestLength} finais` : 'SmartTag'} value={knownIssueTag} onChange={(event) => setKnownIssueTag(event.target.value.replace(/[^0-9]/g, ''))} />
+                    <input id="prep-known-tag" className="text-input" inputMode="numeric" disabled={busy} aria-describedby="prep-known-tag-help" placeholder={knownIssueRestLength ? `${knownIssueRestLength} finais` : 'SmartTag'} value={knownIssueTag} onChange={(event) => { setKnownIssueTag(event.target.value.replace(/[^0-9]/g, '')); setError(null); }} />
                   </div>
-                  <select className="text-input" value={knownIssueType} onChange={(event) => setKnownIssueType(event.target.value as KnownIssueType)}>
+                  <small id="prep-known-tag-help" className="prep-known-issues__help">Use os dígitos finais ou cole a tag completa. Apenas tags válidas da planilha serão aceitas.</small>
+                  <label className="field-label" htmlFor="prep-known-type">Tipo de problema</label>
+                  <select id="prep-known-type" className="text-input" disabled={busy} value={knownIssueType} onChange={(event) => setKnownIssueType(event.target.value as KnownIssueType)}>
                     {KNOWN_ISSUE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
-                  <input className="text-input" placeholder="Observacao opcional" value={knownIssueNote} onChange={(event) => setKnownIssueNote(event.target.value)} />
-                  <button className="button button--secondary button--full" onClick={addKnownIssueDraft}>Adicionar problema</button>
+                  <label className="field-label" htmlFor="prep-known-note">Observação opcional</label>
+                  <input id="prep-known-note" className="text-input" disabled={busy} placeholder="Ex.: conferir posição do colar" value={knownIssueNote} onChange={(event) => setKnownIssueNote(event.target.value)} />
+                  <button className="button button--secondary button--full" disabled={busy} onClick={addKnownIssueDraft}>Adicionar problema</button>
+                  {error && <div className="alert alert--danger" role="alert"><IssuesIcon /> <span>{error}</span></div>}
                 </div>
                 {knownIssueDrafts.length > 0 ? (
                   <div className="prep-known-issues__list">
@@ -1367,7 +1423,7 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
                           <span>{issue.tagNumber}</span>
                           {issue.note && <small>{issue.note}</small>}
                         </div>
-                        <button type="button" onClick={() => removeKnownIssueDraft(issue.id)} aria-label="Remover problema">×</button>
+                        <button type="button" disabled={busy} onClick={() => removeKnownIssueDraft(issue.id)} aria-label="Remover problema">×</button>
                       </div>
                     ))}
                   </div>
@@ -1375,17 +1431,26 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
                   <p className="prep-known-issues__empty">Cadastre aqui tags invertidas, fora de uso ou com falha conhecida antes de entrar no campo.</p>
                 )}
               </section>
+              </>}
             </div>
 
             <div className="import-prep-footer">
-              {error && <div className="alert alert--danger"><IssuesIcon /> <span>{error}</span></div>}
+              {error && prepStep !== 'alerts' && <div className="alert alert--danger" role="alert"><IssuesIcon /> <span>{error}</span></div>}
+              {prepStep === 'summary' && <>
               <div className="summary-strip">
                 <span><CheckIcon /> Estrutura Nedap reconhecida</span>
                 <span>{preview.stats.duplicateTags} duplicadas · {preview.issues.length} alertas · {knownIssueDrafts.length} conhecidos</span>
               </div>
-              <button className="button button--primary button--full button--large" disabled={!farmName.trim() || busy || !patternConfirmed} onClick={saveImport}>
+              <button className="button button--primary button--full button--large" disabled={!farmName.trim() || busy} onClick={() => goToPrepStep('pattern')}>
                 Iniciar auditoria
               </button>
+              </>}
+              {prepStep !== 'summary' && <div className="import-prep-actions">
+                <button className="button button--ghost" disabled={busy} onClick={() => goToPrepStep(prepStep === 'pattern' ? 'summary' : 'pattern')}>Voltar</button>
+                <button className="button button--primary button--large" disabled={busy || (prepStep === 'alerts' && !patternConfirmed)} onClick={() => void (prepStep === 'pattern' ? applyPattern() : saveImport())}>
+                  {busy ? (prepStep === 'pattern' ? 'Confirmando…' : 'Abrindo…') : prepStep === 'pattern' ? 'Confirmar e continuar' : 'Entrar na conferência'}
+                </button>
+              </div>}
             </div>
           </div>
         </div>
@@ -1417,10 +1482,7 @@ function KnownIssuesView({
   const issuePrefix = audit?.tagPattern?.prefix ?? '';
   const issueExpectedLength = audit?.tagPattern?.length ?? MAX_SMARTTAG_DIGITS;
   const issueRestLength = Math.max(issueExpectedLength - issuePrefix.length, 0);
-  const issueDigits = tagNumber.replace(/[^0-9]/g, '');
-  const composedKnownIssueTag = issuePrefix && issueDigits && !issueDigits.startsWith(issuePrefix)
-    ? `${issuePrefix}${issueDigits}`
-    : issueDigits;
+  const composedKnownIssueTag = composeKnownIssueTag(tagNumber, audit?.tagPattern);
 
   if (!audit) {
     return (
@@ -1454,8 +1516,10 @@ function KnownIssuesView({
 
   async function saveKnownIssue() {
     const normalizedTag = composedKnownIssueTag.trim();
-    if (!normalizedTag) {
-      setToast('Informe a SmartTag do problema conhecido.');
+    const assignments = await db.tagAssignments.where('[auditId+tagNumber]').equals([activeAudit.id, normalizedTag]).toArray();
+    const validationError = knownIssueTagError(normalizedTag, assignments, activeAudit.tagPattern);
+    if (validationError) {
+      setToast(validationError);
       return;
     }
 
@@ -1592,12 +1656,16 @@ function KnownIssueCard({
 
 function AuditView({
   audit,
+  hhr5000,
+  bluetoothReadHandler,
   onNeedImport,
   setToast,
   onPaused,
   onAuditChanged
 }: {
   audit: Audit | null;
+  hhr5000: HHR5000Reader;
+  bluetoothReadHandler: RefObject<((tagNumber: string, rawValue: string) => void) | null>;
   onNeedImport: () => void;
   setToast: (value: string) => void;
   onPaused: () => void;
@@ -1608,7 +1676,11 @@ function AuditView({
   const [scan, setScan] = useState<ScanState | null>(null);
   const [observedAnimal, setObservedAnimal] = useState('');
   const [manualTag, setManualTag] = useState('');
-  const [manualMode, setManualMode] = useState(false);
+  const [readMode, setReadMode] = useState<AuditReadMode>('choose');
+  const manualMode = readMode === 'manual';
+  const [showReaderSettings, setShowReaderSettings] = useState(false);
+  const [nfcStarting, setNfcStarting] = useState(false);
+  const [nfcError, setNfcError] = useState<string | null>(null);
   const [showPatternModal, setShowPatternModal] = useState(false);
   const [patternPrefixDraft, setPatternPrefixDraft] = useState('');
   const [patternLengthDraft, setPatternLengthDraft] = useState(String(MAX_SMARTTAG_DIGITS));
@@ -1623,11 +1695,18 @@ function AuditView({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const stopReader = useRef<null | (() => void)>(null);
   const lastRead = useRef<{ tag: string; at: number } | null>(null);
-  const hhrAuditRef = useRef<Audit | null>(null);
-  hhrAuditRef.current = audit;
-  const hhr5000 = useHHR5000(handleHHR5000Read);
+  const readInFlight = useRef(false);
+  const phoneReadHandler = useRef<((tag: string, raw: string) => void) | null>(null);
+  const nfcAttempt = useRef<AbortController | null>(null);
+  const currentReadMode = useRef(readMode);
+  currentReadMode.current = readMode;
 
-  useEffect(() => () => stopReader.current?.(), []);
+  useEffect(() => () => { nfcAttempt.current?.abort(); stopReader.current?.(); }, []);
+  useEffect(() => {
+    bluetoothReadHandler.current = handleHHR5000Read;
+    phoneReadHandler.current = (tag, raw) => { if (audit && readMode === 'phone') void processRead(tag, raw, 'nfc'); };
+    return () => { bluetoothReadHandler.current = null; phoneReadHandler.current = null; };
+  });
   useEffect(() => {
     if (!audit) return;
     setPatternPrefixDraft(audit.tagPattern?.prefix ?? '');
@@ -1647,6 +1726,9 @@ function AuditView({
     }, 0);
     return () => window.clearTimeout(timer);
   }, [manualMode, scan, outcome]);
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [readMode, scan?.tagNumber, outcome?.kind, Boolean(decision)]);
 
   const auditRecords = useLiveQuery(
     () => audit ? db.auditRecords.where('auditId').equals(audit.id).toArray() : Promise.resolve<AuditRecord[]>([]),
@@ -1704,7 +1786,7 @@ function AuditView({
   const activeAudit = audit;
 
   function handleHHR5000Read(tagNumber: string, rawValue: string) {
-    if (!hhrAuditRef.current) return;
+    if (!audit || audit.status === 'finished' || readMode !== 'bluetooth') return;
     void processRead(tagNumber, rawValue, 'nfc');
   }
 
@@ -1722,11 +1804,18 @@ function AuditView({
 
   async function processRead(tagNumber: string, rawValue = tagNumber, source: 'nfc' | 'manual' = 'nfc') {
     const normalized = tagNumber.replace(/[^0-9]/g, '').trim();
-    if (!normalized) return;
+    if (!normalized) return false;
+    if (readInFlight.current || scan || outcome || decision) {
+      if (source !== 'manual' && lastRead.current?.tag !== normalized) setToast('Conclua a tag atual antes de ler outra.');
+      return false;
+    }
+    if (correctionTarget || showPatternModal || showReaderSettings) return false;
     const now = Date.now();
-    if (lastRead.current?.tag === normalized && now - lastRead.current.at < 1800) return;
+    if (source !== 'manual' && lastRead.current?.tag === normalized && now - lastRead.current.at < 1800) return false;
     lastRead.current = { tag: normalized, at: now };
+    readInFlight.current = true;
 
+    try {
     const [assignment, existingRecord, knownIssue] = await Promise.all([
       db.tagAssignments.where('[auditId+tagNumber]').equals([activeAudit.id, normalized]).first(),
       getCurrentRecord(activeAudit.id, normalized),
@@ -1759,33 +1848,55 @@ function AuditView({
       source
     });
     setReaderMessage(`Tag lida: ${normalized}`);
+    setNfcError(null);
     feedbackCorrect();
+    return true;
+    } catch (err) {
+      readInFlight.current = false;
+      lastRead.current = null;
+      setToast(err instanceof Error ? err.message : 'Não foi possível consultar esta tag. Tente novamente.');
+      return false;
+    }
   }
 
   async function activateReader() {
+    const controller = new AbortController();
+    nfcAttempt.current?.abort();
+    nfcAttempt.current = controller;
+    setNfcStarting(true);
+    setNfcError(null);
     try {
       primeFeedbackAudio();
       setReaderMessage('Solicitando acesso ao NFC…');
       stopReader.current?.();
-      stopReader.current = await startNfcReader(
-        (result) => void processRead(result.tagNumber, result.rawValue, 'nfc'),
-        (message) => { setReaderMessage(message); feedbackWarning(); }
+      const stop = await startNfcReader(
+        (result) => { if (currentReadMode.current === 'phone') phoneReadHandler.current?.(result.tagNumber, result.rawValue); },
+        (message) => { if (!readInFlight.current) { setNfcError(message); feedbackWarning(); } },
+        controller.signal
       );
+      if (controller.signal.aborted) { stop(); return; }
+      stopReader.current = stop;
       setReaderActive(true);
       const now = new Date().toISOString();
       await db.audits.update(activeAudit.id, { status: 'in_progress', pausedAt: undefined, updatedAt: now, lastActivityAt: now });
       setReaderMessage('Leitor ativo. Aproxime uma SmartTag.');
     } catch (err) {
+      if (controller.signal.aborted) return;
       setReaderActive(false);
-      setReaderMessage(err instanceof Error ? err.message : 'Não foi possível ativar o NFC.');
+      setNfcError(err instanceof Error ? err.message : 'Não foi possível ativar o NFC.');
       feedbackWarning();
+    } finally {
+      if (nfcAttempt.current === controller) setNfcStarting(false);
     }
   }
 
   function deactivateReader() {
+    nfcAttempt.current?.abort();
     stopReader.current?.();
     stopReader.current = null;
     setReaderActive(false);
+    setNfcStarting(false);
+    setNfcError(null);
     setReaderMessage('Leitor NFC desativado');
   }
 
@@ -2073,9 +2184,13 @@ function AuditView({
     resetForNext(readerActive ? 'Leitor ativo. Aproxime a proxima SmartTag.' : 'Leitura cancelada. Voce pode digitar outra tag.');
   }
 
-  function exitManualMode() {
-    setManualMode(false);
+  function selectReadMode(mode: typeof readMode) {
+    if (readInFlight.current) return;
+    deactivateReader();
+    currentReadMode.current = mode;
+    setReadMode(mode);
     setManualTag('');
+    window.scrollTo({ top: 0, behavior: 'auto' });
   }
 
   async function saveSmartTagPattern() {
@@ -2121,6 +2236,7 @@ function AuditView({
   }
 
   function resetForNext(message = 'Pronto para a próxima leitura.') {
+    readInFlight.current = false;
     setScan(null);
     setDecision(null);
     setOutcome(null);
@@ -2175,10 +2291,7 @@ function AuditView({
   async function manualRead() {
     primeFeedbackAudio();
     const typed = manualTag.replace(/[^0-9]/g, '').trim();
-    const prefix = activeAudit.tagPattern?.prefix ?? '';
-    const tag = prefix && typed && !typed.startsWith(prefix)
-      ? `${prefix}${typed}`
-      : typed;
+    const tag = composeKnownIssueTag(typed, activeAudit.tagPattern);
     if (!tag) return;
     const expectedLength = activeAudit.tagPattern?.length ?? MAX_SMARTTAG_DIGITS;
     if (tag.length > expectedLength) {
@@ -2186,9 +2299,7 @@ function AuditView({
       setToast(`SmartTag com ${tag.length} digitos. O limite esperado e ${expectedLength}.`);
       return;
     }
-    await processRead(tag, tag, 'manual');
-    setManualMode(true);
-    setManualTag('');
+    if (await processRead(tag, tag, 'manual')) setManualTag('');
   }
 
   async function pauseAudit() {
@@ -2200,22 +2311,17 @@ function AuditView({
     onPaused();
   }
 
-  const isNfcFieldFlow = readerActive && !manualMode;
   const fieldPageClass = [
-    'page field-page',
+    'page field-page audit-workspace',
     scan ? 'field-page--scanned' : '',
-    isNfcFieldFlow ? 'field-page--reader-flow' : '',
-    readerActive && !scan && !outcome && !manualMode ? 'field-page--reader-active' : '',
-    manualMode && !scan && !outcome ? 'field-page--manual' : '',
+    `audit-workspace--${readMode}`,
     decision ? 'field-page--decision' : '',
     outcome ? `field-page--outcome-active field-page--outcome-${outcome.kind}` : ''
   ].filter(Boolean).join(' ');
   const manualPrefix = activeAudit.tagPattern?.prefix ?? '';
   const manualRestLength = Math.max((activeAudit.tagPattern?.length ?? 0) - manualPrefix.length, 0);
   const manualDigits = manualTag.replace(/[^0-9]/g, '');
-  const manualPreviewTag = manualPrefix && manualDigits && !manualDigits.startsWith(manualPrefix)
-    ? `${manualPrefix}${manualDigits}`
-    : manualDigits;
+  const manualPreviewTag = composeKnownIssueTag(manualDigits, activeAudit.tagPattern);
   const manualExpectedLength = activeAudit.tagPattern?.length ?? MAX_SMARTTAG_DIGITS;
   const manualTooLong = manualPreviewTag.length > manualExpectedLength;
   const patternPreviewSuffix = Math.max((Number(patternLengthDraft.replace(/[^0-9]/g, '')) || 0) - patternPrefixDraft.replace(/[^0-9]/g, '').length, 0);
@@ -2258,25 +2364,26 @@ function AuditView({
 
   return (
     <section className={fieldPageClass}>
-      <div className="field-session-bar">
-        <div><span className="eyebrow">MODO CAMPO</span><strong>{activeAudit.farmName}</strong></div>
-        <div className="field-session-actions">
-          <button className="compact-action" onClick={() => setShowPatternModal(true)}><TagIcon /> Padrao</button>
-          <button className="compact-action" onClick={pauseAudit}><PauseIcon /> Pausar</button>
+      <div className="audit-workspace__header">
+        <div className="audit-workspace__heading"><span className="eyebrow">{readMode === 'choose' ? 'CONFERÊNCIA' : readMode === 'manual' ? 'CONFERÊNCIA MANUAL' : readMode === 'bluetooth' ? 'CONFERÊNCIA COM BASTÃO' : 'CONFERÊNCIA PELO TELEFONE'}</span><h1>{activeAudit.farmName}</h1></div>
+        <div className="audit-workspace__tools">
+          <HHR5000Connector reader={hhr5000} open={showReaderSettings} onOpenChange={setShowReaderSettings} />
+          <details className="audit-workspace__options">
+            <summary aria-label="Opções da conferência"><MoreIcon size={21} /></summary>
+            <div>
+              <button onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setShowPatternModal(true); }}><TagIcon size={18} /> Ajustar padrão</button>
+              <button onClick={() => void pauseAudit()}><PauseIcon size={18} /> Pausar auditoria</button>
+            </div>
+          </details>
         </div>
       </div>
-
-      <div className="field-progress-strip" aria-label="Progresso da auditoria">
-        <div><span>Conferidas</span><strong>{fieldMetrics.auditedUnique}</strong></div>
-        <div><span>Pendentes</span><strong>{fieldMetrics.pending}</strong></div>
-        <div><span>Ocorrencias</span><strong>{fieldMetrics.issues}</strong></div>
-        <div><span>Total</span><strong>{activeAudit.validTags ?? activeAudit.totalTags}</strong></div>
+      <div className="audit-workspace__progress" aria-label="Progresso da auditoria">
+        <span><strong>{fieldMetrics.auditedUnique}</strong> de {activeAudit.validTags ?? activeAudit.totalTags} conferidas</span>
+        <span>{fieldMetrics.pending} restantes</span>
+        <div className="audit-workspace__progress-track"><span style={{ width: `${fieldMetrics.percent}%` }} /></div>
       </div>
-      <div className="field-progress-bar"><span style={{ width: `${fieldMetrics.percent}%` }} /></div>
-      <div className="field-save-banner">
-        <CheckIcon size={18} />
-        <span>Salvamento automatico ativo</span>
-      </div>
+      {readMode !== 'choose' && !scan && !outcome && <button className="audit-workspace__back" onClick={() => selectReadMode('choose')}>‹ Trocar modo de conferência</button>}
+      {readMode === 'choose' && !scan && !outcome && <AuditReadModePicker onSelect={selectReadMode} />}
 
       {attentionAlert && showAttentionOverlay && (
         <div className="attention-overlay" role="dialog" aria-modal="true" aria-labelledby="attention-title">
@@ -2301,16 +2408,8 @@ function AuditView({
 
       {manualMode && !scan && !outcome && (
         <div className="manual-field-screen">
-          <div className="manual-field-screen__header">
-            <span className="eyebrow">MODO MANUAL</span>
-            <h1>Digitar SmartTag</h1>
-            <div className="manual-field-meta">
-              <div><span>Fazenda</span><strong>{activeAudit.farmName}</strong></div>
-              <div><span>Progresso</span><strong>{fieldMetrics.auditedUnique}/{activeAudit.validTags ?? activeAudit.totalTags}</strong></div>
-            </div>
-          </div>
-
           <div className="manual-field-card">
+            <h2 className="audit-manual-title">Digitar SmartTag</h2>
             {manualPrefix && (
               <div className="manual-prefix-block">
                 <span>Prefixo da fazenda</span>
@@ -2364,85 +2463,27 @@ function AuditView({
               </div>
             )}
 
-            <button className="button button--primary button--full button--field" disabled={manualTooLong} onClick={() => void manualRead()}>
+            <button className="button button--primary button--full button--field" disabled={manualTooLong || !manualTag} onClick={() => void manualRead()}>
               Registrar leitura manual
             </button>
-            <button className="button button--ghost button--full" onClick={exitManualMode}>
-              Voltar para NFC
-            </button>
           </div>
         </div>
       )}
 
-      {!manualMode && !scan && !outcome && (
-        <div className={`nfc-panel nfc-panel--field ${readerActive ? 'is-active' : 'is-standby'}`}>
-          {readerActive && (
-            <div className="nfc-panel__field-meta">
-              <div>
-                <span>Fazenda</span>
-                <strong>{activeAudit.farmName}</strong>
-              </div>
-              <div>
-                <span>Progresso</span>
-                <strong>{fieldMetrics.auditedUnique}/{activeAudit.validTags ?? activeAudit.totalTags}</strong>
-              </div>
-            </div>
-          )}
-          {readerActive && (
-            <div className="nfc-panel__mini-progress" aria-label={`${fieldMetrics.percent}% concluido`}>
-              <span style={{ width: `${fieldMetrics.percent}%` }} />
-            </div>
-          )}
-          <div className="nfc-panel__status">
-            <span />
-            {readerActive ? 'Leitor NFC ativo' : 'Inativo'}
-          </div>
-          <div className="nfc-panel__visual"><ScanIcon size={58} /></div>
-          <div className="nfc-panel__text">
-            <span className="eyebrow">SMARTTAG</span>
-            <h1>{readerActive ? 'Aproxime a tag' : 'Leitor NFC'}</h1>
-            <p>{readerMessage}</p>
-          </div>
-          {readerActive && latestConfirmedRecords.length > 0 && (
-            <div className="nfc-panel__recent" aria-label="Ultimas conferencias">
-              <div className="nfc-panel__recent-head">
-                <span>Ultimas conferencias</span>
-                <button type="button" onClick={() => openCorrection(latestConfirmedRecords[0])}>Corrigir</button>
-              </div>
-              <div className="nfc-panel__recent-list">
-                {latestConfirmedRecords.map((record) => (
-                  <button key={record.id} type="button" className="nfc-panel__recent-item" onClick={() => openCorrection(record)}>
-                    <strong>{record.observedAnimal}</strong>
-                    <span>...{record.tagNumber.slice(-4)} · {record.source === 'nfc' ? 'NFC' : 'Manual'}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          {!readerActive ? (
-            <button className="button button--primary button--full button--field" onClick={activateReader} disabled={!isWebNfcSupported()}><NfcReaderGlyph className="nfc-reader-glyph--inline" /> Ativar leitor NFC</button>
-          ) : (
-            <button className="button button--ghost button--full" onClick={deactivateReader}>Parar leitor</button>
-          )}
-          <HHR5000Connector
-            status={hhr5000.status}
-            message={hhr5000.message}
-            lastTagRead={hhr5000.lastTagRead}
-            isSupported={hhr5000.isSupported}
-            onConnect={() => void hhr5000.connect()}
-            onDisconnect={hhr5000.disconnect}
-          />
-          <button className="button button--secondary button--full nfc-manual-button" onClick={() => setManualMode(true)}>
-            Digitar tag manualmente
-          </button>
-        </div>
+      {(readMode === 'bluetooth' || readMode === 'phone') && !scan && !outcome && (
+        <AuditReaderStandby
+          mode={readMode}
+          active={readMode === 'phone' ? readerActive : hhr5000.status === 'conectado'}
+          connecting={readMode === 'phone' ? nfcStarting : hhr5000.status === 'conectando'}
+          supported={readMode === 'phone' ? isWebNfcSupported() : hhr5000.isSupported}
+          message={readMode === 'phone' ? readerMessage : hhr5000.message}
+          error={readMode === 'phone' ? nfcError : null}
+          onActivate={() => { primeFeedbackAudio(); void (readMode === 'phone' ? activateReader() : hhr5000.connect()); }}
+          onStop={deactivateReader}
+        />
       )}
 
-      {!isWebNfcSupported() && !scan && !manualMode && (
-        <div className="alert alert--warning"><IssuesIcon /><span>Web NFC indisponível neste acesso. Para a leitura real, use a versão HTTPS no Chrome Android.</span></div>
-      )}
-
-      {!readerActive && !scan && !outcome && !manualMode && latestConfirmedRecords.length > 0 && (
+      {!scan && !outcome && (readMode === 'bluetooth' || readMode === 'phone') && latestConfirmedRecords.length > 0 && (
         <section className="latest-conferences latest-conferences--bottom" aria-labelledby="latest-conferences-title-bottom">
           <div className="section-heading section-heading--compact">
             <div><span className="eyebrow">REGISTROS CONFIRMADOS</span><h2 id="latest-conferences-title-bottom">Ultimas conferencias</h2></div>
@@ -2453,7 +2494,7 @@ function AuditView({
                 <span className="latest-conference__animal">{record.observedAnimal}</span>
                 <span className="latest-conference__details">
                   <strong>Tag ...{record.tagNumber.slice(-4)}</strong>
-                  <small>{formatRelativeTime(record.scannedAt)} - {record.source === 'nfc' ? 'NFC' : 'Manual'}</small>
+                  <small>{formatRelativeTime(record.scannedAt)} · {record.source === 'nfc' ? 'Leitor' : 'Manual'}</small>
                 </span>
                 <ChevronRightIcon size={18} />
               </button>
@@ -2465,7 +2506,7 @@ function AuditView({
         </section>
       )}
 
-      {scan && !outcome && (
+      {scan && !outcome && !showAttentionOverlay && (
         scan.patternWarning && !scan.patternConfirmed ? (
           <div className="field-outcome field-outcome--issue">
             <IssuesIcon size={52} />

@@ -8268,6 +8268,101 @@ body,
   }
 }
 
+/* Audit preparation: summary, pattern, then optional known issues. */
+.import-prep-body {
+  align-content: start;
+}
+
+.import-prep-description {
+  margin: 0;
+  color: #6F655C;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.import-prep-header h2:focus {
+  outline: none;
+}
+
+.import-prep-overlay--pattern,
+.import-prep-overlay--alerts {
+  padding: 0;
+}
+
+.import-prep-overlay--pattern .import-prep-panel,
+.import-prep-overlay--alerts .import-prep-panel {
+  width: 100%;
+  max-width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  max-height: 100dvh;
+  border: 0;
+  border-radius: 0;
+}
+
+.import-prep-overlay--pattern .import-prep-header,
+.import-prep-overlay--alerts .import-prep-header {
+  padding: max(16px, env(safe-area-inset-top)) max(16px, calc((100vw - 680px) / 2)) 16px;
+}
+
+.import-prep-overlay--pattern .import-prep-header h2,
+.import-prep-overlay--alerts .import-prep-header h2 {
+  font-size: clamp(28px, 6vw, 38px);
+  line-height: 1.15;
+}
+
+.import-prep-overlay--pattern .import-prep-body,
+.import-prep-overlay--alerts .import-prep-body {
+  padding: 20px max(12px, calc((100vw - 680px) / 2));
+  gap: 16px;
+}
+
+.import-prep-pattern-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #42645A;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.import-prep-pattern-summary svg {
+  flex-shrink: 0;
+}
+
+.import-prep-overlay--alerts .prep-known-issues__form {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.prep-known-issues__form > .field-label,
+.prep-known-issues__help,
+.prep-known-issues__form > .alert {
+  grid-column: 1 / -1;
+}
+
+.prep-known-issues__form > .field-label {
+  margin: 4px 0 0;
+}
+
+.prep-known-issues__help {
+  color: #6F655C;
+  line-height: 1.5;
+}
+
+.import-prep-actions {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  width: min(680px, 100%);
+  margin-inline: auto;
+}
+
+.import-prep-actions .button {
+  min-width: 0;
+  white-space: normal;
+}
+
 /* Manual SmartTag mode: compact field-first layout without changing read handlers. */
 .field-page--manual {
   width: min(640px, 100%);

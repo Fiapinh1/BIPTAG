@@ -31,7 +31,8 @@ function decodeRecord(record: NDEFRecord) {
 
 export async function startNfcReader(
   onRead: (result: NfcScanResult) => void,
-  onReadError?: (message: string) => void
+  onReadError?: (message: string) => void,
+  signal?: AbortSignal
 ) {
   if (!isWebNfcSupported()) {
     throw new Error('Web NFC não está disponível neste navegador. Use Chrome no Android.');
@@ -39,8 +40,12 @@ export async function startNfcReader(
 
   const reader = new NDEFReader();
   const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  signal?.addEventListener('abort', abort, { once: true });
 
   reader.addEventListener('reading', (event) => {
+    if (controller.signal.aborted) return;
     const decoded = event.message.records
       .map(decodeRecord)
       .map((value) => value.trim())
@@ -59,10 +64,15 @@ export async function startNfcReader(
   });
 
   reader.addEventListener('readingerror', () => {
+    if (controller.signal.aborted) return;
     onReadError?.('A tag foi detectada, mas houve erro na leitura. Aproxime novamente.');
   });
 
-  await reader.scan({ signal: controller.signal });
-
-  return () => controller.abort();
+  try {
+    await reader.scan({ signal: controller.signal });
+    return () => { signal?.removeEventListener('abort', abort); controller.abort(); };
+  } catch (err) {
+    signal?.removeEventListener('abort', abort);
+    throw err;
+  }
 }

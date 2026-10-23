@@ -55,6 +55,26 @@ export function ScanIcon({ size = 22, ...props }: IconProps) {
   );
 }
 
+export function BluetoothIcon({ size = 22, ...props }: IconProps) {
+  return <svg {...base(size)} {...props}><path d="m7 7 10 10-5 4V3l5 4L7 17" /></svg>;
+}
+
+export function MoreIcon({ size = 22, ...props }: IconProps) {
+  return <svg {...base(size)} {...props}><circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" /></svg>;
+}
+
+export function KeyboardIcon({ size = 22, ...props }: IconProps) {
+  return <svg {...base(size)} {...props}><rect x="3" y="5" width="18" height="14" rx="3" /><path d="M7 9h.01M12 9h.01M17 9h.01M7 12h.01M12 12h.01M17 12h.01M8 15h8" /></svg>;
+}
+
+export function PhoneIcon({ size = 22, ...props }: IconProps) {
+  return <svg {...base(size)} {...props}><rect x="6" y="2" width="12" height="20" rx="3" /><path d="M10 5h4M11 19h2M9 10c2-2 4-2 6 0M10.5 12c1-1 2-1 3 0" /></svg>;
+}
+
+export function StickReaderIcon({ size = 22, ...props }: IconProps) {
+  return <svg {...base(size)} {...props}><path d="m7 5 3-3 5 5-3 3zM11 9l7 10-2 2L9 11M3 5c-1 2-1 4 0 6M5.5 6c-.5 1-.5 2 0 3" /></svg>;
+}
+
 export function IssuesIcon({ size = 22, ...props }: IconProps) {
   return (
     <svg {...base(size)} {...props}>

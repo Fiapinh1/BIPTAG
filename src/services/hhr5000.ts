@@ -13,6 +13,7 @@ export interface HHR5000ScanResult {
 }
 
 export interface HHR5000Connection {
+  device: BluetoothDevice;
   deviceName: string;
   disconnect: () => void;
 }
@@ -73,58 +74,72 @@ function parseHHR5000Value(value: DataView): HHR5000ScanResult | null {
 
 export async function connectHHR5000(
   onRead: (result: HHR5000ScanResult) => void,
-  onDisconnect?: () => void
+  onDisconnect?: () => void,
+  options: { device?: BluetoothDevice; signal?: AbortSignal; onDeviceSelected?: (device: BluetoothDevice) => void } = {}
 ): Promise<HHR5000Connection> {
   if (!isWebBluetoothSupported()) {
     throw new Error('Web Bluetooth nao esta disponivel neste navegador. Use Chrome ou Edge em HTTPS.');
   }
 
-  const device = await navigator.bluetooth!.requestDevice({
+  const device = options.device ?? await navigator.bluetooth!.requestDevice({
     filters: [
       { namePrefix: 'HHR5000' },
       { services: [HHR5000_SERVICE_UUID] }
     ],
     optionalServices: [HHR5000_SERVICE_UUID]
   });
+  options.signal?.throwIfAborted();
+  options.onDeviceSelected?.(device);
+  let primaryCharacteristic: BluetoothRemoteGATTCharacteristic | undefined;
+  let closed = false;
 
-  const server = await device.gatt?.connect();
-  if (!server) throw new Error('Nao foi possivel conectar ao GATT do HHR5000SN.');
+  function cleanup() {
+    if (closed) return;
+    closed = true;
+    primaryCharacteristic?.removeEventListener('characteristicvaluechanged', handleValueChanged);
+    device.removeEventListener('gattserverdisconnected', handleDisconnect);
+    options.signal?.removeEventListener('abort', disconnect);
+  }
 
-  const service = await server.getPrimaryService(HHR5000_SERVICE_UUID);
-  const primaryCharacteristic = await service.getCharacteristic(HHR5000_PRIMARY_CHARACTERISTIC_UUID);
-
-  try {
-    await service.getCharacteristic(HHR5000_SECONDARY_CHARACTERISTIC_UUID);
-    console.debug('[HHR5000SN] Characteristic secundaria encontrada', HHR5000_SECONDARY_CHARACTERISTIC_UUID);
-  } catch (err) {
-    console.debug('[HHR5000SN] Characteristic secundaria indisponivel ou nao utilizada', err);
+  function disconnect() {
+    cleanup();
+    // Closing GATT also stops notifications, including when the reader is already off.
+    if (device.gatt?.connected) device.gatt.disconnect();
   }
 
   const handleValueChanged = (event: Event) => {
     const characteristic = event.target as BluetoothRemoteGATTCharacteristic | null;
-    if (!characteristic?.value) return;
+    if (closed || !characteristic?.value) return;
 
     const result = parseHHR5000Value(characteristic.value);
     if (result) onRead(result);
   };
 
   const handleDisconnect = () => {
+    if (closed) return;
+    cleanup();
     onDisconnect?.();
   };
 
-  await primaryCharacteristic.startNotifications();
-  primaryCharacteristic.addEventListener('characteristicvaluechanged', handleValueChanged);
+  options.signal?.addEventListener('abort', disconnect, { once: true });
   device.addEventListener('gattserverdisconnected', handleDisconnect);
-
-  return {
-    deviceName: device.name ?? 'HHR5000SN',
-    disconnect: () => {
-      primaryCharacteristic.removeEventListener('characteristicvaluechanged', handleValueChanged);
-      device.removeEventListener('gattserverdisconnected', handleDisconnect);
-      void primaryCharacteristic.stopNotifications().catch((err) => {
-        console.debug('[HHR5000SN] Nao foi possivel parar notificacoes', err);
-      });
-      if (device.gatt?.connected) device.gatt.disconnect();
-    }
-  };
+  try {
+    const server = await device.gatt?.connect();
+    options.signal?.throwIfAborted();
+    if (!server || closed) throw new Error('Não foi possível conectar ao bastão.');
+    const service = await server.getPrimaryService(HHR5000_SERVICE_UUID);
+    options.signal?.throwIfAborted();
+    if (closed) throw new Error('O bastão foi desconectado.');
+    primaryCharacteristic = await service.getCharacteristic(HHR5000_PRIMARY_CHARACTERISTIC_UUID);
+    options.signal?.throwIfAborted();
+    if (closed) throw new Error('O bastão foi desconectado.');
+    primaryCharacteristic.addEventListener('characteristicvaluechanged', handleValueChanged);
+    await primaryCharacteristic.startNotifications();
+    options.signal?.throwIfAborted();
+    if (closed || !server.connected) throw new Error('O bastão foi desconectado.');
+    return { device, deviceName: device.name ?? 'HHR5000SN', disconnect };
+  } catch (error) {
+    disconnect();
+    throw error;
+  }
 }

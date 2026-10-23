@@ -4,6 +4,7 @@ import { registerSW } from 'virtual:pwa-register';
 import App from './App';
 import DesignPreview from './design-preview/DesignPreview';
 import './styles.css';
+import './styles/audit-workspace.css';
 
 const SW_UPDATE_RELOAD_KEY = 'biptag-sw-update-reload-at';
 

@@ -10,7 +10,7 @@ Durante a ordenha, o tecnico deve pensar o minimo possivel.
 
 O fluxo do aplicativo e:
 
-1. Ler a SmartTag via NFC ou teste manual.
+1. Escolher a leitura manual, pelo bastão Bluetooth ou pelo NFC do telefone e ler a SmartTag.
 2. Mostrar o animal esperado conforme a base Nedap importada.
 3. Digitar o brinco observado fisicamente no animal.
 4. Confirmar apenas o fato visto em campo.
@@ -39,12 +39,19 @@ A base importada e salva no IndexedDB do navegador. O app pode ser fechado e abe
 
 ## Leitura de SmartTag
 
-Existem dois modos de leitura:
+Ao abrir `Auditar`, o usuário escolhe entre três telas de leitura:
 
-- NFC real, usando Web NFC no Chrome Android.
-- Teste manual sem NFC, digitando a tag ou apenas o final da tag quando existe um padrao definido.
+- `Digitar manualmente`: informa a tag completa ou os dígitos finais quando existe um padrão definido.
+- `Usar bastão Bluetooth`: recebe as tags do HHR5000SN autorizado no navegador.
+- `Usar NFC do telefone`: lê tags NFC compatíveis com conteúdo NDEF no Chrome Android.
 
-No modo manual, a area permanece aberta ate o usuario clicar em `Sair do modo manual`.
+O botão `Trocar modo de conferência` retorna à escolha sem apagar os registros. O NFC é parado ao sair da tela do telefone. A conexão Bluetooth permanece ao abrir outras páginas do app; suas leituras só abrem a conferência quando o modo bastão está selecionado.
+
+O ícone de Bluetooth no canto mostra verde quando conectado e cinza quando desconectado. Ao tocar nele, é possível consultar o bastão, conectar, desconectar ou escolher outro dispositivo.
+
+Após a primeira conexão, o app tenta reconectar ao mesmo bastão se houver uma queda, com intervalos de até 15 segundos e enquanto a página estiver visível. Ao reabrir o app, a reconexão depende de o navegador disponibilizar os dispositivos já autorizados (`getDevices`). Quando essa função não existe ou a permissão foi removida, o usuário conecta pelo botão. Desconectar manualmente interrompe as tentativas automáticas, inclusive após reabrir o app.
+
+Uma leitura nova não substitui uma conferência ou decisão em andamento. É necessário terminar ou cancelar a tag atual antes de ler outra.
 
 Ao ler uma tag, o sistema procura a SmartTag na base importada e mostra:
 

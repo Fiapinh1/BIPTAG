@@ -1,13 +1,13 @@
 # BIPTAG V0.3 - roteiro de teste mobile
 
 Use este roteiro no Chrome Android, preferencialmente com o app publicado em HTTPS.
-O endereco local HTTP serve para testar interface, importacao, IndexedDB e relatorio, mas Web NFC real depende de Chrome Android com HTTPS.
+O endereço local HTTP serve para testar interface, digitação manual, importação, IndexedDB e relatório. No celular, Bluetooth e NFC reais exigem HTTPS e navegador compatível.
 
 ## Ambiente
 
 - [ ] Abrir o BIPTAG no Chrome Android.
 - [ ] Confirmar que a tela nao corta na largura do celular.
-- [ ] Confirmar que a logo aparece no topo e no icone do PWA.
+- [ ] Confirmar que a logo aparece no início e no ícone do PWA; a conferência usa um cabeçalho compacto com a fazenda.
 - [ ] Confirmar que o app pode ser instalado na tela inicial.
 - [ ] Confirmar que o modo instalado abre em retrato.
 - [ ] Confirmar que os botoes principais tem area de toque confortavel.
@@ -25,11 +25,32 @@ O endereco local HTTP serve para testar interface, importacao, IndexedDB e relat
 ## Teste manual sem NFC
 
 - [ ] Abrir `Auditar`.
-- [ ] Abrir `Teste manual sem NFC`.
+- [ ] Escolher `Digitar manualmente` e confirmar que não aparecem controles de NFC ou um painel grande do bastão.
 - [ ] Digitar somente o final da tag quando houver prefixo definido.
 - [ ] Confirmar que o app monta a tag completa corretamente.
 - [ ] Simular outra tag sem sair do modo manual.
-- [ ] Usar `Sair do modo manual` e confirmar que o campo limpa.
+- [ ] Usar `Trocar modo de conferência` e confirmar que o campo limpa e os registros anteriores permanecem salvos.
+
+## Bastão Bluetooth
+
+- [ ] Em HTTPS, escolher `Usar bastão Bluetooth` e conectar o HHR5000SN.
+- [ ] Confirmar que o ícone no canto fica verde e que os detalhes só aparecem ao tocar nele.
+- [ ] Ler uma tag e manter o campo do brinco aberto; ler outra tag e confirmar que a primeira não é substituída.
+- [ ] Confirmar o brinco e finalizar a decisão antes de ler a próxima tag.
+- [ ] Desligar e ligar o mesmo bastão, mantendo o app visível; aguardar a reconexão sem um novo seletor de dispositivos.
+- [ ] Abrir `Consultar` e `Revisão`, retornar a `Auditar` e confirmar que a conexão foi mantida.
+- [ ] Confirmar que leituras do bastão não interrompem os modos manual e telefone.
+- [ ] Reabrir o app e verificar a reconexão quando `getDevices` estiver disponível no navegador.
+- [ ] Desconectar pelo ícone, reabrir o app e confirmar que não reconecta até tocar em conectar.
+- [ ] Testar o menu `Escolher outro bastão` e o cancelamento do seletor.
+
+## NFC do telefone
+
+- [ ] Escolher `Usar NFC do telefone` e ativar a leitura com uma tag NFC compatível com NDEF.
+- [ ] Confirmar que não aparecem os controles de conexão Bluetooth no painel principal.
+- [ ] Confirmar que erros de leitura aparecem na tela.
+- [ ] Usar `Parar NFC` ou trocar para outro modo e confirmar que eventos do NFC não abrem uma conferência.
+- [ ] Testar a leitura, o brinco e as decisões em um celular de tela pequena, com e sem o teclado aberto, sem cartões sobrepostos ou botões cortados.
 
 ## Tag correta
 
@@ -37,7 +58,7 @@ O endereco local HTTP serve para testar interface, importacao, IndexedDB e relat
 - [ ] Digitar o mesmo brinco do cadastro Nedap.
 - [ ] Confirmar que aparece `TAG CORRETA`.
 - [ ] Confirmar que a mensagem nao some sozinha antes da decisao.
-- [ ] Tocar `Proxima tag` e confirmar que volta para leitura.
+- [ ] Tocar `Manter tag atual` e confirmar que volta ao mesmo modo de leitura.
 - [ ] Repetir e testar `Remover vinculo`.
 - [ ] Repetir e testar `Substituir tag`.
 - [ ] Repetir e testar `Mais opcoes > Adicionar observacao`.
