@@ -79,23 +79,13 @@ As opcoes principais sao:
 
 ## Tag correta
 
-Tag correta nao significa obrigatoriamente "sem acao".
+Quando o brinco informado coincide com o cadastro, um único toque em `Conferir brinco` salva a evidência como correta e mantém a tag. O aviso verde `Tag correta e salva` aparece por alguns segundos, sem bloquear a próxima leitura e sem outra confirmação.
 
-Quando uma tag esta correta, o sistema mostra:
+Os detalhes continuam acessíveis no aviso e nas últimas conferências. Ali é possível corrigir o brinco da última leitura e abrir `Ações desta tag` para remover vínculo, substituir tag, adicionar observação ou marcar fora de uso. Uma observação preserva a ação operacional já escolhida.
 
-- `TAG CORRETA`;
-- animal;
-- tag;
-- botoes de decisao operacional.
+As ações opcionais só podem alterar uma leitura correta ainda atual, da auditoria aberta. Elas atualizam o estado efetivo da tag e o relatório sem criar outra evidência física. Leituras antigas substituídas ou auditorias finalizadas não são alteradas.
 
-As opcoes atuais sao:
-
-- `Proxima tag`: registra que a tag atual deve ser mantida.
-- `Remover tag`: registra acao futura para remover o vinculo da tag no Nedap.
-- `Substituir tag`: registra acao futura para substituir a tag do animal.
-- `Adicionar observacao`: adiciona uma observacao ao relatorio mantendo a tag atual.
-
-Essas decisoes aparecem no relatorio final.
+Resultados confirmados usam verde, pendências usam amarelo e conflitos usam vermelho. Divergências continuam exigindo confirmação do brinco físico antes de serem salvas.
 
 ## Status de auditoria
 

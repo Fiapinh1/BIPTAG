@@ -377,6 +377,32 @@ export async function saveReading(input: {
   return (await db.auditRecords.get(id))!;
 }
 
+export async function updateConfirmedTagAction(input: {
+  auditId: string;
+  recordId: string;
+  action?: Extract<OperationalAction, 'keep_tag' | 'remove_tag' | 'replace_tag' | 'tag_out_of_use'>;
+  actionNote?: string | null;
+  note?: string | null;
+}) {
+  return db.transaction('rw', db.audits, db.auditRecords, db.tagAssignments, db.effectiveTagAssignments, async () => {
+    const [audit, record] = await Promise.all([db.audits.get(input.auditId), db.auditRecords.get(input.recordId)]);
+    if (!audit || audit.status === 'finished' || !record || record.auditId !== input.auditId || record.isCurrent === false || record.status !== 'correct') return null;
+    const now = new Date().toISOString();
+    const action = input.action ?? record.operationalAction ?? 'keep_tag';
+    await db.auditRecords.update(record.id, {
+      operationalAction: action,
+      ...(input.actionNote !== undefined ? { actionNote: input.actionNote } : {}),
+      ...(input.note !== undefined ? { note: input.note } : {}),
+      reviewStatus: action === 'keep_tag' ? 'not_required' : 'open',
+      updatedAt: now,
+      syncStatus: 'pending'
+    });
+    await db.audits.update(input.auditId, { updatedAt: now, lastActivityAt: now });
+    await rebuildEffectiveState(input.auditId);
+    return (await db.auditRecords.get(record.id))!;
+  });
+}
+
 export async function correctConfirmedReading(input: {
   auditId: string;
   originalRecord: AuditRecord;

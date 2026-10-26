@@ -59,13 +59,13 @@ O endereço local HTTP serve para testar interface, digitação manual, importa�
 
 - [ ] Ler ou simular uma tag que exista na base.
 - [ ] Digitar o mesmo brinco do cadastro Nedap.
-- [ ] Confirmar que aparece `TAG CORRETA`.
-- [ ] Confirmar que a mensagem nao some sozinha antes da decisao.
-- [ ] Tocar `Manter tag atual` e confirmar que volta ao mesmo modo de leitura.
-- [ ] Repetir e testar `Remover vinculo`.
-- [ ] Repetir e testar `Substituir tag`.
-- [ ] Repetir e testar `Mais opcoes > Adicionar observacao`.
-- [ ] Repetir e testar `Mais opcoes > Tag fora de uso`.
+- [ ] Tocar `Conferir brinco` uma vez e confirmar o aviso verde `Tag correta e salva`, sem pedir para manter a tag novamente.
+- [ ] Confirmar que a próxima leitura fica disponível imediatamente, inclusive antes de o aviso desaparecer.
+- [ ] Pressionar Enter duas vezes rapidamente e confirmar que existe somente uma leitura salva.
+- [ ] Abrir `Detalhes` do aviso ou da última conferência e testar `Corrigir última leitura`.
+- [ ] Em `Ações desta tag`, testar `Remover vínculo`, `Substituir tag`, `Adicionar observação` e `Tag fora de uso`.
+- [ ] Confirmar que as ações atingem a tag selecionada, mesmo quando outra já foi conferida depois.
+- [ ] Adicionar observação a uma tag com remoção registrada e confirmar que a remoção continua no relatório.
 
 ## Divergencia
 

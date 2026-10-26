@@ -8,6 +8,7 @@ import { TagReadOnlyList } from './components/TagReadOnlyList';
 import { HHR5000Connector } from './components/HHR5000Connector';
 import { AuditReadModePicker, AuditReaderStandby, type AuditReadMode } from './components/AuditReaderWorkspace';
 import { AuditScanSummary } from './components/AuditScanSummary';
+import { AuditResultCard } from './components/AuditResultCard';
 import { StatCard } from './components/StatCard';
 import {
   ActionIcon,
@@ -48,6 +49,7 @@ import {
   getRelatedContext,
   markPendingTagsNotFound,
   saveReading,
+  updateConfirmedTagAction,
   type AnimalTagContext,
   type RelatedContext
 } from './services/audit-engine';
@@ -190,14 +192,8 @@ type KnownIssueDraft = {
 
 type OutcomeState =
   | {
-      kind: 'correct';
-      recordId: string;
-      title: string;
-      tagNumber: string;
-      animal: string;
-    }
-  | {
       kind: 'issue';
+      status: RecordStatus;
       title: string;
       message: string;
       tagNumber: string;
@@ -217,7 +213,6 @@ type OutcomeState =
       actionLabel: string;
       tagNumber: string | null;
       animal: string | null;
-      autoAdvance?: boolean;
     };
 
 function BiptagLogo({ className = '' }: { className?: string }) {
@@ -1590,6 +1585,8 @@ function AuditView({
   const [patternLengthDraft, setPatternLengthDraft] = useState(String(MAX_SMARTTAG_DIGITS));
   const [decision, setDecision] = useState<DecisionState | null>(null);
   const [outcome, setOutcome] = useState<OutcomeState | null>(null);
+  const [lastSuccess, setLastSuccess] = useState<AuditRecord | null>(null);
+  const [savingReading, setSavingReading] = useState(false);
   const [correctionTarget, setCorrectionTarget] = useState<AuditRecord | null>(null);
   const [correctionDraft, setCorrectionDraft] = useState('');
   const [correctionEditing, setCorrectionEditing] = useState(false);
@@ -1600,6 +1597,8 @@ function AuditView({
   const stopReader = useRef<null | (() => void)>(null);
   const lastRead = useRef<{ tag: string; at: number } | null>(null);
   const readInFlight = useRef(false);
+  const savingReadingRef = useRef(false);
+  const manualInputRef = useRef<HTMLInputElement>(null);
   const phoneReadHandler = useRef<((tag: string, raw: string) => void) | null>(null);
   const nfcAttempt = useRef<AbortController | null>(null);
   const currentReadMode = useRef(readMode);
@@ -1617,12 +1616,15 @@ function AuditView({
     setPatternLengthDraft(String(audit.tagPattern?.length ?? MAX_SMARTTAG_DIGITS));
   }, [audit?.id, audit?.tagPattern?.prefix, audit?.tagPattern?.length]);
   useEffect(() => {
-    if (outcome?.kind !== 'action' || !outcome.autoAdvance) return;
+    if (!lastSuccess) return;
     const timer = window.setTimeout(() => {
-      resetForNext('Tag mantida. Aproxime a proxima SmartTag.');
-    }, 3000);
+      setLastSuccess(null);
+    }, 6000);
     return () => window.clearTimeout(timer);
-  }, [outcome]);
+  }, [lastSuccess?.id]);
+  useEffect(() => {
+    if (lastSuccess && manualMode) manualInputRef.current?.focus({ preventScroll: true });
+  }, [lastSuccess?.id, manualMode]);
   useEffect(() => {
     if (!manualMode || scan || outcome) return;
     const timer = window.setTimeout(() => {
@@ -1709,7 +1711,7 @@ function AuditView({
   async function processRead(tagNumber: string, rawValue = tagNumber, source: 'nfc' | 'manual' = 'nfc') {
     const normalized = tagNumber.replace(/[^0-9]/g, '').trim();
     if (!normalized) return false;
-    if (readInFlight.current || scan || outcome || decision) {
+    if (savingReadingRef.current || readInFlight.current || scan || outcome || decision) {
       if (source !== 'manual' && lastRead.current?.tag !== normalized) setToast('Conclua a tag atual antes de ler outra.');
       return false;
     }
@@ -1718,6 +1720,7 @@ function AuditView({
     if (source !== 'manual' && lastRead.current?.tag === normalized && now - lastRead.current.at < 1800) return false;
     lastRead.current = { tag: normalized, at: now };
     readInFlight.current = true;
+    setLastSuccess(null);
 
     try {
     const [assignment, existingRecord, knownIssue] = await Promise.all([
@@ -1804,6 +1807,20 @@ function AuditView({
     setReaderMessage('Leitor NFC desativado');
   }
 
+  async function runFieldSave(operation: () => Promise<void>) {
+    if (savingReadingRef.current) return;
+    savingReadingRef.current = true;
+    setSavingReading(true);
+    try { await operation(); }
+    catch (error) {
+      setToast(error instanceof Error ? error.message : 'Não foi possível salvar. Tente novamente.');
+      feedbackWarning();
+    } finally {
+      savingReadingRef.current = false;
+      setSavingReading(false);
+    }
+  }
+
   async function evaluateObserved() {
     if (!scan) return;
     const observed = observedAnimal.trim() || null;
@@ -1823,10 +1840,12 @@ function AuditView({
         status,
         fieldDecision: 'confirmed_match',
         source: scan.source,
-        existingRecord: scan.existingRecord
+        existingRecord: scan.existingRecord,
+        operationalAction: 'keep_tag'
       });
       feedbackCorrect();
-      setOutcome({ kind: 'correct', recordId: saved.id, title: 'Tag correta', tagNumber: saved.tagNumber, animal: observed });
+      resetForNext('Tag correta e salva. Pronto para a próxima leitura.');
+      setLastSuccess(saved);
       onAuditChanged(activeAudit.id);
       return;
     }
@@ -1874,6 +1893,7 @@ function AuditView({
     setScan((currentScan) => currentScan ? { ...currentScan, existingRecord: saved } : currentScan);
     setOutcome({
       kind: 'issue',
+      status: saved.status,
       title: issueSavedTitle(saved.status),
       message: issueSavedMessage(saved.status, saved.observedAnimal),
       tagNumber: saved.tagNumber,
@@ -1902,6 +1922,7 @@ function AuditView({
     setScan({ ...scan, existingRecord: saved });
     setOutcome({
       kind: 'issue',
+      status: saved.status,
       title: 'Separado para revisão',
       message: 'Você não precisou decidir o problema agora. O BIPTAG guardou esta leitura nas pendências.',
       tagNumber: scan.tagNumber,
@@ -1965,6 +1986,7 @@ function AuditView({
     setScan({ ...scan, existingRecord: saved });
     setOutcome({
       kind: 'issue',
+      status: saved.status,
       title: 'Animal sem brinco',
       message: 'Ocorrencia salva. O BIPTAG nao inventou numero de animal nem criou movimento para esta SmartTag.',
       tagNumber: scan.tagNumber,
@@ -1975,62 +1997,45 @@ function AuditView({
     onAuditChanged(activeAudit.id);
   }
 
-  async function setOperationalAction(recordId: string, action: OperationalAction, actionNote: string | null = null) {
-    const now = new Date().toISOString();
-    await db.auditRecords.update(recordId, {
-      operationalAction: action,
-      actionNote,
-      reviewStatus: action === 'keep_tag' ? 'not_required' : 'open',
-      updatedAt: now,
-      syncStatus: 'pending'
-    });
-    if (scan) {
-      await db.effectiveTagAssignments.where('[auditId+tagNumber]').equals([activeAudit.id, scan.tagNumber]).modify({
-        updatedAt: now,
-        syncStatus: 'pending'
-      });
+  async function saveTagOptions(record: AuditRecord, changes: Omit<Parameters<typeof updateConfirmedTagAction>[0], 'auditId' | 'recordId'>) {
+    const updated = await updateConfirmedTagAction({ auditId: activeAudit.id, recordId: record.id, ...changes });
+    if (!updated) {
+      setToast('Esta leitura foi atualizada. Abra os detalhes da conferência mais recente.');
+      setCorrectionTarget(null);
+      return null;
     }
+    setLastSuccess(null);
+    setCorrectionTarget(null);
+    setShowCorrectOptions(false);
     onAuditChanged(activeAudit.id);
+    return updated;
   }
 
-  async function keepCorrectTag(recordId: string) {
-    await setOperationalAction(recordId, 'keep_tag', 'Manter tag atual.');
+  async function removeCorrectTag(record: AuditRecord) {
+    if (!await saveTagOptions(record, { action: 'remove_tag', actionNote: 'Remover vínculo desta tag no Nedap após a auditoria.' })) return;
     setOutcome({
       kind: 'action',
-      title: 'Tag mantida',
-      message: 'A conferencia foi salva e nenhuma correcao sera sugerida para esta SmartTag.',
-      actionLabel: 'MANTER TAG ATUAL',
-      tagNumber: scan?.tagNumber ?? null,
-      animal: scan?.assignment?.expectedAnimal ?? (observedAnimal.trim() || null),
-      autoAdvance: true
-    });
-  }
-
-  async function removeCorrectTag(recordId: string) {
-    await setOperationalAction(recordId, 'remove_tag', 'Remover vinculo desta tag no Nedap apos a auditoria.');
-    setOutcome({
-      kind: 'action',
-      title: 'Remocao registrada',
+      title: 'Remoção registrada',
       message: 'O relatorio final vai listar esta SmartTag para remover o vinculo no Nedap depois da auditoria.',
       actionLabel: 'REMOVER VINCULO',
-      tagNumber: scan?.tagNumber ?? null,
-      animal: scan?.assignment?.expectedAnimal ?? (observedAnimal.trim() || null)
+      tagNumber: record.tagNumber,
+      animal: record.observedAnimal
     });
   }
 
-  async function replaceCorrectTag(recordId: string) {
-    await setOperationalAction(recordId, 'replace_tag', 'Substituir esta tag no Nedap apos a auditoria.');
+  async function replaceCorrectTag(record: AuditRecord) {
+    if (!await saveTagOptions(record, { action: 'replace_tag', actionNote: 'Substituir esta tag no Nedap após a auditoria.' })) return;
     setOutcome({
       kind: 'action',
-      title: 'Substituicao registrada',
+      title: 'Substituição registrada',
       message: 'O relatorio final vai listar esta SmartTag como substituicao operacional para executar no Nedap.',
       actionLabel: 'SUBSTITUIR TAG',
-      tagNumber: scan?.tagNumber ?? null,
-      animal: scan?.assignment?.expectedAnimal ?? (observedAnimal.trim() || null)
+      tagNumber: record.tagNumber,
+      animal: record.observedAnimal
     });
   }
 
-  async function addCorrectObservation(recordId: string) {
+  async function addCorrectObservation(record: AuditRecord) {
     const note = await appDialog.prompt({
       title: 'Adicionar observacao',
       message: 'Escreva a observacao que deve aparecer no relatorio final desta SmartTag.',
@@ -2038,18 +2043,18 @@ function AuditView({
       confirmLabel: 'Salvar observacao'
     });
     if (note === null) return;
-    await setOperationalAction(recordId, 'keep_tag', note.trim() || 'Observacao adicionada em campo.');
+    if (!await saveTagOptions(record, { note: note.trim() || 'Observação adicionada em campo.' })) return;
     setOutcome({
       kind: 'action',
-      title: 'Observacao salva',
+      title: 'Observação salva',
       message: note.trim() || 'Observacao adicionada em campo.',
       actionLabel: 'OBSERVACAO',
-      tagNumber: scan?.tagNumber ?? null,
-      animal: scan?.assignment?.expectedAnimal ?? (observedAnimal.trim() || null)
+      tagNumber: record.tagNumber,
+      animal: record.observedAnimal
     });
   }
 
-  async function markCorrectTagOutOfUse(recordId: string) {
+  async function markCorrectTagOutOfUse(record: AuditRecord) {
     const note = await appDialog.prompt({
       title: 'Tag fora de uso',
       message: 'Informe o motivo para o relatorio operacional.',
@@ -2057,14 +2062,14 @@ function AuditView({
       confirmLabel: 'Registrar'
     });
     if (note === null) return;
-    await setOperationalAction(recordId, 'tag_out_of_use', note.trim() || 'Tag marcada como fora de uso em campo.');
+    if (!await saveTagOptions(record, { action: 'tag_out_of_use', actionNote: note.trim() || 'Tag marcada como fora de uso em campo.' })) return;
     setOutcome({
       kind: 'action',
       title: 'Tag fora de uso',
       message: note.trim() || 'Tag marcada como fora de uso em campo.',
       actionLabel: 'TAG FORA DE USO',
-      tagNumber: scan?.tagNumber ?? null,
-      animal: scan?.assignment?.expectedAnimal ?? (observedAnimal.trim() || null)
+      tagNumber: record.tagNumber,
+      animal: record.observedAnimal
     });
   }
 
@@ -2144,6 +2149,7 @@ function AuditView({
     setScan(null);
     setDecision(null);
     setOutcome(null);
+    setLastSuccess(null);
     setShowCorrectOptions(false);
     setDismissedAttentionKey(null);
     setObservedAnimal('');
@@ -2155,6 +2161,7 @@ function AuditView({
     setCorrectionDraft('');
     setCorrectionEditing(false);
     setCorrectionConfirming(false);
+    setShowCorrectOptions(false);
   }
 
   function beginCorrection() {
@@ -2287,6 +2294,11 @@ function AuditView({
         <span>{fieldMetrics.pending} restantes</span>
         <div className="audit-workspace__progress-track"><span style={{ width: `${fieldMetrics.percent}%` }} /></div>
       </div>
+      {lastSuccess && !scan && !outcome && <div className="audit-save-receipt">
+        <CheckIcon size={24} />
+        <div role="status"><strong>Tag correta e salva</strong><span>Animal {lastSuccess.observedAnimal} · <span className="audit-save-receipt__tag">{lastSuccess.tagNumber}</span></span></div>
+        <button aria-label="Ver detalhes da tag correta" onClick={() => openCorrection(lastSuccess)}>Detalhes</button>
+      </div>}
       {readMode !== 'choose' && !scan && !outcome && <button className="audit-workspace__back" onClick={() => selectReadMode('choose')}>‹ Trocar modo de conferência</button>}
       {readMode === 'choose' && !scan && !outcome && <AuditReadModePicker onSelect={selectReadMode} />}
 
@@ -2325,6 +2337,7 @@ function AuditView({
             <label className="field-label" htmlFor="manual-tag">{manualPrefix ? 'Digitos finais' : 'SmartTag'}</label>
             <input
               id="manual-tag"
+              ref={manualInputRef}
               className={`text-input manual-field-input ${manualTooLong ? 'is-invalid' : ''}`}
               inputMode="numeric"
               enterKeyHint="done"
@@ -2348,7 +2361,7 @@ function AuditView({
               <div className="manual-recent">
                 <div className="manual-recent__head">
                   <span>Ultimas conferencias</span>
-                  <button type="button" onClick={() => openCorrection(manualRecentRecords[0])}>Corrigir</button>
+                  <button type="button" onClick={() => openCorrection(manualRecentRecords[0])}>Detalhes</button>
                 </div>
                 <div className="manual-recent__list">
                   {manualRecentRecords.map((record) => (
@@ -2440,79 +2453,37 @@ function AuditView({
                 enterKeyHint="done"
                 pattern="[0-9]*"
                 autoComplete="off"
+                disabled={savingReading}
                 aria-labelledby="observed-title"
                 aria-describedby="observed-help"
                 placeholder="0000"
                 value={observedAnimal}
                 onChange={(event) => setObservedAnimal(event.target.value.replace(/[^0-9A-Za-z_-]/g, ''))}
-                onKeyDown={(event) => { if (event.key === 'Enter') void evaluateObserved(); }}
+                onKeyDown={(event) => { if (event.key === 'Enter') void runFieldSave(evaluateObserved); }}
               />
-              <button className="button button--primary button--full button--field" disabled={!observedAnimal.trim()} onClick={() => void evaluateObserved()}>Conferir brinco</button>
+              <button className="button button--primary button--full button--field" disabled={!observedAnimal.trim() || savingReading} onClick={() => void runFieldSave(evaluateObserved)}>{savingReading ? 'Salvando…' : 'Conferir brinco'}</button>
               <div className="conference-alternatives"><span>Ou registre uma situação</span><div>
-                <button className="button button--ghost" onClick={() => void markTagWithoutAnimal()}>Tag sem animal</button>
-                <button className="button button--ghost" onClick={() => void markAnimalWithoutEarTag()}>Animal sem brinco</button>
+                <button className="button button--ghost" disabled={savingReading} onClick={() => void runFieldSave(markTagWithoutAnimal)}>Tag sem animal</button>
+                <button className="button button--ghost" disabled={savingReading} onClick={() => void runFieldSave(markAnimalWithoutEarTag)}>Animal sem brinco</button>
               </div></div>
-              <button className="conference-cancel" onClick={cancelCurrentRead}><span aria-hidden="true">‹</span> {manualMode ? 'Digitar outra tag' : 'Ler outra tag'}</button>
+              <button className="conference-cancel" disabled={savingReading} onClick={cancelCurrentRead}><span aria-hidden="true">‹</span> {manualMode ? 'Digitar outra tag' : 'Ler outra tag'}</button>
             </div>
           ) : (
-            <GuidedDecision scan={scan} decision={decision} onConfirm={() => void confirmPhysicalFact()} onCorrect={correctObservedNumber} onUnconfirmed={() => void markAnimalWithoutEarTag()} onCancel={cancelCurrentRead} />
+            <GuidedDecision scan={scan} decision={decision} busy={savingReading} onConfirm={() => void runFieldSave(confirmPhysicalFact)} onCorrect={correctObservedNumber} onUnconfirmed={() => void runFieldSave(markAnimalWithoutEarTag)} onCancel={cancelCurrentRead} />
           )}
         </div>
         )
       )}
 
-      {outcome?.kind === 'correct' && (
-        <div className="field-outcome field-outcome--success">
-          <span className="field-outcome__icon"><CheckIcon size={58} /></span>
-          <span className="eyebrow">TAG CORRETA</span>
-          <h1>{outcome.title}</h1>
-          <div className="outcome-summary">
-            <div><AnimalIcon size={20} /><span>Animal</span><strong>{outcome.animal}</strong></div>
-            <div><TagIcon size={20} /><span>Tag</span><strong>{outcome.tagNumber}</strong></div>
-          </div>
-          <div className="outcome-action-grid">
-            <button className="outcome-action-button outcome-action-button--primary" onClick={() => void keepCorrectTag(outcome.recordId)}>
-              <CheckIcon size={24} />
-              <span><strong>Manter tag atual</strong><small>Confirmar decisão de campo</small></span>
-            </button>
-            <button className="outcome-action-button outcome-action-button--danger" onClick={() => void removeCorrectTag(outcome.recordId)}>
-              <TagIcon size={24} />
-              <span><strong>Remover vínculo</strong><small>Registrar ação para o Nedap</small></span>
-            </button>
-            <button className="outcome-action-button outcome-action-button--secondary" onClick={() => void replaceCorrectTag(outcome.recordId)}>
-              <SwapIcon size={24} />
-              <span><strong>Substituir tag</strong><small>Registrar troca operacional</small></span>
-            </button>
-          </div>
-          <button className="button button--ghost button--full" onClick={() => setShowCorrectOptions((value) => !value)}>Mais ações</button>
-          {showCorrectOptions && (
-            <div className="field-more-options">
-              <button className="button button--ghost button--full" onClick={() => void addCorrectObservation(outcome.recordId)}><ActionIcon /> Adicionar observação</button>
-              <button className="button button--secondary button--full" onClick={() => void markCorrectTagOutOfUse(outcome.recordId)}><IssuesIcon /> Tag fora de uso</button>
-            </div>
-          )}
-        </div>
-      )}
-
       {outcome?.kind === 'issue' && (
-        <div className="field-outcome field-outcome--issue">
-          <span className="field-outcome__icon"><IssuesIcon size={52} /></span>
-          <span className="eyebrow">OCORRÊNCIA SALVA</span>
-          <h1>{outcome.title}</h1>
-          <p>{outcome.message}</p>
-          <div className="outcome-summary">
-            <div><TagIcon size={20} /><span>Tag</span><strong>{outcome.tagNumber}</strong></div>
-            <div><AnimalIcon size={20} /><span>Nedap</span><strong>{outcome.expectedAnimal ?? '—'}</strong></div>
-            <div><AnimalIcon size={20} /><span>Brinco visto</span><strong>{outcome.observedAnimal ?? '—'}</strong></div>
-          </div>
-          <button className="button button--primary button--full button--field" onClick={() => resetForNext()}>Continuar auditoria</button>
+        <AuditResultCard tone={['audit_conflict', 'new_tag_conflict'].includes(outcome.status) ? 'danger' : ['correct', 'divergence', 'reassignment', 'linked', 'new_tag', 'tag_without_animal', 'tag_stored'].includes(outcome.status) ? 'success' : 'warning'} title={outcome.title} message={outcome.message} tagNumber={outcome.tagNumber} expectedAnimal={outcome.expectedAnimal ?? (scan?.assignment ? 'Sem vínculo' : 'Não cadastrada')} observedAnimal={outcome.observedAnimal}>
+          <button className="button button--primary button--full" onClick={() => resetForNext()}>Próxima tag</button>
           {scan && (
-            <button className="button button--secondary button--full" onClick={() => returnToConference(outcome.observedAnimal)}>
-              Voltar e corrigir brinco
+            <button className="button button--ghost button--full" onClick={() => returnToConference(outcome.observedAnimal)}>
+              Corrigir brinco
             </button>
           )}
-          <button className="button button--ghost button--full" onClick={cancelCurrentRead}>Ler outra tag</button>
-        </div>
+        </AuditResultCard>
       )}
 
       {outcome?.kind === 'swap' && (
@@ -2531,27 +2502,9 @@ function AuditView({
       )}
 
       {outcome?.kind === 'action' && (
-        <div className="field-outcome field-outcome--action">
-          <span className="field-outcome__icon"><ActionIcon size={56} /></span>
-          <span className="eyebrow">AÇÃO REGISTRADA</span>
-          <h1>{outcome.title}</h1>
-          <p>{outcome.message}</p>
-          <div className="action-result">
-            <div><ActionIcon size={22} /><span>Ação</span><strong>{outcome.actionLabel}</strong></div>
-            <div><AnimalIcon size={22} /><span>Animal</span><strong>{outcome.animal ?? '—'}</strong></div>
-            <div><TagIcon size={22} /><span>Tag</span><strong>{outcome.tagNumber ?? '—'}</strong></div>
-          </div>
-          {outcome.autoAdvance ? (
-            <div className="auto-advance-note">
-              <span />
-              Voltando para a proxima leitura...
-            </div>
-          ) : (
-            <button className="button button--primary button--full button--field" onClick={() => resetForNext()}>
-              Continuar auditoria
-            </button>
-          )}
-        </div>
+        <AuditResultCard tone={outcome.actionLabel === 'OBSERVACAO' || outcome.actionLabel === 'SEM ACAO NEDAP' ? 'success' : 'warning'} label="AÇÃO REGISTRADA" title={outcome.title} message={outcome.message} tagNumber={outcome.tagNumber} observedAnimal={outcome.animal}>
+          <button className="button button--primary button--full" onClick={() => resetForNext()}>Próxima tag</button>
+        </AuditResultCard>
       )}
 
       {showPatternModal && (
@@ -2610,18 +2563,13 @@ function AuditView({
                 <span className="eyebrow">{correctionEditing ? 'CORRIGIR CONFERÊNCIA' : 'CONFERÊNCIA CONFIRMADA'}</span>
                 <h2 id="correction-modal-title">{correctionEditing ? 'Qual é o número correto?' : 'Detalhes da leitura'}</h2>
               </div>
-              <button className="app-modal__close" onClick={() => setCorrectionTarget(null)} aria-label="Fechar">×</button>
+              <button className="app-modal__close" disabled={savingReading} onClick={() => setCorrectionTarget(null)} aria-label="Fechar">×</button>
             </div>
-            <div className="correction-summary">
-              <div><span>Tag</span><strong>{correctionTarget.tagNumber}</strong></div>
-              <div><span>Animal informado</span><strong>{correctionTarget.observedAnimal}</strong></div>
-              <div><span>Animal Nedap</span><strong>{correctionTarget.expectedAnimal ?? 'Sem vínculo'}</strong></div>
-              <div><span>Horário</span><strong>{formatTime(correctionTarget.scannedAt)}</strong></div>
-              <div><span>Origem</span><strong>{correctionTarget.source === 'nfc' ? 'NFC' : 'Manual'}</strong></div>
-            </div>
+            <dl className="reading-details"><div><dt>SmartTag</dt><dd>{correctionTarget.tagNumber}</dd></div><div><dt>Animal Nedap</dt><dd>{correctionTarget.expectedAnimal ?? 'Sem vínculo'}</dd></div><div><dt>Brinco visto</dt><dd>{correctionTarget.observedAnimal}</dd></div></dl>
+            <p className="reading-details__time">Confirmado às {formatTime(correctionTarget.scannedAt)}</p>
             {!correctionEditing ? (
               correctionTarget.id === latestConfirmedRecords[0]?.id && (
-                <button className="button button--secondary button--full" onClick={beginCorrection}>
+                <button className="button button--ghost button--full" disabled={savingReading} onClick={beginCorrection}>
                   Corrigir última leitura
                 </button>
               )
@@ -2645,16 +2593,26 @@ function AuditView({
             ) : (
               <>
                 <p className="correction-confirmation">Você confirma que esta tag está no animal <strong>{correctionDraft}</strong>?</p>
-                <button className="button button--primary button--full button--field" onClick={() => void confirmCorrection()}>
+                <button className="button button--primary button--full button--field" disabled={savingReading} onClick={() => void runFieldSave(confirmCorrection)}>
                   Sim, estou no {correctionDraft}
                 </button>
-                <button className="button button--ghost button--full" onClick={() => setCorrectionConfirming(false)}>
+                <button className="button button--ghost button--full" disabled={savingReading} onClick={() => setCorrectionConfirming(false)}>
                   Voltar
                 </button>
               </>
             )}
-            <button className="button button--ghost button--full" onClick={() => setCorrectionTarget(null)}>
-              Cancelar
+            {!correctionEditing && correctionTarget.status === 'correct' && <div className="reading-extra-actions">
+              <button className="reading-extra-actions__toggle" disabled={savingReading} aria-expanded={showCorrectOptions} onClick={() => setShowCorrectOptions((value) => !value)}><MoreIcon size={20} /> Ações desta tag</button>
+              {showCorrectOptions && <div className="reading-extra-actions__list">
+                <p>As escolhas abaixo entram no relatório para executar no Nedap.</p>
+                <button disabled={savingReading} onClick={() => void runFieldSave(() => addCorrectObservation(correctionTarget))}><ActionIcon size={18} /> Adicionar observação</button>
+                <button disabled={savingReading} onClick={() => void runFieldSave(() => replaceCorrectTag(correctionTarget))}><SwapIcon size={18} /> Substituir tag</button>
+                <button className="is-warning" disabled={savingReading} onClick={() => void runFieldSave(() => markCorrectTagOutOfUse(correctionTarget))}><IssuesIcon size={18} /> Tag fora de uso</button>
+                <button className="is-danger" disabled={savingReading} onClick={() => void runFieldSave(() => removeCorrectTag(correctionTarget))}><TagIcon size={18} /> Remover vínculo</button>
+              </div>}
+            </div>}
+            <button className="button button--ghost button--full" disabled={savingReading} onClick={() => setCorrectionTarget(null)}>
+              Fechar detalhes
             </button>
           </div>
         </div>
@@ -2667,6 +2625,7 @@ function AuditView({
 function GuidedDecision({
   scan,
   decision,
+  busy,
   onConfirm,
   onCorrect,
   onUnconfirmed,
@@ -2674,6 +2633,7 @@ function GuidedDecision({
 }: {
   scan: ScanState;
   decision: DecisionState;
+  busy: boolean;
   onConfirm: () => void;
   onCorrect: () => void;
   onUnconfirmed: () => void;
@@ -2697,10 +2657,10 @@ function GuidedDecision({
         </div>
       )}
       <div className="decision-number">{observed}</div>
-      <button className="button button--primary button--full button--field" onClick={onConfirm}>{content.confirmLabel}</button>
-      <button className="button button--secondary button--full" onClick={onCorrect}>Digitei o brinco errado</button>
-      <button className="button button--ghost button--full" onClick={onUnconfirmed}>Animal sem brinco</button>
-      <button className="button button--ghost button--full" onClick={onCancel}>Ler outra tag</button>
+      <button className="button button--primary button--full button--field" disabled={busy} onClick={onConfirm}>{busy ? 'Salvando…' : content.confirmLabel}</button>
+      <button className="button button--secondary button--full" disabled={busy} onClick={onCorrect}>Digitei o brinco errado</button>
+      <button className="button button--ghost button--full" disabled={busy} onClick={onUnconfirmed}>Animal sem brinco</button>
+      <button className="button button--ghost button--full" disabled={busy} onClick={onCancel}>Ler outra tag</button>
       <small className="decision-hint">O BIPTAG decide a classificação e cruza possíveis trocas depois. Você só confirma o fato físico.</small>
     </div>
   );
@@ -2771,26 +2731,26 @@ function decisionCopy(status: Exclude<RecordStatus, 'correct'>, expected: string
 }
 
 function issueSavedTitle(status: RecordStatus) {
-  if (status === 'tag_not_registered') return 'Registrado para revisao';
-  if (status === 'divergence' || status === 'reassignment') return 'Registrado';
-  if (status === 'audit_conflict' || status === 'new_tag_conflict') return 'Conflito para revisao';
+  if (status === 'tag_not_registered' || status === 'new_tag') return 'Nova tag registrada';
+  if (status === 'divergence' || status === 'reassignment') return 'Movimentação registrada';
+  if (status === 'audit_conflict' || status === 'new_tag_conflict') return 'Revisão necessária';
   if (status === 'tag_stored') return 'Tag sem animal';
   if (status === 'animal_without_ear_tag') return 'Animal sem brinco';
-  if (status === 'linked') return 'Registrado';
-  if (status === 'new_tag') return 'Registrado';
+  if (status === 'linked') return 'Vínculo registrado';
   if (status === 'animal_not_in_base') return 'Animal fora da base';
-  if (status === 'tag_without_animal') return 'Registrado';
+  if (status === 'tag_without_animal') return 'Vínculo registrado';
   if (status === 'tag_not_found') return 'Registrado para revisao';
   return 'Ocorrência registrada';
 }
 
 function issueSavedMessage(status: RecordStatus, observed: string | null) {
   if (status === 'tag_not_registered') return `Evidencia salva no brinco ${observed ?? ''}. A acao fica para revisao.`;
-  if (status === 'divergence' || status === 'reassignment') return 'Evidencia salva. O BIPTAG vai organizar a acao na Revisao.';
+  if (status === 'divergence' || status === 'reassignment') return 'Brinco confirmado. O ajuste do vínculo está indicado no relatório.';
   if (status === 'audit_conflict' || status === 'new_tag_conflict') return 'Esta leitura possui informacoes conflitantes com uma ocorrencia anterior. Registramos para revisao.';
   if (status === 'tag_stored') return 'Tag registrada como guardada/sem animal.';
   if (status === 'animal_without_ear_tag') return 'Ocorrencia registrada sem criar vinculo novo.';
-  if (status === 'linked' || status === 'new_tag' || status === 'tag_without_animal') return `Evidencia salva no brinco ${observed ?? ''}.`;
+  if (status === 'new_tag') return `Tag confirmada no animal ${observed ?? ''}. O cadastro no Nedap está indicado no relatório.`;
+  if (status === 'linked' || status === 'tag_without_animal') return `Brinco ${observed ?? ''} confirmado. O vínculo no Nedap está indicado no relatório.`;
   if (status === 'animal_not_in_base') return `O brinco ${observed ?? ''} foi confirmado em campo e ficara separado para revisao.`;
   if (status === 'tag_not_found') return `Evidencia salva no brinco ${observed ?? ''}. A acao fica para revisao.`;
   return 'Ocorrencia salva para revisao posterior.';

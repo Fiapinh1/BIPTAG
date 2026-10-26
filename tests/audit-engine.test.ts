@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import * as XLSX from 'xlsx';
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../src/db/db';
 import type { Audit, AuditRecord, EffectiveTagAssignment, TagAssignment, TagValidationStatus } from '../src/types/domain';
 import {
@@ -9,7 +9,8 @@ import {
   correctConfirmedReading,
   detectReciprocalSwap,
   markPendingTagsNotFound,
-  saveReading
+  saveReading,
+  updateConfirmedTagAction
 } from '../src/services/audit-engine';
 import { deriveReconciliation } from '../src/services/reconciliation';
 import { buildAuditReportRows, buildAuditWhatsAppText, createAuditWorkbook, writeStyledAuditWorkbook } from '../src/services/excel';
@@ -301,6 +302,76 @@ describe('Simple Excel report', () => {
     expect(rowsOf(workbook, 'RESULTADO FINAL')[6][3]).toBe('CORRETO');
     expect(rowsOf(workbook, 'CORRIGIR NO NEDAP')).toHaveLength(1);
     expect(rowsOf(workbook, 'HISTORICO').slice(1).map((row) => row[3])).toEqual(['TAG NÃO ENCONTRADA', 'CORRETO']);
+  });
+});
+
+describe('Optional actions after a correct confirmation', () => {
+  it('saves a correct reading as keep_tag without another confirmation or history row', async () => {
+    const { assignments } = await seedAudit([{ tag: '984000010514961', animal: '751' }]);
+    const record = await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '751' });
+    expect(record.status).toBe('correct');
+    expect(record.operationalAction).toBe('keep_tag');
+    expect(record.reviewStatus).toBe('not_required');
+    expect(await db.auditRecords.count()).toBe(1);
+    const state = await db.effectiveTagAssignments.where('[auditId+tagNumber]').equals([AUDIT_ID, record.tagNumber]).first();
+    expect(state?.effectiveAnimal).toBe('751');
+  });
+
+  it('applies removal to the selected reading and rebuilds its effective state only', async () => {
+    const { assignments } = await seedAudit([{ tag: '984000010514961', animal: '751' }, { tag: '984000010514962', animal: '888' }]);
+    const first = await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '751' });
+    await saveConfirmed({ tag: assignments[1].tagNumber, assignment: assignments[1], observed: '888' });
+    const changed = await updateConfirmedTagAction({ auditId: AUDIT_ID, recordId: first.id, action: 'remove_tag', actionNote: 'Retirada no campo' });
+    expect(changed?.operationalAction).toBe('remove_tag');
+    expect(changed?.scannedAt).toBe(first.scannedAt);
+    expect(changed?.fieldDecision).toBe(first.fieldDecision);
+    expect(changed?.reviewStatus).toBe('open');
+    const states = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
+    expect(states.find((row) => row.tagNumber === first.tagNumber)?.effectiveAnimal).toBeNull();
+    expect(states.find((row) => row.tagNumber === assignments[1].tagNumber)?.effectiveAnimal).toBe('888');
+    expect(await db.auditRecords.count()).toBe(2);
+  });
+
+  it('adds an observation without replacing an already selected removal', async () => {
+    const { assignments } = await seedAudit([{ tag: '984000010514961', animal: '751' }]);
+    const record = await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '751' });
+    await updateConfirmedTagAction({ auditId: AUDIT_ID, recordId: record.id, action: 'remove_tag', actionNote: 'Retirar vínculo após auditoria' });
+    const changed = await updateConfirmedTagAction({ auditId: AUDIT_ID, recordId: record.id, note: 'Colar retirado pelo operador' });
+    expect(changed?.operationalAction).toBe('remove_tag');
+    expect(changed?.actionNote).toBe('Retirar vínculo após auditoria');
+    expect(changed?.note).toBe('Colar retirado pelo operador');
+    expect(await db.auditRecords.count()).toBe(1);
+  });
+
+  it('rejects a superseded reading and cannot erase a newer physical fact', async () => {
+    const { assignments } = await seedAudit([{ tag: '984000010514961', animal: '751' }]);
+    const previous = await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '751' });
+    await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '999', existingRecord: previous });
+    expect(await updateConfirmedTagAction({ auditId: AUDIT_ID, recordId: previous.id, action: 'remove_tag' })).toBeNull();
+    const state = await db.effectiveTagAssignments.where('[auditId+tagNumber]').equals([AUDIT_ID, previous.tagNumber]).first();
+    expect(state?.effectiveAnimal).toBe('999');
+    expect((await db.auditRecords.get(previous.id))?.operationalAction).toBe('keep_tag');
+  });
+
+  it('rejects finished audits and readings belonging to another audit', async () => {
+    const { assignments } = await seedAudit([{ tag: '984000010514961', animal: '751' }]);
+    const record = await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '751' });
+    expect(await updateConfirmedTagAction({ auditId: 'other', recordId: record.id, action: 'replace_tag' })).toBeNull();
+    await db.audits.update(AUDIT_ID, { status: 'finished' });
+    expect(await updateConfirmedTagAction({ auditId: AUDIT_ID, recordId: record.id, action: 'replace_tag' })).toBeNull();
+    expect((await db.auditRecords.get(record.id))?.operationalAction).toBe('keep_tag');
+  });
+
+  it('rolls back the action if rebuilding the effective state fails', async () => {
+    const { assignments } = await seedAudit([{ tag: '984000010514961', animal: '751' }]);
+    const record = await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '751' });
+    const failingUpdate = vi.spyOn(db.effectiveTagAssignments, 'update').mockRejectedValueOnce(new Error('Storage unavailable'));
+    try {
+      await expect(updateConfirmedTagAction({ auditId: AUDIT_ID, recordId: record.id, action: 'remove_tag' })).rejects.toThrow('Storage unavailable');
+    } finally { failingUpdate.mockRestore(); }
+    expect((await db.auditRecords.get(record.id))?.operationalAction).toBe('keep_tag');
+    const state = await db.effectiveTagAssignments.where('[auditId+tagNumber]').equals([AUDIT_ID, record.tagNumber]).first();
+    expect(state?.effectiveAnimal).toBe('751');
   });
 });
 

@@ -3556,7 +3556,7 @@ body {
 }
 
 .app-dialog {
-  z-index: 120;
+  z-index: 1200;
 }
 
 .app-dialog__panel {
