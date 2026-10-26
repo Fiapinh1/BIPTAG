@@ -3,6 +3,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, newId } from './db/db';
 import { EmptyState } from './components/EmptyState';
 import { FarmDirectory } from './components/FarmDirectory';
+import { AuditSummary } from './components/AuditSummary';
+import { TagReadOnlyList } from './components/TagReadOnlyList';
 import { HHR5000Connector } from './components/HHR5000Connector';
 import { AuditReadModePicker, AuditReaderStandby, type AuditReadMode } from './components/AuditReaderWorkspace';
 import { AuditScanSummary } from './components/AuditScanSummary';
@@ -25,8 +27,7 @@ import {
   ShareIcon,
   SettingsIcon,
   SwapIcon,
-  TagIcon,
-  TrashIcon
+  TagIcon
 } from './icons/Icons';
 import { parseNedapWorkbook, exportAuditWorkbook, validateSmartTag, buildAuditWhatsAppText } from './services/excel';
 import { knownIssueActionLabel, knownIssueLabel, operationalActionLabel, statusLabel } from './services/audit-labels';
@@ -237,14 +238,6 @@ function formatDate(value: string) {
   });
 }
 
-function formatShortDate(value: string) {
-  return new Date(value).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: '2-digit'
-  });
-}
-
 function formatTime(value: string) {
   return new Date(value).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
@@ -288,9 +281,13 @@ function App() {
   }, [audits, selectedAuditId]);
 
   useEffect(() => {
-    if (selectedAuditId && audits.length && !audits.some((audit) => audit.id === selectedAuditId)) {
-      setSelectedAuditId(null);
-    }
+    if (!selectedAuditId || audits.some((audit) => audit.id === selectedAuditId)) return;
+    let cancelled = false;
+    // A committed import can be selected before the live audit list refreshes.
+    void db.audits.get(selectedAuditId).then((audit) => {
+      if (!cancelled && !audit) setSelectedAuditId((current) => current === selectedAuditId ? null : current);
+    }).catch(() => { /* Keep the selection if local storage cannot be read. */ });
+    return () => { cancelled = true; };
   }, [audits, selectedAuditId]);
 
   useEffect(() => {
@@ -518,8 +515,8 @@ function App() {
             onClearAudit={() => setSelectedAuditId(null)}
             onImportCreated={(auditId) => {
               setSelectedAuditId(auditId);
-              setToast(cloudSession ? 'Fazenda criada e sincronizacao iniciada.' : 'Fazenda salva neste aparelho. Entre no Supabase para aparecer nos outros dispositivos.');
-              setView('audit');
+              setToast('Fazenda criada. Confira o resumo e a base importada.');
+              setView('home');
               void syncCreatedAuditInBackground(auditId);
             }}
             onIssues={() => setView('issues')}
@@ -531,8 +528,8 @@ function App() {
           <ImportView
             onCreated={(auditId) => {
               setSelectedAuditId(auditId);
-              setToast(cloudSession ? 'Base importada e sincronizacao iniciada.' : 'Base salva neste aparelho. Entre no Supabase para aparecer nos outros dispositivos.');
-              setView('audit');
+              setToast('Base importada. Confira o resumo da fazenda.');
+              setView('home');
               void syncCreatedAuditInBackground(auditId);
             }}
           />
@@ -666,6 +663,11 @@ function HomeView({
   setToast: (value: string) => void;
 }) {
   const [showCreateFarmModal, setShowCreateFarmModal] = useState(false);
+  const assignments = useLiveQuery(
+    () => activeAudit ? db.tagAssignments.where('auditId').equals(activeAudit.id).toArray() : Promise.resolve<TagAssignment[]>([]),
+    [activeAudit?.id],
+    [] as TagAssignment[]
+  );
   const records = useLiveQuery(
     () => activeAudit ? db.auditRecords.where('auditId').equals(activeAudit.id).toArray() : Promise.resolve<AuditRecord[]>([]),
     [activeAudit?.id],
@@ -761,71 +763,7 @@ function HomeView({
 
   return (
     <>
-      <section className="page home-page home-page--active-audit">
-        <div className="home-toolbar home-toolbar--audit">
-          <div>
-            <button className="back-link" onClick={onClearAudit} aria-label="Voltar para fazendas">
-              <span className="back-link__icon" aria-hidden="true">&lsaquo;</span>
-              <span>Fazendas</span>
-            </button>
-            <h1>{activeAudit.farmName}</h1>
-            <p>{activeAudit.status === 'finished' ? 'Auditoria finalizada' : activeAudit.status === 'paused' ? 'Auditoria pausada' : 'Auditoria em andamento'}</p>
-          </div>
-        </div>
-
-        <div className="home-dashboard">
-          <div className="audit-progress-card">
-            <div className="audit-progress-card__text">
-              <span className="eyebrow">{activeAudit.status === 'finished' ? 'FINALIZADA' : activeAudit.status === 'paused' ? 'PAUSADA' : 'EM ANDAMENTO'}</span>
-              <strong>{metrics.percent}% concluído</strong>
-              <small>Última atividade: {formatDate(activeAudit.lastActivityAt || activeAudit.updatedAt)}</small>
-              <span className="saved-pill"><CheckIcon size={15} /> Salvo neste aparelho</span>
-            </div>
-            <div className="progress-ring" style={{ '--progress': `${metrics.percent * 3.6}deg` } as React.CSSProperties}>
-              <div><strong>{metrics.percent}%</strong><small>feito</small></div>
-            </div>
-            {activeAudit.status !== 'finished' && (
-              <div className="audit-progress-card__actions">
-                <button className="button button--ghost" onClick={pauseAudit}><PauseIcon /> Pausar</button>
-                <button className="button button--ghost" onClick={finishAudit}>Finalizar</button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="summary-metrics" aria-label="Resumo da auditoria">
-          <div><span>Processadas</span><strong>{metrics.auditedUnique}</strong><small>{metrics.pending} pendentes</small></div>
-          <div><span>Corretas</span><strong>{metrics.correct}</strong></div>
-          <div className={metrics.problems ? 'is-danger' : ''}><span>Ocorrências</span><strong>{metrics.problems}</strong></div>
-          <div><span>Tags válidas</span><strong>{activeAudit.validTags ?? activeAudit.totalTags}</strong></div>
-        </div>
-
-        <button className="secondary-row secondary-row--compact" onClick={onKnownIssues}>
-          <span><IssuesIcon /> Problemas conhecidos</span>
-          <strong>{knownIssues.length}</strong>
-          <ChevronRightIcon />
-        </button>
-
-      {audits.length > 0 && (
-        <>
-          <div className="section-heading section-heading--compact"><div><span className="eyebrow">HISTÓRICO</span><h2>Auditorias salvas</h2></div></div>
-          <div className="audit-history">
-            {audits.map((audit) => (
-              <div key={audit.id} className={`audit-history__item ${audit.id === activeAudit.id ? 'is-selected' : ''}`}>
-                <button className="audit-history__open" onClick={() => onSelectAudit(audit)}>
-                <span><strong>{audit.farmName}</strong><small>{formatShortDate(audit.lastActivityAt || audit.updatedAt)} · {audit.status === 'finished' ? 'Finalizada' : audit.status === 'paused' ? 'Pausada' : 'Em andamento'}</small></span>
-                  <ChevronRightIcon />
-                </button>
-                <button className="audit-history__delete" onClick={() => onDeleteAudit(audit)} title="Excluir auditoria" aria-label={`Excluir auditoria ${audit.farmName}`}>
-                  <TrashIcon size={19} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      </section>
+      <AuditSummary audit={activeAudit} metrics={metrics} assignments={assignments} knownIssueCount={knownIssues.length} onBack={onClearAudit} onContinue={() => onResumeAudit(activeAudit)} onPause={() => void pauseAudit()} onFinish={() => void finishAudit()} onReview={onIssues} onKnownIssues={onKnownIssues} />
       {createFarmModal}
     </>
   );
@@ -1414,7 +1352,7 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
               {prepStep !== 'summary' && <div className="import-prep-actions">
                 <button className="button button--ghost" disabled={busy} onClick={() => goToPrepStep(prepStep === 'pattern' ? 'summary' : 'pattern')}>Voltar</button>
                 <button className="button button--primary button--large" disabled={busy || (prepStep === 'alerts' && !patternConfirmed)} onClick={() => void (prepStep === 'pattern' ? applyPattern() : saveImport())}>
-                  {busy ? (prepStep === 'pattern' ? 'Confirmando…' : 'Abrindo…') : prepStep === 'pattern' ? 'Confirmar e continuar' : 'Entrar na conferência'}
+                  {busy ? (prepStep === 'pattern' ? 'Confirmando…' : 'Abrindo…') : prepStep === 'pattern' ? 'Confirmar e continuar' : 'Criar auditoria'}
                 </button>
               </div>}
             </div>
@@ -2938,6 +2876,10 @@ function IssuesView({
   const pendingTags = effectiveAssignments.filter((item) => item.status === 'pending');
   const animalGaps = reconciliation.animalsWithoutConfirmedTag;
   const notFoundTags = effectiveAssignments.filter((item) => item.status === 'not_found' && !notFoundRecordTags.has(item.tagNumber));
+  const missingTagRows = [
+    ...notFoundRecords.map((record) => ({ id: record.id, tagNumber: record.tagNumber, animal: record.expectedAnimal })),
+    ...notFoundTags.map((item) => ({ id: item.id, tagNumber: item.tagNumber, animal: item.originalAnimal }))
+  ].filter((item, index, rows) => rows.findIndex((other) => other.tagNumber === item.tagNumber) === index);
   const processedCount = countAuditedBaseTags(effectiveAssignments, current);
   const totalValid = activeAudit.validTags ?? activeAudit.totalTags;
   const correctCount = current.filter((record) => record.status === 'correct').length;
@@ -2969,8 +2911,12 @@ function IssuesView({
     pendingTags.length;
 
   async function exportReport() {
-    const assignments = await db.tagAssignments.where('auditId').equals(activeAudit.id).toArray();
-    exportAuditWorkbook(activeAudit, records, issues, effectiveAssignments, knownIssues, assignments);
+    try {
+      const assignments = await db.tagAssignments.where('auditId').equals(activeAudit.id).toArray();
+      await exportAuditWorkbook(activeAudit, records, issues, effectiveAssignments, knownIssues, assignments);
+    } catch (error) {
+      await appDialog.alert({ title: 'Não foi possível exportar', message: error instanceof Error ? error.message : 'Tente exportar a planilha novamente.', tone: 'warning' });
+    }
   }
 
   function buildWhatsAppReviewText() {
@@ -3020,6 +2966,7 @@ function IssuesView({
             <h2>{pendingTags.length} SmartTags ainda sem resultado</h2>
             <p>Antes de finalizar, revise o lote ou marque as SmartTags restantes como nao localizadas.</p>
           </div>
+          <TagReadOnlyList label="Tags ainda sem resultado" rows={pendingTags.map((item) => ({ id: item.id, tagNumber: item.tagNumber, animal: item.originalAnimal }))} />
           <button className="button button--secondary button--full" onClick={() => void markMissingTags()}>Marcar pendentes como nao localizadas</button>
         </div>
       )}
@@ -3084,9 +3031,8 @@ function IssuesView({
           {animalWithoutEarTagRecords.map((record) => <ReviewRecordCard key={record.id} record={record} tone="warning" />)}
         </ReviewSection>
 
-        <ReviewSection eyebrow="NAO LOCALIZADAS" title="Tags nao localizadas" emptyText="Nenhuma tag marcada como nao localizada.">
-          {notFoundRecords.map((record) => <ReviewRecordCard key={record.id} record={record} tone="warning" />)}
-          {notFoundTags.map((item) => <ReviewEffectiveCard key={item.id} item={item} />)}
+        <ReviewSection eyebrow="NÃO LOCALIZADAS" title={`Tags não localizadas (${missingTagRows.length})`} emptyText="Nenhuma tag marcada como não localizada.">
+          {missingTagRows.length > 0 && <TagReadOnlyList label="Tags não localizadas" rows={missingTagRows} />}
         </ReviewSection>
 
         <ReviewSection eyebrow="CONHECIDOS" title="Problemas conhecidos" emptyText="Nenhum problema conhecido cadastrado.">

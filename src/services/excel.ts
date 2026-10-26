@@ -1262,6 +1262,75 @@ function buildAuditReportRowsLegacy(
   return { actionRows, animalGapRows, reviewRows, conferenceRows, summaryRows };
 }
 
+const SIMPLE_RESULT_HEADER = ['SMARTTAG', 'ANIMAL NEDAP', 'ANIMAL CAMPO', 'RESULTADO', 'ULTIMA CONFIRMACAO'];
+
+function simpleFinalResult(row: ResultFinalRow) {
+  switch (row.status) {
+    case 'MOVER':
+    case 'TROCA': return `MOVER ${row.animalNedap} -> ${row.animalCampo}`;
+    case 'NOVA': return `CADASTRAR TAG -> ${row.animalCampo}`;
+    case 'VINCULAR': return `VINCULAR TAG -> ${row.animalCampo}`;
+    case 'TAG NAO LOCALIZADA': return 'TAG NÃO ENCONTRADA';
+    case 'SEM ANIMAL': return 'REMOVER VÍNCULO';
+    case 'SUBSTITUIR': return 'SUBSTITUIR TAG';
+    case 'TAG FORA DE USO': return 'TAG FORA DE USO';
+    case 'ANIMAL SEM BRINCO': return 'ANIMAL SEM BRINCO';
+    case 'CADASTRO INVALIDO': return 'CADASTRO INVÁLIDO';
+    case 'CADASTRO SUSPEITO': return 'CADASTRO SUSPEITO';
+    case 'POSSIVEL ERRO CADASTRO': return 'CORRIGIR NÚMERO DA TAG';
+    case 'PENDENTE': return 'NÃO CONFERIDA';
+    default:
+      if (row.resultado === 'CORRETA') return row.animalNedap === 'SEM ANIMAL' && !row.animalCampo ? 'TAG SEM ANIMAL' : 'CORRETO';
+      if (row.resultado === 'NAO CONFERIDA') return 'NÃO CONFERIDA';
+      return row.resultado;
+  }
+}
+
+function simpleHistoryResult(record: AuditRecord) {
+  if (record.status === 'unconfirmed') return 'NÃO CONFIRMADA';
+  if (record.status === 'tag_not_found') return 'TAG NÃO ENCONTRADA';
+  if (record.status === 'audit_conflict' || record.status === 'new_tag_conflict') return 'CONFLITO: REVISAR';
+  if (record.status === 'animal_without_ear_tag') return 'ANIMAL SEM BRINCO';
+  if (record.operationalAction === 'remove_tag') return 'REMOVER VÍNCULO';
+  if (record.operationalAction === 'replace_tag') return 'SUBSTITUIR TAG';
+  if (record.operationalAction === 'tag_out_of_use') return 'TAG FORA DE USO';
+  if (record.status === 'tag_stored') return 'TAG SEM ANIMAL';
+  if (record.status === 'correct') return 'CORRETO';
+  if (record.status === 'possible_typo') return 'CORRIGIR NÚMERO DA TAG';
+  if (record.status === 'new_tag' || record.status === 'tag_not_registered') return `CADASTRAR TAG -> ${record.observedAnimal ?? ''}`;
+  if (record.status === 'linked' || record.status === 'tag_without_animal') return `VINCULAR TAG -> ${record.observedAnimal ?? ''}`;
+  if (record.observedAnimal && ['reassignment', 'divergence', 'possible_swap', 'animal_not_in_base'].includes(record.status)) return `MOVER ${record.expectedAnimal ?? ''} -> ${record.observedAnimal}`;
+  return conferenceDecision(record);
+}
+
+function appendSimpleSheet(workbook: XLSX.WorkBook, rows: SheetRows, name: string, headerIndex: number, widths: number[], resultColumn?: number) {
+  const sheet = XLSX.utils.aoa_to_sheet(rows);
+  sheet['!cols'] = widths.map((wch) => ({ wch }));
+  sheet['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: headerIndex, c: 0 }, e: { r: rows.length - 1, c: widths.length - 1 } }) };
+  sheet['!rows'] = rows.map((row, index) => ({ hpt: index === 0 && headerIndex > 0 ? 25 : Math.max(21, ...row.map((value, col) => Math.ceil(String(value ?? '').length / (widths[col] - 2)) * 14 + 5)) }));
+  for (let r = 0; r < rows.length; r++) {
+    const dataRow = r > headerIndex;
+    const fill = r === headerIndex ? 'C5D9F1' : dataRow && resultColumn !== undefined ? rows[r][resultColumn] === 'CORRETO' ? 'EBF1DE' : 'FFFF99' : undefined;
+    for (let c = 0; c < widths.length; c++) {
+      const address = XLSX.utils.encode_cell({ r, c });
+      if (!sheet[address] && r >= headerIndex) sheet[address] = { t: 's', v: '' };
+      if (!sheet[address]) continue;
+      mergeCellStyle(sheet[address], {
+        font: { name: 'Calibri', sz: 11, bold: r === headerIndex || (r === 0 && headerIndex > 0), color: { rgb: '000000' } },
+        alignment: { vertical: 'center', horizontal: r < headerIndex ? 'left' : 'center', wrapText: r >= headerIndex },
+        ...(fill ? { fill: { patternType: 'solid', fgColor: { rgb: fill } } } : {})
+      });
+      const header = String(rows[headerIndex][c] ?? '');
+      if (r > headerIndex && (header.includes('SMARTTAG') || header.includes('TAG ORIGINAL'))) asTextCell(sheet[address]);
+    }
+  }
+  if (headerIndex > 0) sheet['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: widths.length - 1 } },
+    ...[1, 2, 3].map((r) => ({ s: { r, c: 1 }, e: { r, c: widths.length - 1 } }))
+  ];
+  XLSX.utils.book_append_sheet(workbook, sheet, name);
+}
+
 export function createAuditWorkbook(
   audit: Audit,
   records: AuditRecord[],
@@ -1270,7 +1339,7 @@ export function createAuditWorkbook(
   knownIssues: KnownIssue[] = [],
   assignments: TagAssignment[] = []
 ) {
-  const { resultRows, actionRows, animalGapRows, reviewRows, conferenceRows } = buildAuditReportRows(
+  const report = buildAuditReportRows(
     audit,
     records,
     issues,
@@ -1278,17 +1347,37 @@ export function createAuditWorkbook(
     knownIssues,
     assignments
   );
+  const finalRows = report.resultFinalRows.map((row) => [row.smartTag, row.animalNedap, row.animalCampo, simpleFinalResult(row), row.ultimaConfirmacao]);
+  const resultRows: SheetRows = [
+    ['BIPTAG - RESULTADO FINAL'],
+    ['Fazenda', audit.farmName],
+    ['Data inicio', formatDateTime(audit.startedAt)],
+    ['Data fim', audit.finishedAt ? formatDateTime(audit.finishedAt) : ''],
+    [],
+    SIMPLE_RESULT_HEADER,
+    ...finalRows
+  ];
+  const correctionRows: SheetRows = [SIMPLE_RESULT_HEADER, ...finalRows.filter((row) => !['CORRETO', 'NÃO CONFERIDA', 'TAG SEM ANIMAL'].includes(row[3]))];
+  const importedTagNumbers = new Set(assignments.map((item) => item.tagNumber));
+  const historyRows: SheetRows = [
+    ['SMARTTAG', 'ANIMAL NEDAP', 'ANIMAL CAMPO', 'RESULTADO', 'DATA/HORA', 'OBSERVACAO'],
+    ...chronological(records).map((record) => [record.tagNumber, record.expectedAnimal ?? (importedTagNumbers.has(record.tagNumber) ? 'SEM ANIMAL' : 'NAO CADASTRADA'), record.observedAnimal ?? '', simpleHistoryResult(record), formatDateTime(record.scannedAt), [...new Set([record.note, record.actionNote].filter(Boolean))].join(' | ')])
+  ];
+  const animalRows: SheetRows = [['ANIMAL', 'SMARTTAG ORIGINAL'], ...report.animalGapRows.slice(1).map((row) => [row[0], row[1]])];
   const workbook = XLSX.utils.book_new();
-  appendSheet(workbook, resultRows, 'RESULTADO FINAL', { tableHeader: ['STATUS', 'SMARTTAG'], textColumns: ['SMARTTAG'], statusColors: true });
-  appendSheet(workbook, actionRows, 'CORRIGIR NO NEDAP', { tableHeader: ['ACAO', 'SMARTTAG'], textColumns: ['SMARTTAG'], statusColors: true });
-  appendSheet(workbook, reviewRows, 'ALERTAS E PENDENCIAS', { tableHeader: ['TIPO', 'SMARTTAG'], textColumns: ['SMARTTAG'], statusColors: true });
-  appendSheet(workbook, animalGapRows, 'ANIMAIS SEM TAG', { tableHeader: ['ANIMAL', 'TAG ORIGINAL'], textColumns: ['TAG ORIGINAL'] });
-  appendSheet(workbook, conferenceRows, 'CONFERENCIA', { tableHeader: ['SEQUENCIA', 'DATA/HORA'], textColumns: ['TAG'] });
-
+  appendSimpleSheet(workbook, resultRows, 'RESULTADO FINAL', 5, [25, 20, 20, 40, 25], 3);
+  appendSimpleSheet(workbook, correctionRows, 'CORRIGIR NO NEDAP', 0, [25, 20, 20, 40, 25], 3);
+  appendSimpleSheet(workbook, historyRows, 'HISTORICO', 0, [25, 20, 20, 40, 25, 60]);
+  appendSimpleSheet(workbook, animalRows, 'ANIMAIS SEM TAG', 0, [20, 25]);
   return workbook;
 }
 
-export function exportAuditWorkbook(
+export async function writeStyledAuditWorkbook(workbook: XLSX.WorkBook): Promise<ArrayBuffer> {
+  const { default: writer } = await import('xlsx-js-style');
+  return writer.write(workbook, { bookType: 'xlsx', type: 'array', compression: true }) as ArrayBuffer;
+}
+
+export async function exportAuditWorkbook(
   audit: Audit,
   records: AuditRecord[],
   issues: ImportIssue[],
@@ -1303,7 +1392,15 @@ export function exportAuditWorkbook(
     .replace(/[\\/:*?"<>|]+/g, '')
     .replace(/\s+/g, ' ')
     .slice(0, 80) || 'fazenda';
-  XLSX.writeFile(workbook, `Auditoria_${safeFarm}.xlsx`);
+  const bytes = await writeStyledAuditWorkbook(workbook);
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `Auditoria_${safeFarm}.xlsx`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
 export function reviewLabel(reviewStatus: AuditRecord['reviewStatus']) {

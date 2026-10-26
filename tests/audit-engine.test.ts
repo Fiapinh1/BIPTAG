@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto';
+import * as XLSX from 'xlsx';
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from '../src/db/db';
@@ -11,7 +12,7 @@ import {
   saveReading
 } from '../src/services/audit-engine';
 import { deriveReconciliation } from '../src/services/reconciliation';
-import { buildAuditReportRows, buildAuditWhatsAppText, createAuditWorkbook } from '../src/services/excel';
+import { buildAuditReportRows, buildAuditWhatsAppText, createAuditWorkbook, writeStyledAuditWorkbook } from '../src/services/excel';
 
 const AUDIT_ID = 'audit-test';
 
@@ -171,6 +172,136 @@ function conferenceConfirmedFor(rows: ReturnType<typeof buildAuditReportRows>, t
 
 beforeEach(async () => {
   await resetDb();
+});
+
+describe('Simple Excel report', () => {
+  const headers = ['SMARTTAG', 'ANIMAL NEDAP', 'ANIMAL CAMPO', 'RESULTADO', 'ULTIMA CONFIRMACAO'];
+  const rowsOf = (book: XLSX.WorkBook, sheet: string) => XLSX.utils.sheet_to_json<string[]>(book.Sheets[sheet], { header: 1, defval: '', raw: true });
+
+  async function screenshotExample() {
+    const { audit, assignments } = await seedAudit([
+      { tag: '984000010772185', animal: '348' },
+      { tag: '984000010772194', animal: '336' },
+      { tag: '984000010772161', animal: '2' },
+      { tag: '984000010772162', animal: '237' },
+      { tag: '984000010772187', animal: '347' },
+      { tag: '984000010772175', animal: '337' }
+    ]);
+    audit.farmName = 'Fazenda Santá Fé';
+    audit.finishedAt = '2026-10-26T18:23:29.000Z';
+    for (const index of [0, 2, 3]) await saveConfirmed({ tag: assignments[index].tagNumber, assignment: assignments[index], observed: assignments[index].expectedAnimal, status: 'correct' });
+    await saveConfirmed({ tag: assignments[1].tagNumber, assignment: assignments[1], observed: '337' });
+    await saveConfirmed({ tag: assignments[5].tagNumber, assignment: assignments[5], observed: '999' });
+    await markPendingTagsNotFound(AUDIT_ID);
+    await saveConfirmed({ tag: '984000010772999', assignment: null, observed: '402', status: 'new_tag' });
+    const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
+    const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
+    return { audit, assignments, records, effective, workbook: createAuditWorkbook(audit, records, [], effective, [], assignments) };
+  }
+
+  it('matches the five columns and four tabs from the supplied example', async () => {
+    const { workbook } = await screenshotExample();
+    expect(workbook.SheetNames).toEqual(['RESULTADO FINAL', 'CORRIGIR NO NEDAP', 'HISTORICO', 'ANIMAIS SEM TAG']);
+    const result = rowsOf(workbook, 'RESULTADO FINAL');
+    expect(result.slice(0, 4).map((row) => row[0])).toEqual(['BIPTAG - RESULTADO FINAL', 'Fazenda', 'Data inicio', 'Data fim']);
+    expect(result[1][1]).toBe('Fazenda Santá Fé');
+    expect(result[5]).toEqual(headers);
+    expect(result.slice(6).map((row) => row.slice(0, 4))).toEqual([
+      ['984000010772185', '348', '348', 'CORRETO'],
+      ['984000010772194', '336', '337', 'MOVER 336 -> 337'],
+      ['984000010772161', '2', '2', 'CORRETO'],
+      ['984000010772162', '237', '237', 'CORRETO'],
+      ['984000010772187', '347', '', 'TAG NÃO ENCONTRADA'],
+      ['984000010772175', '337', '999', 'MOVER 337 -> 999'],
+      ['984000010772999', 'NAO CADASTRADA', '402', 'CADASTRAR TAG -> 402']
+    ]);
+    const corrections = rowsOf(workbook, 'CORRIGIR NO NEDAP');
+    expect(corrections[0]).toEqual(headers);
+    expect(corrections.slice(1)).toEqual(result.slice(6).filter((row) => row[3] !== 'CORRETO'));
+    expect(workbook.Sheets['RESULTADO FINAL']['!autofilter']?.ref).toBe('A6:E13');
+  });
+
+  it('preserves the row colors, filters and full SmartTag numbers in a real XLSX file', async () => {
+    const { workbook } = await screenshotExample();
+    const bytes = await writeStyledAuditWorkbook(workbook);
+    const parsed = XLSX.read(bytes, { type: 'array', cellStyles: true, cellNF: true });
+    const sheet = parsed.Sheets['RESULTADO FINAL'];
+    expect(sheet.A6.s.fgColor.rgb).toBe('C5D9F1');
+    expect(sheet.A7.s.fgColor.rgb).toBe('EBF1DE');
+    expect(sheet.A8.s.fgColor.rgb).toBe('FFFF99');
+    expect(sheet.A11.s.fgColor.rgb).toBe('FFFF99');
+    expect(sheet.A7.t).toBe('s');
+    expect(sheet.A7.z).toBe('@');
+    expect(sheet.A7.v).toBe('984000010772185');
+    expect(sheet['!autofilter']?.ref).toBe('A6:E13');
+    expect(rowsOf(parsed, 'CORRIGIR NO NEDAP')).toHaveLength(5);
+  });
+
+  it('keeps only the final correction and all previous readings in history', async () => {
+    const { audit, assignments } = await seedAudit([{ tag: '984000010514961', animal: '1001' }]);
+    const first = await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '2001' });
+    await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '3001', existingRecord: first });
+    const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
+    const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
+    const workbook = createAuditWorkbook(audit, records, [], effective, [], assignments);
+    expect(rowsOf(workbook, 'CORRIGIR NO NEDAP').slice(1).map((row) => row[3])).toEqual(['MOVER 1001 -> 3001']);
+    expect(rowsOf(workbook, 'HISTORICO').slice(1).map((row) => row[2])).toEqual(['2001', '3001']);
+  });
+
+  it('does not mark unread tags as missing or put them among Nedap corrections', async () => {
+    const { audit, assignments } = await seedAudit([{ tag: '984000010514961', animal: '1001' }]);
+    const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
+    const workbook = createAuditWorkbook(audit, [], [], effective, [], assignments);
+    expect(rowsOf(workbook, 'RESULTADO FINAL')[6].slice(2)).toEqual(['', 'NÃO CONFERIDA', '']);
+    expect(rowsOf(workbook, 'CORRIGIR NO NEDAP')).toHaveLength(1);
+    expect(rowsOf(workbook, 'HISTORICO')).toHaveLength(1);
+  });
+
+  it('keeps removals, replacements and out-of-use decisions explicit, and retains both notes', async () => {
+    const { audit, assignments } = await seedAudit([
+      { tag: '984000010514961', animal: '1001' },
+      { tag: '984000010514962', animal: '1002' },
+      { tag: '984000010514963', animal: '1003' },
+      { tag: '984000010514964', animal: null }
+    ]);
+    for (const [index, action] of (['remove_tag', 'replace_tag', 'tag_out_of_use'] as const).entries()) {
+      await saveReading({ auditId: AUDIT_ID, tagNumber: assignments[index].tagNumber, assignment: assignments[index], expectedAnimal: assignments[index].expectedAnimal, observedAnimal: assignments[index].expectedAnimal, status: 'correct', fieldDecision: 'confirmed_match', source: 'manual', existingRecord: null, operationalAction: action, note: 'Observação do operador', actionNote: 'Decisão operacional' });
+    }
+    await saveTagWithoutAnimal({ tag: assignments[3].tagNumber, assignment: assignments[3] });
+    const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
+    const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
+    const workbook = createAuditWorkbook(audit, records, [], effective, [], assignments);
+    expect(rowsOf(workbook, 'RESULTADO FINAL').slice(6).map((row) => row[3])).toEqual(['REMOVER VÍNCULO', 'SUBSTITUIR TAG', 'TAG FORA DE USO', 'TAG SEM ANIMAL']);
+    expect(rowsOf(workbook, 'CORRIGIR NO NEDAP').slice(1).map((row) => row[3])).toEqual(['REMOVER VÍNCULO', 'SUBSTITUIR TAG', 'TAG FORA DE USO']);
+    expect(rowsOf(workbook, 'HISTORICO')[1][5]).toBe('Observação do operador | Decisão operacional');
+  });
+
+  it('exports both final movements of a reciprocal swap as separate tag rows', async () => {
+    const { audit, assignments } = await seedAudit([{ tag: '984000010514961', animal: '1001' }, { tag: '984000010514962', animal: '1002' }]);
+    await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '1002' });
+    const second = await saveConfirmed({ tag: assignments[1].tagNumber, assignment: assignments[1], observed: '1001' });
+    await detectReciprocalSwap(second);
+    const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
+    const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
+    const workbook = createAuditWorkbook(audit, records, [], effective, [], assignments);
+    expect(rowsOf(workbook, 'CORRIGIR NO NEDAP').slice(1).map((row) => row.slice(0, 4))).toEqual([
+      ['984000010514961', '1001', '1002', 'MOVER 1001 -> 1002'],
+      ['984000010514962', '1002', '1001', 'MOVER 1002 -> 1001']
+    ]);
+  });
+
+  it('removes a missing result after the tag is physically confirmed', async () => {
+    const { audit, assignments } = await seedAudit([{ tag: '984000010514961', animal: '1001' }]);
+    await markPendingTagsNotFound(AUDIT_ID);
+    const previous = await db.auditRecords.where('auditId').equals(AUDIT_ID).first();
+    await saveConfirmed({ tag: assignments[0].tagNumber, assignment: assignments[0], observed: '1001', existingRecord: previous });
+    const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
+    const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
+    const workbook = createAuditWorkbook(audit, records, [], effective, [], assignments);
+    expect(rowsOf(workbook, 'RESULTADO FINAL')[6][3]).toBe('CORRETO');
+    expect(rowsOf(workbook, 'CORRIGIR NO NEDAP')).toHaveLength(1);
+    expect(rowsOf(workbook, 'HISTORICO').slice(1).map((row) => row[3])).toEqual(['TAG NÃO ENCONTRADA', 'CORRETO']);
+  });
 });
 
 describe('BIPTAG audit rules', () => {

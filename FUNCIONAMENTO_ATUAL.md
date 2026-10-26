@@ -37,6 +37,8 @@ Na importacao, o sistema:
 
 A base importada e salva no IndexedDB do navegador. O app pode ser fechado e aberto depois sem perder a auditoria, desde que os dados do site nao sejam apagados.
 
+Depois da criação, o app abre o Resumo da fazenda recém-criada. O Resumo mostra o andamento, os problemas conhecidos e uma lista pesquisável e rolável das tags da planilha, somente para visualização. Outras fazendas aparecem apenas na página inicial. A conferência começa pelo botão `Iniciar conferência` do Resumo.
+
 ## Leitura de SmartTag
 
 Ao abrir `Auditar`, o usuário escolhe entre três telas de leitura:
@@ -259,38 +261,16 @@ Essa tela serve para acompanhamento durante e depois da auditoria.
 
 O relatorio Excel e operacional. Ele nao mostra apenas problemas; ele mostra o que aconteceu, o que foi decidido em campo e o que precisa ser feito depois.
 
-As abas principais incluem:
+O arquivo usa quatro abas:
 
-- `Resumo`;
-- `Resultado Final`;
-- `Auditoria`;
-- `Pendencias`;
-- `Relatorio Operacional`;
-- `Acoes Nedap`;
-- `Pre-validacao`.
+- `RESULTADO FINAL`: fazenda, datas de início e fim e uma linha por tag. As cinco colunas são `SMARTTAG`, `ANIMAL NEDAP`, `ANIMAL CAMPO`, `RESULTADO` e `ULTIMA CONFIRMACAO`.
+- `CORRIGIR NO NEDAP`: as mesmas cinco colunas, com os resultados finais que precisam de atenção. Tags corretas, ainda não conferidas ou guardadas sem necessidade de alterar o cadastro ficam fora dessa lista.
+- `HISTORICO`: todas as leituras em ordem, inclusive as anteriores a uma correção, com as observações.
+- `ANIMAIS SEM TAG`: animal e SmartTag original dos animais que terminaram sem tag confirmada.
 
-A aba `Relatorio Operacional` organiza as informacoes em secoes:
+O resultado resume a ação em uma frase, como `CORRETO`, `MOVER 336 -> 337`, `TAG NÃO ENCONTRADA` ou `CADASTRAR TAG -> 402`. Linhas corretas ficam verdes; resultados que exigem atenção ficam amarelos. As SmartTags são exportadas como texto, sem notação científica.
 
-1. Tags corretas.
-2. Trocas confirmadas.
-3. Trocas pendentes.
-4. Tags novas para cadastro.
-5. Tags removidas.
-6. Substituicoes de tag.
-7. Conflitos de auditoria.
-8. Conflitos de tag nova.
-9. Tags nao localizadas.
-10. Acoes para executar no Nedap.
-
-A aba `Acoes Nedap` consolida as acoes futuras, como:
-
-- trocar tags;
-- remover tag;
-- cadastrar nova tag;
-- vincular tag;
-- substituir tag;
-- investigar ocorrencia;
-- manter tag atual quando houver observacao.
+Na Revisão, as tags ainda sem resultado e as marcadas como não localizadas aparecem em listas com o número completo, o animal da base, busca e rolagem.
 
 ## Persistencia local
 

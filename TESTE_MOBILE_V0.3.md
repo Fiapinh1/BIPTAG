@@ -19,6 +19,9 @@ O endereço local HTTP serve para testar interface, digitação manual, importa�
 - [ ] Confirmar pre-validacao da planilha.
 - [ ] Confirmar prefixo e quantidade de digitos da SmartTag.
 - [ ] Salvar auditoria no aparelho.
+- [ ] Confirmar que a criação abre o Resumo da fazenda recém-criada, inclusive quando já existem outras fazendas salvas.
+- [ ] Confirmar que o Resumo não lista outras fazendas.
+- [ ] Rolar `Tags da planilha` até o final, buscar por tag e por animal, e confirmar que a lista é somente para visualização.
 - [ ] Fechar e abrir o navegador.
 - [ ] Confirmar que a auditoria continua disponivel sem importar novamente.
 
@@ -121,6 +124,8 @@ O endereço local HTTP serve para testar interface, digitação manual, importa�
 
 ## Revisao
 
+- [ ] Ver as tags completas e os animais na lista de tags ainda sem resultado antes de marcar como não localizadas.
+- [ ] Depois da marcação, confirmar que a lista `Tags não localizadas` contém as mesmas tags, sem duplicação, com busca e rolagem.
 - [ ] Confirmar as secoes:
   - Tags corretas mantidas
   - Trocas confirmadas
@@ -145,14 +150,14 @@ O endereço local HTTP serve para testar interface, digitação manual, importa�
 - [ ] Exportar relatorio.
 - [ ] Confirmar que o arquivo abre no celular ou computador.
 - [ ] Confirmar as abas:
-  - Acoes Nedap
-  - Resumo
-  - Pendencias
-  - Evidencias Campo
-  - Pre-validacao
-- [ ] Confirmar que `Acoes Nedap` e a primeira aba.
-- [ ] Confirmar que conflitos e problemas conhecidos aparecem no relatorio.
-- [ ] Confirmar que evidencias de campo mantem historico cronologico.
+  - RESULTADO FINAL
+  - CORRIGIR NO NEDAP
+  - HISTORICO
+  - ANIMAIS SEM TAG
+- [ ] Confirmar que `RESULTADO FINAL` começa com a fazenda e as datas de início e fim e usa apenas `SMARTTAG`, `ANIMAL NEDAP`, `ANIMAL CAMPO`, `RESULTADO` e `ULTIMA CONFIRMACAO`.
+- [ ] Confirmar que as tags corretas ficam verdes e os demais resultados ficam amarelos, com os números completos como texto.
+- [ ] Confirmar que `CORRIGIR NO NEDAP` contém somente os resultados finais que exigem atenção, incluindo tags não encontradas, sem tags corretas ou ainda não conferidas.
+- [ ] Confirmar que o histórico mantém todas as leituras em ordem e as observações, enquanto o resultado final usa apenas o estado final de cada tag.
 
 ## Offline e persistencia
 

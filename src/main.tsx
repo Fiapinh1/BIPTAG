@@ -6,6 +6,7 @@ import DesignPreview from './design-preview/DesignPreview';
 import './styles.css';
 import './styles/audit-workspace.css';
 import './styles/farm-directory.css';
+import './styles/audit-summary.css';
 
 const SW_UPDATE_RELOAD_KEY = 'biptag-sw-update-reload-at';
 
