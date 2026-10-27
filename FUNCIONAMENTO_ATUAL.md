@@ -73,6 +73,12 @@ Ao ler uma tag, o sistema procura a SmartTag na base importada e mostra:
 - avisos de relacao com ocorrencias anteriores;
 - campo para informar o brinco observado.
 
+## Navegação
+
+`Início` e o logo BIPTAG abrem a lista de fazendas. O resumo da fazenda tem `Voltar ao início`, e as telas internas oferecem `Voltar` com o destino indicado e um botão separado `Início`. Em Configurações, o retorno leva à tela de onde ela foi aberta; após recarregar o app, o destino padrão é o resumo ou a lista de fazendas. Sair de uma leitura ainda não confirmada pede escolher entre continuar conferindo ou sair daquela leitura, preservando os registros já salvos. Uma conferência concluída não exige essa etapa.
+
+Os controles de retorno usam texto e ícone, áreas de toque maiores e foco visível. O menu inferior distingue a página atual e exibe os nomes completos, incluindo `Revisão`. A mudança do modo de leitura fica em `Trocar forma de leitura`, e os retornos do preparo indicam `Voltar ao resumo` ou `Voltar ao padrão`. Compartilhar por WhatsApp e exportar Excel também mostram rótulos.
+
 ## Confirmacao do brinco
 
 Depois da leitura, o usuario informa o numero do brinco visto no animal.

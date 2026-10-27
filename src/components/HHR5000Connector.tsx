@@ -26,7 +26,7 @@ export function HHR5000Connector({
   return (
     <>
       <button type="button" className={`reader-indicator reader-indicator--${status}`} aria-label={`Bastão: ${statusLabel[status]}. Abrir conexão`} title={`Bastão ${statusLabel[status].toLowerCase()}`} aria-haspopup="dialog" onClick={() => onOpenChange(true)}>
-        <BluetoothIcon size={22} /><span className="reader-indicator__dot" />
+        <BluetoothIcon size={22} /><span className="reader-indicator__label" aria-hidden="true">Bastão</span><span className="reader-indicator__dot" />
       </button>
       <dialog ref={dialogRef} className="reader-settings" aria-labelledby="reader-settings-title" onCancel={() => onOpenChange(false)} onClose={() => onOpenChange(false)} onClick={(event) => { if (event.target === event.currentTarget) onOpenChange(false); }}>
         <div className="reader-settings__content">

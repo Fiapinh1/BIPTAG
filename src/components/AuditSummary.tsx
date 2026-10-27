@@ -1,6 +1,7 @@
 import { CheckIcon, ChevronRightIcon, IssuesIcon, PauseIcon } from '../icons/Icons';
 import type { Audit, TagAssignment } from '../types/domain';
 import { TagReadOnlyList } from './TagReadOnlyList';
+import { PageNavigation } from './PageNavigation';
 
 export function AuditSummary({ audit, metrics, assignments, knownIssueCount, onBack, onContinue, onPause, onFinish, onReview, onKnownIssues }: {
   audit: Audit;
@@ -17,7 +18,7 @@ export function AuditSummary({ audit, metrics, assignments, knownIssueCount, onB
   const finished = audit.status === 'finished';
   const paused = audit.status === 'paused';
   return <section className="page audit-summary">
-    <button className="audit-summary__back" onClick={onBack} aria-label="Voltar para fazendas">‹ Fazendas</button>
+    <PageNavigation onHome={onBack} />
     <div className="audit-summary__heading"><span className="eyebrow">RESUMO DA FAZENDA</span><h1>{audit.farmName}</h1><span className={`audit-summary__status ${finished ? 'is-finished' : paused ? 'is-paused' : ''}`}>{finished ? 'Finalizada' : paused ? 'Pausada' : 'Em andamento'}</span></div>
     <section className="audit-summary__progress" aria-label="Andamento da auditoria">
       <div><strong>{metrics.auditedUnique} <span>de {audit.validTags ?? audit.totalTags} tags com resultado</span></strong><span>{metrics.percent}%</span></div>

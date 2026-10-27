@@ -11,12 +11,14 @@ import { AuditScanSummary } from './components/AuditScanSummary';
 import { AuditResultCard } from './components/AuditResultCard';
 import { ImportValidationIssues } from './components/ImportValidationIssues';
 import { ReaderPermissionsPanel } from './components/ReaderPermissionsPanel';
+import { PageNavigation } from './components/PageNavigation';
 import { getFieldReadingProgress } from './services/audit-progress';
 import { describeReaderError } from './services/reader-access';
 import { StatCard } from './components/StatCard';
 import {
   ActionIcon,
   AnimalIcon,
+  ArrowLeftIcon,
   CheckIcon,
   ChevronRightIcon,
   CloudIcon,
@@ -259,6 +261,8 @@ function App() {
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(() => readStoredAuditId());
   const autoSyncBusy = useRef(false);
   const bluetoothReadHandler = useRef<((tagNumber: string, rawValue: string) => void) | null>(null);
+  const pendingAuditRead = useRef(false);
+  const [settingsReturnView, setSettingsReturnView] = useState<View>('home');
 
   const audits = useLiveQuery(() => db.audits.orderBy('createdAt').reverse().toArray(), [], []);
   const pendingSyncSignal = useLiveQuery(async () => {
@@ -486,11 +490,27 @@ function App() {
   }
 
   const auditNavActive = Boolean(selectedAudit) && !['import', 'settings'].includes(view);
+  const viewTitles: Record<View, string> = { home: selectedAudit ? 'Resumo da fazenda' : 'Fazendas', import: 'Nova auditoria', audit: 'Conferência', lookup: 'Consulta', issues: 'Revisão', knownIssues: 'Problemas conhecidos', settings: 'Configurações' };
+  const backView = view === 'settings' ? settingsReturnView : 'home';
+
+  async function navigate(next: View, allFarms = false) {
+    if (view === 'audit' && (next !== 'audit' || allFarms) && pendingAuditRead.current) {
+      const leave = await appDialog.confirm({
+        title: 'Sair desta leitura?', message: 'A tag atual ainda não foi confirmada. Você pode continuar conferindo ou sair sem salvar esta leitura.',
+        confirmLabel: 'Sair desta leitura', cancelLabel: 'Continuar conferindo', tone: 'warning'
+      });
+      if (!leave) return;
+    }
+    if (next === 'settings' && view !== 'settings') setSettingsReturnView(view);
+    if (allFarms) setSelectedAuditId(null);
+    setView(next);
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }
 
   return (
     <div className={`app-shell app-shell--${view}`}>
       <header className="topbar">
-        <button className="brand" onClick={() => setView('home')} aria-label="Ir para início">
+        <button className="brand" onClick={() => void navigate('home', true)} aria-label="Início — todas as fazendas">
           <span className="brand__mark"><BiptagLogo /></span>
           <span>
             <strong>BIPTAG</strong>
@@ -498,13 +518,15 @@ function App() {
           </span>
         </button>
 
-        <button className={`connection-pill connection-pill--settings ${online ? 'is-online' : 'is-offline'}`} onClick={() => setView('settings')} title="Configurações" aria-label="Abrir configurações">
+        <button className={`connection-pill connection-pill--settings ${online ? 'is-online' : 'is-offline'}`} onClick={() => void navigate('settings')} title="Configurações" aria-label="Abrir configurações">
           <SettingsIcon size={20} />
           <span>Configurações</span>
         </button>
       </header>
 
       <main className="main-content">
+        {view !== 'home' && <PageNavigation onHome={() => void navigate('home', true)}
+          onBack={selectedAudit || backView !== 'home' ? () => void navigate(backView) : undefined} backHint={viewTitles[backView]} />}
         {view === 'home' && (
           <HomeView
             audits={audits}
@@ -535,7 +557,7 @@ function App() {
           />
         )}
         {view === 'audit' && (
-          <AuditView key={selectedAudit?.id} audit={selectedAudit} hhr5000={hhr5000} bluetoothReadHandler={bluetoothReadHandler} onNeedImport={() => setView('import')} setToast={setToast} onPaused={() => setView('home')} onAuditChanged={(auditId) => syncAuditInBackground(auditId)} />
+          <AuditView key={selectedAudit?.id} audit={selectedAudit} hhr5000={hhr5000} bluetoothReadHandler={bluetoothReadHandler} pendingRead={pendingAuditRead} onNeedImport={() => setView('import')} setToast={setToast} onPaused={() => setView('home')} onAuditChanged={(auditId) => syncAuditInBackground(auditId)} />
         )}
         {view === 'lookup' && (
           <LookupView audit={selectedAudit} onNeedImport={() => setView('import')} />
@@ -552,15 +574,15 @@ function App() {
       <nav className={`bottom-nav ${auditNavActive ? 'bottom-nav--audit' : 'bottom-nav--home'}`} aria-label="Navegação principal">
         {auditNavActive ? (
           <>
-            <NavButton active={view === 'home'} label="Resumo" icon={<HomeIcon />} onClick={() => setView('home')} />
-            <NavButton active={view === 'audit'} label="Auditar" icon={<NfcReaderGlyph />} onClick={() => setView('audit')} />
-            <NavButton active={view === 'lookup'} label="Consultar" icon={<CowIcon />} onClick={() => setView('lookup')} />
-            <NavButton active={view === 'issues' || view === 'knownIssues'} label="Revisao" icon={<IssuesIcon />} onClick={() => setView('issues')} />
+            <NavButton active={view === 'home'} label="Resumo" icon={<HomeIcon />} onClick={() => void navigate('home')} />
+            <NavButton active={view === 'audit'} label="Auditar" icon={<NfcReaderGlyph />} onClick={() => void navigate('audit')} />
+            <NavButton active={view === 'lookup'} label="Consultar" icon={<CowIcon />} onClick={() => void navigate('lookup')} />
+            <NavButton active={view === 'issues' || view === 'knownIssues'} label="Revisão" icon={<IssuesIcon />} onClick={() => void navigate('issues')} />
           </>
         ) : (
           <>
-            <NavButton active={view === 'home'} label="Fazendas" icon={<HomeIcon />} onClick={() => setView('home')} />
-            <NavButton active={view === 'settings'} label="Configurações" icon={<SettingsIcon />} onClick={() => setView('settings')} />
+            <NavButton active={view === 'home'} label="Início" icon={<HomeIcon />} onClick={() => void navigate('home', true)} />
+            <NavButton active={view === 'settings'} label="Configurações" icon={<SettingsIcon />} onClick={() => void navigate('settings')} />
           </>
         )}
       </nav>
@@ -573,7 +595,7 @@ function App() {
 
 function NavButton({ active, label, icon, onClick }: { active: boolean; label: string; icon: ReactNode; onClick: () => void }) {
   return (
-    <button className={`nav-button ${active ? 'is-active' : ''}`} onClick={onClick}>
+    <button className={`nav-button ${active ? 'is-active' : ''}`} onClick={onClick} aria-current={active ? 'page' : undefined}>
       {icon}
       <span>{label}</span>
     </button>
@@ -1351,7 +1373,7 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
               </button>
               </>}
               {prepStep !== 'summary' && <div className="import-prep-actions">
-                <button className="button button--ghost" disabled={busy} onClick={() => goToPrepStep(prepStep === 'pattern' ? 'summary' : 'pattern')}>Voltar</button>
+                <button className="button button--ghost" disabled={busy} onClick={() => goToPrepStep(prepStep === 'pattern' ? 'summary' : 'pattern')}><ArrowLeftIcon size={18} />{prepStep === 'pattern' ? 'Voltar ao resumo' : 'Voltar ao padrão'}</button>
                 <button className="button button--primary button--large" disabled={busy || (prepStep === 'alerts' && !patternConfirmed)} onClick={() => void (prepStep === 'pattern' ? applyPattern() : saveImport())}>
                   {busy ? (prepStep === 'pattern' ? 'Confirmando…' : 'Abrindo…') : prepStep === 'pattern' ? 'Confirmar e continuar' : 'Criar auditoria'}
                 </button>
@@ -1563,6 +1585,7 @@ function AuditView({
   audit,
   hhr5000,
   bluetoothReadHandler,
+  pendingRead,
   onNeedImport,
   setToast,
   onPaused,
@@ -1571,6 +1594,7 @@ function AuditView({
   audit: Audit | null;
   hhr5000: HHR5000Reader;
   bluetoothReadHandler: RefObject<((tagNumber: string, rawValue: string) => void) | null>;
+  pendingRead: RefObject<boolean>;
   onNeedImport: () => void;
   setToast: (value: string) => void;
   onPaused: () => void;
@@ -1609,6 +1633,10 @@ function AuditView({
   const nfcAttempt = useRef<AbortController | null>(null);
   const currentReadMode = useRef(readMode);
   currentReadMode.current = readMode;
+  useEffect(() => {
+    pendingRead.current = Boolean(scan && !outcome);
+    return () => { pendingRead.current = false; };
+  }, [scan, outcome, pendingRead]);
 
   useEffect(() => () => { nfcAttempt.current?.abort(); stopReader.current?.(); }, []);
   useEffect(() => {
@@ -2278,7 +2306,7 @@ function AuditView({
         <div className="audit-workspace__tools">
           <HHR5000Connector reader={hhr5000} open={showReaderSettings} onOpenChange={setShowReaderSettings} />
           <details className="audit-workspace__options">
-            <summary aria-label="Opções da conferência"><MoreIcon size={21} /></summary>
+            <summary aria-label="Opções da conferência"><MoreIcon size={20} /><span>Opções</span></summary>
             <div>
               <button onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setShowPatternModal(true); }}><TagIcon size={18} /> Ajustar padrão</button>
               <button onClick={() => void pauseAudit()}><PauseIcon size={18} /> Pausar auditoria</button>
@@ -2303,7 +2331,7 @@ function AuditView({
         <div role="status"><strong>Tag correta e salva</strong><span>Animal {lastSuccess.observedAnimal} · <span className="audit-save-receipt__tag">{lastSuccess.tagNumber}</span></span></div>
         <button aria-label="Ver detalhes da tag correta" onClick={() => openCorrection(lastSuccess)}>Detalhes</button>
       </div>}
-      {readMode !== 'choose' && !scan && !outcome && <button className="audit-workspace__back" onClick={() => selectReadMode('choose')}>‹ Trocar modo de conferência</button>}
+      {readMode !== 'choose' && !scan && !outcome && <button className="audit-workspace__back" onClick={() => selectReadMode('choose')}><ArrowLeftIcon size={20} aria-hidden="true" /> Trocar forma de leitura</button>}
       {readMode === 'choose' && !scan && !outcome && <AuditReadModePicker onSelect={selectReadMode} />}
 
       {attentionAlert && showAttentionOverlay && (
@@ -2553,7 +2581,7 @@ function AuditView({
               Salvar padrao
             </button>
             <button className="button button--ghost button--full" onClick={() => setShowPatternModal(false)}>
-              Voltar
+              Voltar à conferência
             </button>
           </div>
         </div>
@@ -2601,7 +2629,7 @@ function AuditView({
                   Sim, estou no {correctionDraft}
                 </button>
                 <button className="button button--ghost button--full" disabled={savingReading} onClick={() => setCorrectionConfirming(false)}>
-                  Voltar
+                  Alterar número
                 </button>
               </>
             )}
@@ -2922,8 +2950,8 @@ function IssuesView({
       <div className="section-heading section-heading--with-action">
         <div><span className="eyebrow">REVISÃO</span><h1>Revisão da auditoria</h1><p>O campo registra fatos. Aqui o BIPTAG organiza o que precisa ser corrigido depois.</p></div>
         <div className="review-header-actions">
-          <button className="icon-action icon-action--whatsapp" onClick={shareReviewWhatsApp} title="Compartilhar WhatsApp"><ShareIcon /></button>
-          <button className="icon-action" onClick={exportReport} title="Exportar Excel"><ReportIcon /></button>
+          <button className="button button--ghost" onClick={shareReviewWhatsApp}><ShareIcon size={20} /> WhatsApp</button>
+          <button className="button button--secondary" onClick={exportReport}><ReportIcon size={20} /> Exportar Excel</button>
         </div>
       </div>
 

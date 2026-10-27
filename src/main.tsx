@@ -7,6 +7,7 @@ import './styles.css';
 import './styles/audit-workspace.css';
 import './styles/farm-directory.css';
 import './styles/audit-summary.css';
+import './styles/navigation.css';
 
 const SW_UPDATE_RELOAD_KEY = 'biptag-sw-update-reload-at';
 

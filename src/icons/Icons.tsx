@@ -33,6 +33,10 @@ export function HomeIcon({ size = 22, ...props }: IconProps) {
   );
 }
 
+export function ArrowLeftIcon({ size = 22, ...props }: IconProps) {
+  return <svg {...base(size)} {...props}><path d="M20 12H4m7-7-7 7 7 7" /></svg>;
+}
+
 export function ImportIcon({ size = 22, ...props }: IconProps) {
   return (
     <svg {...base(size)} {...props}>

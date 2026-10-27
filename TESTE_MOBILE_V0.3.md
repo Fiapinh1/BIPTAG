@@ -36,6 +36,16 @@ O endereço local HTTP serve para testar interface, digitação manual, importa�
 - [ ] Simular outra tag sem sair do modo manual.
 - [ ] Usar `Trocar modo de conferência` e confirmar que o campo limpa e os registros anteriores permanecem salvos.
 
+## Navegação e botões
+
+- [ ] No resumo da fazenda, usar `Voltar ao início` e confirmar que abre a lista, mantendo a auditoria salva.
+- [ ] Em Auditar, Consultar e Revisão, conferir os botões `Voltar` com destino e `Início` no topo.
+- [ ] Abrir Configurações a partir de Consultar e usar Voltar: deve retornar à Consulta da mesma fazenda.
+- [ ] Iniciar uma leitura e digitar o brinco; ao tocar Início, escolher `Continuar conferindo` e conferir que os dados digitados continuam na tela.
+- [ ] Salvar uma tag correta e voltar ao resumo: não pedir uma nova confirmação nem perder o registro salvo.
+- [ ] Em telas de 320 e 390 px, verificar que `Consultar` e `Revisão` aparecem completos e que nenhum botão está coberto pelo menu inferior.
+- [ ] Navegar pelo teclado e conferir o foco visível nos botões de retorno e do menu.
+
 ## Bastão Bluetooth
 
 - [ ] Em um aparelho novo, abrir `Configurações → Acesso aos leitores` pelo ícone instalado. Conferir o navegador identificado e testar `Autorizar e selecionar bastão` sem criar uma auditoria.
