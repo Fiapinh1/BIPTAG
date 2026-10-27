@@ -119,6 +119,48 @@ describe('HHR5000 connection lifecycle', () => {
     await expect(connectHHR5000(vi.fn())).rejects.toThrow('HTTPS');
     expect(reader.requestDevice).not.toHaveBeenCalled();
   });
+
+  it('keeps a new connection alive if a cancelled older GATT connection resolves later', async () => {
+    const reader = createReader();
+    const controller = new AbortController();
+    let finishOldConnect!: () => void;
+    reader.gatt.connect.mockImplementationOnce(() => new Promise((resolve) => {
+      finishOldConnect = () => { reader.gatt.connected = true; resolve(reader.gatt); };
+    }));
+    const oldRead = vi.fn();
+    const pending = connectHHR5000(oldRead, undefined, { device: reader.device, signal: controller.signal });
+    controller.abort();
+    const onRead = vi.fn();
+    const connection = await connectHHR5000(onRead, undefined, { device: reader.device });
+    finishOldConnect();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(reader.gatt.connected).toBe(true);
+    reader.read('984000010514961\r\n');
+    expect(onRead).toHaveBeenCalledOnce();
+    expect(oldRead).not.toHaveBeenCalled();
+    connection.disconnect();
+  });
+
+  it('does not close a replacement connection when an older stop callback is called', async () => {
+    const reader = createReader();
+    const old = await connectHHR5000(vi.fn(), undefined, { device: reader.device });
+    const onRead = vi.fn();
+    const next = await connectHHR5000(onRead, undefined, { device: reader.device });
+    old.disconnect();
+    expect(reader.gatt.connected).toBe(true);
+    reader.read('984000010514961\r\n');
+    expect(onRead).toHaveBeenCalledOnce();
+    next.disconnect();
+  });
+
+  it('does not require AbortSignal.throwIfAborted to activate Bluetooth', async () => {
+    const reader = createReader();
+    const controller = new AbortController();
+    vi.spyOn(controller.signal, 'throwIfAborted').mockImplementation(() => { throw new Error('Unavailable'); });
+    const connection = await connectHHR5000(vi.fn(), undefined, { device: reader.device, signal: controller.signal });
+    expect(reader.gatt.connected).toBe(true);
+    connection.disconnect();
+  });
 });
 
 describe('HHR5000 fragmented Bluetooth readings', () => {

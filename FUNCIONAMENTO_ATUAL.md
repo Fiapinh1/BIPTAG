@@ -59,6 +59,8 @@ O pedido de acesso ao Bluetooth/NFC ocorre no próprio toque em conectar/ativar.
 
 Uma leitura nova não substitui uma conferência ou decisão em andamento. É necessário terminar ou cancelar a tag atual antes de ler outra.
 
+Na espera por leituras, `Reiniciar NFC` abre uma nova sessão e encerra a anterior; `Reconectar bastão` refaz a conexão autorizada. Cancelar uma ativação libera a próxima tentativa imediatamente. Respostas atrasadas de conexões antigas não podem desligar a sessão atual. A solicitação de acesso ao leitor ocorre antes do feedback sonoro; falhas de áudio ou vibração não interrompem a leitura nem o avanço após salvar. Uma falha ao atualizar o estado local da auditoria também não desliga um NFC que já iniciou.
+
 A conferência mostra duas barras: `Tags lidas` conta SmartTags distintas registradas em campo, incluindo as que não constam na planilha, e informa quantas estão fora da base; `Planilha` mantém o progresso dos identificadores exatos importados e o número de restantes. Releituras e correções da mesma tag não aumentam a primeira contagem. Marcar uma tag não localizada também não conta como leitura física. Assim, dez tags lidas podem coexistir com nove de dez identificadores da planilha conferidos quando um número foi cadastrado incorretamente.
 
 Ao ler uma tag, o sistema procura a SmartTag na base importada e mostra:

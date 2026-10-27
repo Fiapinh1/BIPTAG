@@ -46,6 +46,7 @@ export function AuditReaderStandby({ mode, active, connecting, supported, messag
       {connecting && phone && <p className="audit-reader-standby__permission">Se o Chrome mostrar uma permissão, toque em Permitir. Confira se o NFC está ligado nas configurações do celular.</p>}
       {connecting && <button className="button button--ghost" onClick={onStop}>{phone ? 'Cancelar ativação do NFC' : 'Cancelar conexão'}</button>}
       {active && phone && <button className="button button--ghost" onClick={onStop}>Parar NFC</button>}
+      {active && <button className="button button--ghost" onClick={onActivate}>{phone ? 'Reiniciar NFC' : 'Reconectar bastão'}</button>}
       {phone && <small className="audit-reader-standby__compatibility">O telefone lê tags NFC com conteúdo NDEF. Para tags que exigem o bastão, escolha Bluetooth.</small>}
       <ReaderHelp mode={mode} />
     </div>

@@ -2,6 +2,19 @@ export function isReaderSecureContext() {
   return typeof window === 'undefined' || window.isSecureContext !== false;
 }
 
+export function throwIfReaderAborted(signal?: AbortSignal) {
+  if (signal?.aborted) throw signal.reason ?? new DOMException('Leitura cancelada.', 'AbortError');
+}
+
+export function waitForReaderActivation<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(signal.reason ?? new DOMException('Leitura cancelada.', 'AbortError'));
+    signal.addEventListener('abort', abort, { once: true });
+    operation.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
+    if (signal.aborted) abort();
+  });
+}
+
 export function describeReaderError(error: unknown, mode: 'bluetooth' | 'nfc', deviceSelected = false): { message: string; retryable: boolean } {
   const name = error && typeof error === 'object' && 'name' in error ? String(error.name) : '';
   const detail = error instanceof Error ? error.message : '';

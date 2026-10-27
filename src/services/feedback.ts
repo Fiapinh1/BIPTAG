@@ -1,7 +1,6 @@
 export function vibrate(pattern: number | number[]) {
-  if ('vibrate' in navigator) {
-    navigator.vibrate(pattern);
-  }
+  try { if (typeof navigator.vibrate === 'function') navigator.vibrate(pattern); }
+  catch { /* Feedback must never block a reader or a saved confirmation. */ }
 }
 
 let audioContext: AudioContext | null = null;
@@ -43,11 +42,13 @@ function playTone(frequency: number, durationMs: number, delayMs = 0) {
       oscillator.disconnect();
       gain.disconnect();
     };
-  });
+  }).catch(() => { /* Audio is optional when the browser or device blocks it. */ });
 }
 
 async function ensureAudioContext() {
-  const context = getAudioContext();
+  let context: AudioContext | null;
+  try { context = getAudioContext(); }
+  catch { return null; }
   if (!context) return null;
   if (context.state === 'suspended') {
     try {

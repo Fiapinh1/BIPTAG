@@ -55,10 +55,14 @@ O endereço local HTTP serve para testar interface, digitação manual, importa�
 - [ ] Reabrir o app e verificar a reconexão quando `getDevices` estiver disponível no navegador.
 - [ ] Desconectar pelo ícone, reabrir o app e confirmar que não reconecta até tocar em conectar.
 - [ ] Testar o menu `Escolher outro bastão` e o cancelamento do seletor.
+- [ ] Cancelar uma conexão Bluetooth pendente e tocar em conectar novamente: a tentativa anterior não pode deixar o botão sem efeito nem desconectar a conexão nova ao terminar atrasada.
+- [ ] Com o bastão conectado, testar `Reconectar bastão` e conferir a próxima tag sem reiniciar a auditoria.
 
 ## NFC do telefone
 
 - [ ] Escolher `Usar NFC do telefone` e ativar a leitura com uma tag NFC compatível com NDEF.
+- [ ] Com NFC ativo, tocar em `Reiniciar NFC`: a leitura anterior deve parar e uma nova ativação deve ficar disponível, sem fechar a auditoria.
+- [ ] Bloquear som/vibração no aparelho e conferir que isso não impede conectar, ler ou salvar a próxima tag.
 - [ ] Na primeira ativação, permitir o acesso ao NFC solicitado pelo navegador. Se negar, verificar a mensagem com instruções para liberar a permissão do site.
 - [ ] Enquanto a ativação estiver aguardando, cancelar e ativar novamente. Uma resposta atrasada da tentativa cancelada não pode reativar o leitor nem interferir na nova tentativa.
 - [ ] Em navegador sem Web NFC ou acesso sem HTTPS, verificar que a ativação fica indisponível e oferece orientação para abrir no Chrome em HTTPS.

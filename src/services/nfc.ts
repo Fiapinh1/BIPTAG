@@ -1,4 +1,4 @@
-import { isReaderSecureContext } from './reader-access';
+import { isReaderSecureContext, throwIfReaderAborted, waitForReaderActivation } from './reader-access';
 
 export interface NfcScanResult {
   tagNumber: string;
@@ -6,7 +6,7 @@ export interface NfcScanResult {
 }
 
 export function isWebNfcSupported() {
-  return isReaderSecureContext() && typeof window !== 'undefined' && typeof window.NDEFReader === 'function';
+  return isReaderSecureContext() && typeof window !== 'undefined' && 'NDEFReader' in window;
 }
 
 function normalizeTagValue(value: string) {
@@ -41,7 +41,7 @@ export async function startNfcReader(
     throw new Error('Web NFC não está disponível neste navegador. Use Chrome no Android.');
   }
 
-  signal?.throwIfAborted();
+  throwIfReaderAborted(signal);
   const reader = new NDEFReader();
   const controller = new AbortController();
   const abort = () => controller.abort();
@@ -72,7 +72,7 @@ export async function startNfcReader(
   });
 
   try {
-    await reader.scan({ signal: controller.signal });
+    await waitForReaderActivation(reader.scan({ signal: controller.signal }), controller.signal);
     return () => { signal?.removeEventListener('abort', abort); controller.abort(); };
   } catch (err) {
     signal?.removeEventListener('abort', abort);

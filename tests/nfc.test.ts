@@ -142,4 +142,31 @@ describe('NFC permission and activation lifecycle', () => {
     expect(isWebNfcSupported()).toBe(false);
     await expect(startNfcReader(vi.fn())).rejects.toThrow('Chrome no Android');
   });
+
+  it('cancels immediately even when the native scan promise ignores cancellation', async () => {
+    const nfc = createNfc();
+    let resolveOldScan!: () => void;
+    nfc.scan.mockImplementationOnce(() => new Promise((resolve) => { resolveOldScan = resolve; }));
+    const controller = new AbortController();
+    const pending = startNfcReader(vi.fn(), undefined, controller.signal);
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    const onRead = vi.fn();
+    const stop = await startNfcReader(onRead);
+    resolveOldScan();
+    await Promise.resolve();
+    expect(nfc.scan.mock.calls[1][0].signal.aborted).toBe(false);
+    nfc.read();
+    expect(onRead).toHaveBeenCalledOnce();
+    stop();
+  });
+
+  it('does not require AbortSignal.throwIfAborted to activate NFC', async () => {
+    const nfc = createNfc();
+    const controller = new AbortController();
+    vi.spyOn(controller.signal, 'throwIfAborted').mockImplementation(() => { throw new Error('Unavailable'); });
+    const stop = await startNfcReader(vi.fn(), undefined, controller.signal);
+    expect(nfc.scan).toHaveBeenCalledOnce();
+    stop();
+  });
 });

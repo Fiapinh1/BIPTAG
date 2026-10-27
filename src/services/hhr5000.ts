@@ -1,4 +1,6 @@
-import { isReaderSecureContext } from './reader-access';
+import { isReaderSecureContext, throwIfReaderAborted } from './reader-access';
+
+const connectionOwners = new Map<string, symbol>();
 
 export const HHR5000_SERVICE_UUID = '2456e1b9-26e2-8f83-e744-f34f01e9d701';
 export const HHR5000_PRIMARY_CHARACTERISTIC_UUID = '2456e1b9-26e2-8f83-e744-f34f01e9d703';
@@ -133,7 +135,7 @@ export async function connectHHR5000(
     throw new Error('Web Bluetooth nao esta disponivel neste navegador. Use Chrome ou Edge em HTTPS.');
   }
 
-  options.signal?.throwIfAborted();
+  throwIfReaderAborted(options.signal);
   const device = options.device ?? await navigator.bluetooth!.requestDevice({
     filters: [
       { namePrefix: 'HHR5000' },
@@ -141,11 +143,20 @@ export async function connectHHR5000(
     ],
     optionalServices: [HHR5000_SERVICE_UUID]
   });
-  options.signal?.throwIfAborted();
+  throwIfReaderAborted(options.signal);
   options.onDeviceSelected?.(device);
+  const owner = Symbol('HHR5000 connection');
+  connectionOwners.set(device.id, owner);
   let primaryCharacteristic: BluetoothRemoteGATTCharacteristic | undefined;
   let closed = false;
-  const stream = createHHR5000Stream((result) => { if (!closed) onRead(result); }, options.getExpectedTagLength ?? (() => 15));
+  let opening = true;
+  const ownsConnection = () => connectionOwners.get(device.id) === owner;
+  const stream = createHHR5000Stream((result) => { if (!closed && ownsConnection()) onRead(result); }, options.getExpectedTagLength ?? (() => 15));
+
+  function ensureOpen() {
+    throwIfReaderAborted(options.signal);
+    if (closed || !ownsConnection()) throw new DOMException('Conexão cancelada ou substituída.', 'AbortError');
+  }
 
   function cleanup() {
     if (closed) return;
@@ -159,7 +170,11 @@ export async function connectHHR5000(
   function disconnect() {
     cleanup();
     // Closing GATT also stops notifications, including when the reader is already off.
-    if (device.gatt?.connected) device.gatt.disconnect();
+    // An older pending attempt must never close a newer connection to this reader.
+    if (ownsConnection()) {
+      if (device.gatt?.connected) device.gatt.disconnect();
+      if (!opening) connectionOwners.delete(device.id);
+    }
   }
 
   const handleValueChanged = (event: Event) => {
@@ -172,27 +187,32 @@ export async function connectHHR5000(
   const handleDisconnect = () => {
     if (closed) return;
     cleanup();
-    onDisconnect?.();
+    if (ownsConnection()) {
+      if (!opening) connectionOwners.delete(device.id);
+      onDisconnect?.();
+    }
   };
 
   options.signal?.addEventListener('abort', disconnect, { once: true });
   device.addEventListener('gattserverdisconnected', handleDisconnect);
   try {
     const server = await device.gatt?.connect();
-    options.signal?.throwIfAborted();
+    ensureOpen();
     if (!server || closed) throw new Error('Não foi possível conectar ao bastão.');
     const service = await server.getPrimaryService(HHR5000_SERVICE_UUID);
-    options.signal?.throwIfAborted();
+    ensureOpen();
     if (closed) throw new Error('O bastão foi desconectado.');
     primaryCharacteristic = await service.getCharacteristic(HHR5000_PRIMARY_CHARACTERISTIC_UUID);
-    options.signal?.throwIfAborted();
+    ensureOpen();
     if (closed) throw new Error('O bastão foi desconectado.');
     primaryCharacteristic.addEventListener('characteristicvaluechanged', handleValueChanged);
     await primaryCharacteristic.startNotifications();
-    options.signal?.throwIfAborted();
+    ensureOpen();
     if (closed || !server.connected) throw new Error('O bastão foi desconectado.');
+    opening = false;
     return { device, deviceName: device.name ?? 'HHR5000SN', disconnect };
   } catch (error) {
+    opening = false;
     disconnect();
     throw error;
   }

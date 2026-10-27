@@ -1758,14 +1758,14 @@ function AuditView({
   }
 
   async function activateReader() {
-    if (nfcAttempt.current && !nfcAttempt.current.signal.aborted) return;
+    if (nfcAttempt.current && !nfcAttempt.current.signal.aborted && !stopReader.current) return;
     const controller = new AbortController();
     nfcAttempt.current?.abort();
     nfcAttempt.current = controller;
+    setReaderActive(false);
     setNfcStarting(true);
     setNfcError(null);
     try {
-      primeFeedbackAudio();
       setReaderMessage('Solicitando acesso ao NFC…');
       stopReader.current?.();
       stopReader.current = null;
@@ -1778,7 +1778,8 @@ function AuditView({
       stopReader.current = stop;
       setReaderActive(true);
       const now = new Date().toISOString();
-      await db.audits.update(activeAudit.id, { status: 'in_progress', pausedAt: undefined, updatedAt: now, lastActivityAt: now });
+      void db.audits.update(activeAudit.id, { status: 'in_progress', pausedAt: undefined, updatedAt: now, lastActivityAt: now })
+        .catch(() => setToast('O NFC está ativo. Não foi possível atualizar o estado local da auditoria; tente salvar novamente.'));
       setReaderMessage('Leitor ativo. Aproxime uma SmartTag.');
     } catch (err) {
       if (controller.signal.aborted) return;
@@ -2398,7 +2399,7 @@ function AuditView({
           supported={readMode === 'phone' ? isWebNfcSupported() : hhr5000.isSupported}
           message={readMode === 'phone' ? readerMessage : hhr5000.message}
           error={readMode === 'phone' ? nfcError : null}
-          onActivate={() => { primeFeedbackAudio(); void (readMode === 'phone' ? activateReader() : hhr5000.connect()); }}
+          onActivate={() => { void (readMode === 'phone' ? activateReader() : hhr5000.connect()); primeFeedbackAudio(); }}
           onStop={readMode === 'phone' ? deactivateReader : hhr5000.disconnect}
         />
       )}

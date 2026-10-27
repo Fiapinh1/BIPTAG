@@ -108,9 +108,11 @@ export function useHHR5000(onTagRead: (tagNumber: string, rawValue: string) => v
         setStatus(device && problem.retryable ? 'desconectado' : 'erro');
         setMessage(problem.message);
       } finally {
-        attempting = false;
-        if (attemptAbort === controller) attemptAbort = null;
-        if (!connection) scheduleRetry();
+        if (attemptAbort === controller) {
+          attempting = false;
+          attemptAbort = null;
+          if (!connection) scheduleRetry();
+        }
       }
     }
 
@@ -118,12 +120,15 @@ export function useHHR5000(onTagRead: (tagNumber: string, rawValue: string) => v
       generation++;
       clearRetry();
       attemptAbort?.abort();
+      attemptAbort = null;
+      attempting = false;
       connection?.disconnect();
       connection = null;
     }
 
     actionsRef.current = {
       connect: async () => {
+        if (connection) stop();
         wanted = true;
         retryDelay = 1000;
         await open(device);
