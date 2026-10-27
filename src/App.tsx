@@ -10,6 +10,7 @@ import { AuditReadModePicker, AuditReaderStandby, type AuditReadMode } from './c
 import { AuditScanSummary } from './components/AuditScanSummary';
 import { AuditResultCard } from './components/AuditResultCard';
 import { ImportValidationIssues } from './components/ImportValidationIssues';
+import { ReaderPermissionsPanel } from './components/ReaderPermissionsPanel';
 import { getFieldReadingProgress } from './services/audit-progress';
 import { describeReaderError } from './services/reader-access';
 import { StatCard } from './components/StatCard';
@@ -545,7 +546,7 @@ function App() {
         {view === 'knownIssues' && (
           <KnownIssuesView audit={selectedAudit} onNeedImport={() => setView('import')} setToast={setToast} />
         )}
-        {view === 'settings' && <CloudSettingsView activeAudit={selectedAudit} setToast={setToast} />}
+        {view === 'settings' && <CloudSettingsView activeAudit={selectedAudit} setToast={setToast} reader={hhr5000} />}
       </main>
 
       <nav className={`bottom-nav ${auditNavActive ? 'bottom-nav--audit' : 'bottom-nav--home'}`} aria-label="Navegação principal">
@@ -3241,7 +3242,7 @@ function SettingsView() {
   );
 }
 
-function CloudSettingsView({ activeAudit, setToast }: { activeAudit: Audit | null; setToast: (value: string) => void }) {
+function CloudSettingsView({ activeAudit, setToast, reader }: { activeAudit: Audit | null; setToast: (value: string) => void; reader: HHR5000Reader }) {
   const [session, setSession] = useState<Session | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -3360,8 +3361,9 @@ function CloudSettingsView({ activeAudit, setToast }: { activeAudit: Audit | nul
       <div className="settings-card">
         <div className="settings-row"><span className="settings-row__icon"><CloudIcon /></span><div><strong>Supabase</strong><small>{isSupabaseConfigured ? (isUsingBundledSupabaseConfig ? 'Conectado ao banco BIPTAG' : 'Variaveis configuradas') : 'Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY'}</small></div><span className={`status-dot ${isSupabaseConfigured ? 'is-ok' : ''}`} /></div>
         <div className="settings-row"><span className="settings-row__icon"><CheckIcon /></span><div><strong>Conta</strong><small>{session?.user.email ?? (session ? 'Sessao ativa' : 'Entre com o mesmo e-mail em todos os dispositivos')}</small></div><span className={`status-dot ${session ? 'is-ok' : ''}`} /></div>
-        <div className="settings-row"><span className="settings-row__icon"><ScanIcon /></span><div><strong>Web NFC</strong><small>{isWebNfcSupported() ? 'Disponivel neste navegador' : 'Use Chrome Android em HTTPS para leitura real'}</small></div><span className={`status-dot ${isWebNfcSupported() ? 'is-ok' : ''}`} /></div>
       </div>
+
+      <ReaderPermissionsPanel reader={reader} />
 
       {isSupabaseConfigured && (
         <div className="form-card sync-card">

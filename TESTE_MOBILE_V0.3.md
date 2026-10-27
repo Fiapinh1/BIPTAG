@@ -38,6 +38,13 @@ O endereço local HTTP serve para testar interface, digitação manual, importa�
 
 ## Bastão Bluetooth
 
+- [ ] Em um aparelho novo, abrir `Configurações → Acesso aos leitores` pelo ícone instalado. Conferir o navegador identificado e testar `Autorizar e selecionar bastão` sem criar uma auditoria.
+- [ ] Se a busca normal não listar o bastão, testar `Bastão não aparece? Procurar todos` e selecionar apenas o leitor desejado.
+- [ ] Desconectar o bastão do primeiro celular e testar a autorização no segundo. A conexão em um aparelho não comprova a permissão no outro.
+- [ ] Testar `Autorizar e testar NFC`, ler uma tag e conferir que o teste não cria registros na auditoria. Sair de Configurações deve encerrar o teste NFC.
+- [ ] Verificar os estados NFC permitida, bloqueada, aguardando autorização e não informada. Se o navegador não oferece NFC, mostrar indisponibilidade sem simular um pedido de permissão.
+- [ ] No ícone instalado em Android, conferir o atalho para abrir o app no Chrome e o botão `Copiar diagnóstico`.
+
 - [ ] Em HTTPS, escolher `Usar bastão Bluetooth` e conectar o HHR5000SN.
 - [ ] Negar o acesso ao Bluetooth no navegador/Android e verificar a orientação sobre Dispositivos próximos e permissões do site, sem tentativas automáticas repetidas enquanto o acesso estiver bloqueado.
 - [ ] Restaurar a permissão, tocar em conectar e confirmar que funciona sem reiniciar a auditoria.

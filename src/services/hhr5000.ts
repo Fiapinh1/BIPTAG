@@ -128,7 +128,7 @@ function createHHR5000Stream(onRead: (result: HHR5000ScanResult) => void, getExp
 export async function connectHHR5000(
   onRead: (result: HHR5000ScanResult) => void,
   onDisconnect?: () => void,
-  options: { device?: BluetoothDevice; signal?: AbortSignal; onDeviceSelected?: (device: BluetoothDevice) => void; getExpectedTagLength?: () => number } = {}
+  options: { device?: BluetoothDevice; signal?: AbortSignal; onDeviceSelected?: (device: BluetoothDevice) => void; getExpectedTagLength?: () => number; acceptAllDevices?: boolean } = {}
 ): Promise<HHR5000Connection> {
   if (!isReaderSecureContext()) throw new Error('Abra o BIPTAG pelo endereço HTTPS para permitir acesso ao Bluetooth.');
   if (!isWebBluetoothSupported()) {
@@ -137,10 +137,10 @@ export async function connectHHR5000(
 
   throwIfReaderAborted(options.signal);
   const device = options.device ?? await navigator.bluetooth!.requestDevice({
-    filters: [
+    ...(options.acceptAllDevices ? { acceptAllDevices: true } : { filters: [
       { namePrefix: 'HHR5000' },
       { services: [HHR5000_SERVICE_UUID] }
-    ],
+    ] }),
     optionalServices: [HHR5000_SERVICE_UUID]
   });
   throwIfReaderAborted(options.signal);

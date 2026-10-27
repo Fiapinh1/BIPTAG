@@ -221,6 +221,21 @@
 .reader-help > summary { min-height: 40px; padding: 10px 0; color: #795E43; font-size: 12px; font-weight: 700; cursor: pointer; }
 .reader-help > ol { margin: 5px 0 0; padding-left: 20px; color: #756A5D; font-size: 12px; line-height: 1.6; }
 .reader-help li + li { margin-top: 8px; }
+.reader-permissions { display: grid; gap: 16px; margin: 20px 0; padding: 20px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); }
+.reader-permissions h2 { margin: 4px 0 8px; font-size: 24px; }
+.reader-permissions p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.reader-permissions small { display: block; margin-top: 7px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.reader-permissions__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.reader-permissions__device { display: grid; align-content: start; gap: 11px; min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 15px; background: #FDFBF7; }
+.reader-permissions__device h3 { display: flex; align-items: center; gap: 9px; margin: 0; color: #4A3E31; font-size: 16px; }
+.reader-permissions__device .button { min-height: 46px; padding: 11px; font-size: 12px; white-space: normal; }
+.reader-permissions__notice { display: grid; gap: 10px; padding: 13px; border: 1px solid #E2D1B7; border-radius: 12px; color: #836638; background: #FFF7E9; font-size: 12px; line-height: 1.6; }
+.reader-permissions .reader-permissions__error { padding: 11px; border-radius: 10px; color: #A34E42; background: #FBEEE9; }
+.reader-permissions__last strong { display: block; color: #326E4F; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
+.reader-permissions__diagnostic { padding-top: 10px; border-top: 1px solid var(--line); }
+.reader-permissions__diagnostic > summary { min-height: 44px; padding: 12px 0; color: #7F654A; font-size: 12px; cursor: pointer; }
+.reader-permissions__diagnostic pre { padding: 12px; border-radius: 10px; color: #665948; background: #F3EEE5; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; line-height: 1.7; }
+@media (max-width: 600px) { .reader-permissions { padding: 14px; } .reader-permissions__grid { grid-template-columns: 1fr; } }
 @media (max-width: 380px) {
   .app-shell--audit .field-page.audit-workspace { padding-inline: 12px; gap: 12px; }
   .audit-workspace__tools { gap: 5px; }

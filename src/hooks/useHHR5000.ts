@@ -26,7 +26,7 @@ export function useHHR5000(onTagRead: (tagNumber: string, rawValue: string) => v
   onTagReadRef.current = onTagRead;
   const expectedTagLengthRef = useRef(expectedTagLength);
   expectedTagLengthRef.current = expectedTagLength;
-  const actionsRef = useRef({ connect: async () => {}, chooseDevice: async () => {}, disconnect: () => {} });
+  const actionsRef = useRef({ connect: async () => {}, chooseDevice: async (_showAllDevices = false) => {}, disconnect: () => {} });
 
   useEffect(() => {
     let disposed = false;
@@ -60,7 +60,7 @@ export function useHHR5000(onTagRead: (tagNumber: string, rawValue: string) => v
       retryDelay = Math.min(retryDelay * 2, 15000);
     }
 
-    async function open(knownDevice?: BluetoothDevice) {
+    async function open(knownDevice?: BluetoothDevice, showAllDevices = false) {
       if (disposed || attempting || connection || !wanted) return;
       if (!isWebBluetoothSupported()) {
         setStatus('erro');
@@ -88,7 +88,7 @@ export function useHHR5000(onTagRead: (tagNumber: string, rawValue: string) => v
             setMessage('Bastão desconectado. Tentando reconectar…');
             scheduleRetry();
           },
-          { device: knownDevice, signal: controller.signal, onDeviceSelected: (selected) => { device = selected; }, getExpectedTagLength: () => expectedTagLengthRef.current }
+          { device: knownDevice, signal: controller.signal, onDeviceSelected: (selected) => { device = selected; }, getExpectedTagLength: () => expectedTagLengthRef.current, acceptAllDevices: showAllDevices }
         );
         if (disposed || !wanted || thisGeneration !== generation) {
           next.disconnect();
@@ -133,12 +133,12 @@ export function useHHR5000(onTagRead: (tagNumber: string, rawValue: string) => v
         retryDelay = 1000;
         await open(device);
       },
-      chooseDevice: async () => {
+      chooseDevice: async (showAllDevices = false) => {
         if (attempting) return;
         stop();
         device = undefined;
         wanted = true;
-        await open();
+        await open(undefined, showAllDevices);
       },
       disconnect: () => {
         wanted = false;
@@ -186,7 +186,7 @@ export function useHHR5000(onTagRead: (tagNumber: string, rawValue: string) => v
     status, message, deviceName, lastTagRead,
     isSupported: isWebBluetoothSupported(),
     connect: () => actionsRef.current.connect(),
-    chooseDevice: () => actionsRef.current.chooseDevice(),
+    chooseDevice: (showAllDevices = false) => actionsRef.current.chooseDevice(showAllDevices),
     disconnect: () => actionsRef.current.disconnect()
   };
 }

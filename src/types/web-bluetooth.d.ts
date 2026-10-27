@@ -47,6 +47,7 @@ type BluetoothServiceUUID = number | string;
 type BluetoothCharacteristicUUID = number | string;
 
 interface RequestDeviceOptions {
+  acceptAllDevices?: boolean;
   filters?: Array<{
     name?: string;
     namePrefix?: string;

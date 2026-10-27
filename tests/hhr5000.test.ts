@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { connectHHR5000, HHR5000_PRIMARY_CHARACTERISTIC_UUID } from '../src/services/hhr5000';
+import { connectHHR5000, HHR5000_PRIMARY_CHARACTERISTIC_UUID, HHR5000_SERVICE_UUID } from '../src/services/hhr5000';
 
 function createReader() {
   const characteristic = Object.assign(new EventTarget(), {
@@ -31,6 +31,14 @@ beforeEach(() => { vi.spyOn(console, 'debug').mockImplementation(() => {}); });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('HHR5000 connection lifecycle', () => {
+  it('opens a fresh broad chooser only when requested and retains access to the reader service', async () => {
+    const reader = createReader();
+    const connection = await connectHHR5000(vi.fn(), undefined, { acceptAllDevices: true });
+    expect(reader.requestDevice).toHaveBeenCalledWith({ acceptAllDevices: true, optionalServices: [HHR5000_SERVICE_UUID] });
+    expect(reader.requestDevice.mock.calls[0]?.[0]).not.toHaveProperty('filters');
+    connection.disconnect();
+  });
+
   it('selects a reader, subscribes to tags and disconnects without notifying an unexpected loss', async () => {
     const reader = createReader();
     const onRead = vi.fn();
