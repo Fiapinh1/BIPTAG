@@ -55,6 +55,8 @@ Os pacotes Bluetooth são reunidos antes de abrir a conferência. O app aceita u
 
 Após a primeira conexão, o app tenta reconectar ao mesmo bastão se houver uma queda, com intervalos de até 15 segundos e enquanto a página estiver visível. Ao reabrir o app, a reconexão depende de o navegador disponibilizar os dispositivos já autorizados (`getDevices`). Quando essa função não existe ou a permissão foi removida, o usuário conecta pelo botão. Desconectar manualmente interrompe as tentativas automáticas, inclusive após reabrir o app.
 
+O pedido de acesso ao Bluetooth/NFC ocorre no próprio toque em conectar/ativar. O navegador e o Android controlam essas permissões; o site não consegue ligar as antenas nem liberar uma permissão bloqueada pelo usuário. A interface oferece ajuda recolhida com orientações do Chrome, Dispositivos próximos, permissões do site e posicionamento da antena NFC. Bloqueios de permissão e ausência do serviço Bluetooth esperado interrompem as tentativas automáticas e exibem a causa. Falhas transitórias de conexão continuam permitindo reconexão. Na ativação do NFC, há opção de cancelar enquanto aguarda; erros de permissão, hardware e leitor ocupado recebem orientações específicas. A existência da API NFC no navegador não comprova disponibilidade do hardware ou compatibilidade da tag.
+
 Uma leitura nova não substitui uma conferência ou decisão em andamento. É necessário terminar ou cancelar a tag atual antes de ler outra.
 
 Ao ler uma tag, o sistema procura a SmartTag na base importada e mostra:

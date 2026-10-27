@@ -37,6 +37,8 @@ O endereço local HTTP serve para testar interface, digitação manual, importa�
 ## Bastão Bluetooth
 
 - [ ] Em HTTPS, escolher `Usar bastão Bluetooth` e conectar o HHR5000SN.
+- [ ] Negar o acesso ao Bluetooth no navegador/Android e verificar a orientação sobre Dispositivos próximos e permissões do site, sem tentativas automáticas repetidas enquanto o acesso estiver bloqueado.
+- [ ] Restaurar a permissão, tocar em conectar e confirmar que funciona sem reiniciar a auditoria.
 - [ ] Confirmar que o ícone no canto fica verde e que os detalhes só aparecem ao tocar nele.
 - [ ] Ler a tag com transmissão fragmentada: a tela deve aguardar todos os dígitos, mostrando a SmartTag completa da etiqueta.
 - [ ] Confirmar que mensagens curtas do bastão (por exemplo `2`) não abrem `Confirmar leitura?` nem exigem cancelar para tentar novamente.
@@ -55,6 +57,10 @@ O endereço local HTTP serve para testar interface, digitação manual, importa�
 ## NFC do telefone
 
 - [ ] Escolher `Usar NFC do telefone` e ativar a leitura com uma tag NFC compatível com NDEF.
+- [ ] Na primeira ativação, permitir o acesso ao NFC solicitado pelo navegador. Se negar, verificar a mensagem com instruções para liberar a permissão do site.
+- [ ] Enquanto a ativação estiver aguardando, cancelar e ativar novamente. Uma resposta atrasada da tentativa cancelada não pode reativar o leitor nem interferir na nova tentativa.
+- [ ] Em navegador sem Web NFC ou acesso sem HTTPS, verificar que a ativação fica indisponível e oferece orientação para abrir no Chrome em HTTPS.
+- [ ] No Galaxy Z Flip, conferir a posição da antena indicada pelo fabricante e testar a mesma tag com a tela desbloqueada e sem capa grossa/magnética.
 - [ ] Confirmar que não aparecem os controles de conexão Bluetooth no painel principal.
 - [ ] Confirmar que erros de leitura aparecem na tela.
 - [ ] Usar `Parar NFC` ou trocar para outro modo e confirmar que eventos do NFC não abrem uma conferência.

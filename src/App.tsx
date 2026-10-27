@@ -9,6 +9,7 @@ import { HHR5000Connector } from './components/HHR5000Connector';
 import { AuditReadModePicker, AuditReaderStandby, type AuditReadMode } from './components/AuditReaderWorkspace';
 import { AuditScanSummary } from './components/AuditScanSummary';
 import { AuditResultCard } from './components/AuditResultCard';
+import { describeReaderError } from './services/reader-access';
 import { StatCard } from './components/StatCard';
 import {
   ActionIcon,
@@ -1768,6 +1769,7 @@ function AuditView({
   }
 
   async function activateReader() {
+    if (nfcAttempt.current && !nfcAttempt.current.signal.aborted) return;
     const controller = new AbortController();
     nfcAttempt.current?.abort();
     nfcAttempt.current = controller;
@@ -1777,6 +1779,7 @@ function AuditView({
       primeFeedbackAudio();
       setReaderMessage('Solicitando acesso ao NFC…');
       stopReader.current?.();
+      stopReader.current = null;
       const stop = await startNfcReader(
         (result) => { if (currentReadMode.current === 'phone') phoneReadHandler.current?.(result.tagNumber, result.rawValue); },
         (message) => { if (!readInFlight.current) { setNfcError(message); feedbackWarning(); } },
@@ -1790,16 +1793,24 @@ function AuditView({
       setReaderMessage('Leitor ativo. Aproxime uma SmartTag.');
     } catch (err) {
       if (controller.signal.aborted) return;
+      controller.abort();
+      stopReader.current?.();
+      stopReader.current = null;
       setReaderActive(false);
-      setNfcError(err instanceof Error ? err.message : 'Não foi possível ativar o NFC.');
+      setNfcError(describeReaderError(err, 'nfc').message);
+      setReaderMessage('Não foi possível ativar o NFC. Confira as orientações abaixo e tente novamente.');
       feedbackWarning();
     } finally {
-      if (nfcAttempt.current === controller) setNfcStarting(false);
+      if (nfcAttempt.current === controller) {
+        setNfcStarting(false);
+        if (!stopReader.current) nfcAttempt.current = null;
+      }
     }
   }
 
   function deactivateReader() {
     nfcAttempt.current?.abort();
+    nfcAttempt.current = null;
     stopReader.current?.();
     stopReader.current = null;
     setReaderActive(false);
@@ -2398,7 +2409,7 @@ function AuditView({
           message={readMode === 'phone' ? readerMessage : hhr5000.message}
           error={readMode === 'phone' ? nfcError : null}
           onActivate={() => { primeFeedbackAudio(); void (readMode === 'phone' ? activateReader() : hhr5000.connect()); }}
-          onStop={deactivateReader}
+          onStop={readMode === 'phone' ? deactivateReader : hhr5000.disconnect}
         />
       )}
 

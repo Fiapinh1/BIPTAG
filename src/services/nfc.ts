@@ -1,10 +1,12 @@
+import { isReaderSecureContext } from './reader-access';
+
 export interface NfcScanResult {
   tagNumber: string;
   rawValue: string;
 }
 
 export function isWebNfcSupported() {
-  return typeof window !== 'undefined' && 'NDEFReader' in window;
+  return isReaderSecureContext() && typeof window !== 'undefined' && typeof window.NDEFReader === 'function';
 }
 
 function normalizeTagValue(value: string) {
@@ -34,14 +36,15 @@ export async function startNfcReader(
   onReadError?: (message: string) => void,
   signal?: AbortSignal
 ) {
+  if (!isReaderSecureContext()) throw new Error('Abra o BIPTAG pelo endereço HTTPS para permitir acesso ao NFC.');
   if (!isWebNfcSupported()) {
     throw new Error('Web NFC não está disponível neste navegador. Use Chrome no Android.');
   }
 
+  signal?.throwIfAborted();
   const reader = new NDEFReader();
   const controller = new AbortController();
   const abort = () => controller.abort();
-  if (signal?.aborted) controller.abort();
   signal?.addEventListener('abort', abort, { once: true });
 
   reader.addEventListener('reading', (event) => {
@@ -73,6 +76,7 @@ export async function startNfcReader(
     return () => { signal?.removeEventListener('abort', abort); controller.abort(); };
   } catch (err) {
     signal?.removeEventListener('abort', abort);
+    controller.abort();
     throw err;
   }
 }

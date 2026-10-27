@@ -1,3 +1,5 @@
+import { isReaderSecureContext } from './reader-access';
+
 export const HHR5000_SERVICE_UUID = '2456e1b9-26e2-8f83-e744-f34f01e9d701';
 export const HHR5000_PRIMARY_CHARACTERISTIC_UUID = '2456e1b9-26e2-8f83-e744-f34f01e9d703';
 export const HHR5000_SECONDARY_CHARACTERISTIC_UUID = '2456e1b9-26e2-8f83-e744-f34f01e9d704';
@@ -19,7 +21,7 @@ export interface HHR5000Connection {
 }
 
 export function isWebBluetoothSupported() {
-  return typeof navigator !== 'undefined' && Boolean(navigator.bluetooth);
+  return isReaderSecureContext() && typeof navigator !== 'undefined' && typeof navigator.bluetooth?.requestDevice === 'function';
 }
 
 function bytesFromDataView(value: DataView) {
@@ -126,10 +128,12 @@ export async function connectHHR5000(
   onDisconnect?: () => void,
   options: { device?: BluetoothDevice; signal?: AbortSignal; onDeviceSelected?: (device: BluetoothDevice) => void; getExpectedTagLength?: () => number } = {}
 ): Promise<HHR5000Connection> {
+  if (!isReaderSecureContext()) throw new Error('Abra o BIPTAG pelo endereço HTTPS para permitir acesso ao Bluetooth.');
   if (!isWebBluetoothSupported()) {
     throw new Error('Web Bluetooth nao esta disponivel neste navegador. Use Chrome ou Edge em HTTPS.');
   }
 
+  options.signal?.throwIfAborted();
   const device = options.device ?? await navigator.bluetooth!.requestDevice({
     filters: [
       { namePrefix: 'HHR5000' },

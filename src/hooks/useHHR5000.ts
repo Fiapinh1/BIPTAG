@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { connectHHR5000, isWebBluetoothSupported, type HHR5000Connection } from '../services/hhr5000';
+import { describeReaderError } from '../services/reader-access';
 
 export type HHR5000Status = 'desconectado' | 'conectando' | 'conectado' | 'erro';
 const READER_STORAGE_KEY = 'biptag-hhr5000-device';
@@ -102,10 +103,10 @@ export function useHHR5000(onTagRead: (tagNumber: string, rawValue: string) => v
         setMessage(`${next.deviceName} conectado`);
       } catch (err) {
         if (disposed || !wanted || thisGeneration !== generation) return;
-        setStatus(device ? 'desconectado' : 'erro');
-        setMessage(device ? 'Aguardando o bastão. A reconexão é automática com o app aberto.'
-          : err instanceof Error && err.name === 'NotFoundError' ? 'Nenhum bastão selecionado. Toque em conectar para tentar novamente.'
-            : err instanceof Error ? err.message : 'Não foi possível conectar ao bastão.');
+        const problem = describeReaderError(err, 'bluetooth', Boolean(device));
+        if (!problem.retryable) wanted = false;
+        setStatus(device && problem.retryable ? 'desconectado' : 'erro');
+        setMessage(problem.message);
       } finally {
         attempting = false;
         if (attemptAbort === controller) attemptAbort = null;

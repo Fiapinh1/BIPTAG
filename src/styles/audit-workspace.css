@@ -198,6 +198,10 @@
 .reader-settings__last { display: grid; gap: 5px; padding: 12px; border-radius: 12px; background: #F2ECE2; overflow-wrap: anywhere; }
 .reader-settings__last span { color: var(--muted); font-size: 11px; }
 .reader-settings__last strong { font-size: 18px; }
+.reader-help { width: 100%; min-width: 0; border-top: 1px solid #E5DCCE; padding-top: 10px; text-align: left; }
+.reader-help > summary { min-height: 40px; padding: 10px 0; color: #795E43; font-size: 12px; font-weight: 700; cursor: pointer; }
+.reader-help > ol { margin: 5px 0 0; padding-left: 20px; color: #756A5D; font-size: 12px; line-height: 1.6; }
+.reader-help li + li { margin-top: 8px; }
 @media (max-width: 380px) {
   .app-shell--audit .field-page.audit-workspace { padding-inline: 12px; gap: 12px; }
   .audit-workspace__tools { gap: 5px; }

@@ -104,6 +104,21 @@ describe('HHR5000 connection lifecycle', () => {
     expect(onRead).not.toHaveBeenCalled();
     expect(onDisconnect).not.toHaveBeenCalled();
   });
+
+  it('does not open device selection for an already cancelled attempt', async () => {
+    const reader = createReader();
+    const controller = new AbortController();
+    controller.abort();
+    await expect(connectHHR5000(vi.fn(), undefined, { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
+    expect(reader.requestDevice).not.toHaveBeenCalled();
+  });
+
+  it('rejects insecure access before asking for a Bluetooth device', async () => {
+    const reader = createReader();
+    vi.stubGlobal('window', { isSecureContext: false });
+    await expect(connectHHR5000(vi.fn())).rejects.toThrow('HTTPS');
+    expect(reader.requestDevice).not.toHaveBeenCalled();
+  });
 });
 
 describe('HHR5000 fragmented Bluetooth readings', () => {

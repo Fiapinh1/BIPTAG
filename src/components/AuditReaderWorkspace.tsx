@@ -1,4 +1,5 @@
 import { ChevronRightIcon, KeyboardIcon, PhoneIcon, StickReaderIcon } from '../icons/Icons';
+import { ReaderHelp } from './ReaderHelp';
 
 export type AuditReadMode = 'choose' | 'manual' | 'bluetooth' | 'phone';
 
@@ -35,15 +36,18 @@ export function AuditReaderStandby({ mode, active, connecting, supported, messag
   return (
     <div className={`audit-reader-standby ${active ? 'is-ready' : ''}`}>
       <span className="audit-reader-standby__icon">{phone ? <PhoneIcon size={42} /> : <StickReaderIcon size={42} />}</span>
-      <span className="audit-reader-standby__status" role="status">{active ? 'Pronto para ler' : connecting ? 'Conectando…' : supported ? 'Leitura desativada' : 'Indisponível neste acesso'}</span>
+      <span className="audit-reader-standby__status" role="status">{active ? 'Pronto para ler' : connecting ? phone ? 'Aguardando ativação do NFC…' : 'Conectando…' : supported ? 'Leitura desativada' : 'Indisponível neste acesso'}</span>
       <h2>{active ? phone ? 'Aproxime a tag' : 'Leia a próxima tag' : phone ? 'NFC do telefone' : 'Conecte seu bastão'}</h2>
       <p>{active ? phone ? 'Encoste uma tag compatível na parte de trás do celular.' : 'Use o bastão. A conferência abre assim que a tag for recebida.'
         : !supported ? phone ? 'Use o Chrome no Android em HTTPS, com NFC disponível no telefone.' : 'Abra o app em HTTPS no Chrome ou Edge com Bluetooth disponível.'
           : message}</p>
       {error && <div className="alert alert--danger" role="alert">{error}</div>}
       {!active && <button className="button button--primary button--full" disabled={!supported || connecting} onClick={onActivate}>{connecting ? 'Conectando…' : phone ? 'Ativar NFC do telefone' : 'Conectar bastão'}</button>}
+      {connecting && phone && <p className="audit-reader-standby__permission">Se o Chrome mostrar uma permissão, toque em Permitir. Confira se o NFC está ligado nas configurações do celular.</p>}
+      {connecting && <button className="button button--ghost" onClick={onStop}>{phone ? 'Cancelar ativação do NFC' : 'Cancelar conexão'}</button>}
       {active && phone && <button className="button button--ghost" onClick={onStop}>Parar NFC</button>}
       {phone && <small className="audit-reader-standby__compatibility">O telefone lê tags NFC com conteúdo NDEF. Para tags que exigem o bastão, escolha Bluetooth.</small>}
+      <ReaderHelp mode={mode} />
     </div>
   );
 }

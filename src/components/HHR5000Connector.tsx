@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { BluetoothIcon } from '../icons/Icons';
 import type { HHR5000Reader } from '../hooks/useHHR5000';
+import { ReaderHelp } from './ReaderHelp';
 
 const statusLabel = {
   desconectado: 'Desconectado',
@@ -36,6 +37,7 @@ export function HHR5000Connector({
           <div className={`reader-settings__status reader-settings__status--${status}`} role="status"><BluetoothIcon /><strong>{statusLabel[status]}</strong></div>
           {deviceName && <strong>{deviceName}</strong>}
           <p>{isSupported ? message : 'Bluetooth indisponível neste acesso. Abra o app em HTTPS no Chrome ou Edge compatível.'}</p>
+          <ReaderHelp mode="bluetooth" />
           {lastTagRead && <div className="reader-settings__last"><span>Última tag recebida</span><strong>{lastTagRead}</strong></div>}
           {!connected ? (
             <button className="button button--primary button--full" onClick={() => void reader.connect()} disabled={!isSupported || connecting}>{connecting ? 'Conectando…' : 'Conectar bastão'}</button>
