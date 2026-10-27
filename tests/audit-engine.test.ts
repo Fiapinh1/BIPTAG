@@ -8,11 +8,13 @@ import {
   classifyReading,
   correctConfirmedReading,
   detectReciprocalSwap,
+  getPossibleTagTypos,
   markPendingTagsNotFound,
   saveReading,
   updateConfirmedTagAction
 } from '../src/services/audit-engine';
 import { deriveReconciliation } from '../src/services/reconciliation';
+import { getFieldReadingProgress } from '../src/services/audit-progress';
 import { buildAuditReportRows, buildAuditWhatsAppText, createAuditWorkbook, writeStyledAuditWorkbook } from '../src/services/excel';
 
 const AUDIT_ID = 'audit-test';
@@ -372,6 +374,65 @@ describe('Optional actions after a correct confirmation', () => {
     expect((await db.auditRecords.get(record.id))?.operationalAction).toBe('keep_tag');
     const state = await db.effectiveTagAssignments.where('[auditId+tagNumber]').equals([AUDIT_ID, record.tagNumber]).first();
     expect(state?.effectiveAnimal).toBe('751');
+  });
+});
+
+describe('Same-animal tag typos and field reading totals', () => {
+  it('flags the reported single-digit typo even when the imported tag passes pattern validation', async () => {
+    const { assignments } = await seedAudit([{ tag: '984000009256954', animal: '751' }]);
+    expect(await classifyReading(AUDIT_ID, '984000009156954', null, '751')).toBe('possible_typo');
+    const candidates = await getPossibleTagTypos(AUDIT_ID, '984000009156954', '751');
+    expect(candidates.map((item) => item.tagNumber)).toEqual(['984000009256954']);
+    const saved = await saveConfirmed({ tag: '984000009156954', assignment: null, observed: '751' });
+    expect(saved.tagNumber).toBe('984000009156954');
+    expect((await db.tagAssignments.get(assignments[0].id))?.tagNumber).toBe('984000009256954');
+  });
+
+  it('does not suggest a similar number assigned to a different animal', async () => {
+    await seedAudit([{ tag: '984000009256954', animal: '751', validationStatus: 'suspicious_tag' }]);
+    expect(await classifyReading(AUDIT_ID, '984000009156954', null, '888')).toBe('new_tag');
+    expect(await getPossibleTagTypos(AUDIT_ID, '984000009156954', '888')).toEqual([]);
+  });
+
+  it('requires exactly one changed digit and excludes invalid-length identifiers', async () => {
+    await seedAudit([{ tag: '984000009256955', animal: '751' }, { tag: '98400000915695', animal: '751', validationStatus: 'invalid_tag' }]);
+    expect(await classifyReading(AUDIT_ID, '984000009156954', null, '751')).toBe('new_tag');
+  });
+
+  it('returns every same-animal candidate without choosing one or changing the registry', async () => {
+    await seedAudit([{ tag: '984000009256954', animal: '751' }, { tag: '984000009156955', animal: '751' }]);
+    const candidates = await getPossibleTagTypos(AUDIT_ID, '984000009156954', '751');
+    expect(candidates).toHaveLength(2);
+    expect(await db.tagAssignments.count()).toBe(2);
+  });
+
+  it('rechecks typo evidence after correcting the observed animal', async () => {
+    await seedAudit([{ tag: '984000009256954', animal: '751' }]);
+    const previous = await saveConfirmed({ tag: '984000009156954', assignment: null, observed: '751' });
+    const corrected = await correctConfirmedReading({ auditId: AUDIT_ID, originalRecord: previous, assignment: null, observedAnimal: '888' });
+    expect(corrected?.status).toBe('new_tag');
+    expect(previous.status).toBe('possible_typo');
+  });
+
+  it('counts ten physical tags while nine exact identifiers match the ten-row base', async () => {
+    const { assignments } = await seedAudit([
+      { tag: '984000009256954', animal: '751' },
+      ...Array.from({ length: 9 }, (_, index) => ({ tag: `98400001000000${index}`, animal: String(100 + index) }))
+    ]);
+    for (const assignment of assignments.slice(1)) await saveConfirmed({ tag: assignment.tagNumber, assignment, observed: assignment.expectedAnimal });
+    const read = await saveConfirmed({ tag: '984000009156954', assignment: null, observed: '751' });
+    const records = await db.auditRecords.toArray();
+    const effective = await db.effectiveTagAssignments.toArray();
+    expect(getFieldReadingProgress(records, effective, 10)).toEqual({ readCount: 10, outsideBase: 1, fieldPercent: 100 });
+    expect(effective.filter((item) => item.sourceAssignmentId && item.status !== 'pending')).toHaveLength(9);
+    await correctConfirmedReading({ auditId: AUDIT_ID, originalRecord: read, assignment: null, observedAnimal: '888' });
+    expect(getFieldReadingProgress(await db.auditRecords.toArray(), await db.effectiveTagAssignments.toArray(), 10).readCount).toBe(10);
+  });
+
+  it('does not count marking pending tags missing as physical reads', async () => {
+    await seedAudit([{ tag: '984000009256954', animal: '751' }]);
+    await markPendingTagsNotFound(AUDIT_ID);
+    expect(getFieldReadingProgress(await db.auditRecords.toArray(), await db.effectiveTagAssignments.toArray(), 1).readCount).toBe(0);
   });
 });
 

@@ -9,6 +9,8 @@ import { HHR5000Connector } from './components/HHR5000Connector';
 import { AuditReadModePicker, AuditReaderStandby, type AuditReadMode } from './components/AuditReaderWorkspace';
 import { AuditScanSummary } from './components/AuditScanSummary';
 import { AuditResultCard } from './components/AuditResultCard';
+import { ImportValidationIssues } from './components/ImportValidationIssues';
+import { getFieldReadingProgress } from './services/audit-progress';
 import { describeReaderError } from './services/reader-access';
 import { StatCard } from './components/StatCard';
 import {
@@ -46,6 +48,7 @@ import {
   defaultOperationalAction,
   detectReciprocalSwap,
   getAnimalTagContext,
+  getPossibleTagTypos,
   getCurrentRecord,
   getRelatedContext,
   markPendingTagsNotFound,
@@ -98,7 +101,7 @@ function baseEffectiveAssignments(items: EffectiveTagAssignment[]) {
 
 function countAuditedBaseTags(effectiveAssignments: EffectiveTagAssignment[], records: AuditRecord[]) {
   const baseItems = baseEffectiveAssignments(effectiveAssignments);
-  if (baseItems.length) return baseItems.filter((item) => item.status !== 'pending').length;
+  if (baseItems.length) return new Set(baseItems.filter((item) => item.status !== 'pending').map((item) => item.tagNumber)).size;
   return new Set(records.filter((record) => record.status !== 'unconfirmed' && record.expectedAnimal !== null).map((record) => record.tagNumber)).size;
 }
 
@@ -162,7 +165,6 @@ type ScanState = {
   related: RelatedContext;
   patternWarning: { status: 'suspicious_tag' | 'invalid_tag'; reason: string } | null;
   patternConfirmed: boolean;
-  possibleTypo: TagAssignment | null;
   knownIssue: KnownIssue | null;
   source: 'nfc' | 'manual';
 };
@@ -182,6 +184,7 @@ type DecisionState = {
   status: Exclude<RecordStatus, 'correct'>;
   observedAnimal: string | null;
   animalTagContext: AnimalTagContext | null;
+  typoCandidates: TagAssignment[];
 };
 
 type KnownIssueDraft = {
@@ -1268,6 +1271,7 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
                 </div>
               </section>
 
+              {preview.issues.length > 0 && <section className="import-prep-section"><h3>Avisos da planilha</h3><ImportValidationIssues issues={preview.issues} /></section>}
               </>}
 
               {prepStep === 'pattern' && patternDraft && (
@@ -1667,6 +1671,7 @@ function AuditView({
     const issues = current.filter((record) => record.status !== 'correct').length;
     const total = audit?.validTags ?? audit?.totalTags ?? 0;
     return {
+      ...getFieldReadingProgress(auditRecords, effectiveAssignments, total),
       auditedUnique,
       issues,
       pending: Math.max(total - auditedUnique, 0),
@@ -1698,18 +1703,6 @@ function AuditView({
     void processRead(tagNumber, rawValue, 'nfc');
   }
 
-  async function findPossibleTypo(tagNumber: string) {
-    const suffix = tagNumber.slice(7);
-    const candidates = await db.tagAssignments.where('auditId').equals(activeAudit.id).toArray();
-    return candidates.find(
-      (candidate) =>
-        candidate.validationStatus === 'suspicious_tag' &&
-        candidate.tagNumber !== tagNumber &&
-        candidate.tagNumber.length === tagNumber.length &&
-        candidate.tagNumber.slice(7) === suffix
-    ) ?? null;
-  }
-
   async function processRead(tagNumber: string, rawValue = tagNumber, source: 'nfc' | 'manual' = 'nfc') {
     const normalized = tagNumber.replace(/[^0-9]/g, '').trim();
     if (!normalized) return false;
@@ -1734,10 +1727,7 @@ function AuditView({
     const patternWarning = patternCheck && patternCheck.status !== 'valid_tag'
       ? { status: patternCheck.status, reason: patternCheck.reason }
       : null;
-    const [related, possibleTypo] = await Promise.all([
-      getRelatedContext(activeAudit.id, assignment ?? null),
-      !assignment ? findPossibleTypo(normalized) : Promise.resolve(null)
-    ]);
+    const related = await getRelatedContext(activeAudit.id, assignment ?? null);
 
     setObservedAnimal('');
     setDecision(null);
@@ -1752,7 +1742,6 @@ function AuditView({
       related,
       patternWarning,
       patternConfirmed: !patternWarning,
-      possibleTypo,
       knownIssue: knownIssue ?? null,
       source
     });
@@ -1862,7 +1851,7 @@ function AuditView({
       return;
     }
 
-    setDecision({ status, observedAnimal: observed, animalTagContext: await getAnimalTagContext(activeAudit.id, observed) });
+    setDecision({ status, observedAnimal: observed, animalTagContext: await getAnimalTagContext(activeAudit.id, observed), typoCandidates: status === 'possible_typo' ? await getPossibleTagTypos(activeAudit.id, scan.tagNumber, observed) : [] });
     feedbackWarning();
   }
 
@@ -1872,7 +1861,9 @@ function AuditView({
       ? scan.existingRecord.observedAnimal ?? scan.existingRecord.expectedAnimal ?? scan.assignment?.expectedAnimal ?? null
       : null;
     const isTagMovement = Boolean(movementOrigin && decision.observedAnimal && movementOrigin !== decision.observedAnimal);
-    const movementNote = isTagMovement
+    const movementNote = decision.status === 'possible_typo'
+      ? `Possível erro de digitação na planilha para o animal ${decision.observedAnimal}. Tag lida: ${scan.tagNumber}. Cadastro(s) semelhante(s): ${decision.typoCandidates.map((item) => item.tagNumber).join(', ')}. Confirmar o cadastro antes de alterar o Nedap.`
+      : isTagMovement
       ? `Movimentacao de tag: remover vinculo do animal ${movementOrigin} e vincular a SmartTag ${scan.tagNumber} ao animal ${decision.observedAnimal}.`
       : null;
     const operationalAction: OperationalAction = isTagMovement ? 'move_tag' : defaultOperationalAction(decision.status);
@@ -2091,7 +2082,7 @@ function AuditView({
   }
 
   function returnToConference(observed: string | null = null) {
-    if (scan?.existingRecord && !scan.knownIssue && !scan.related.message && !scan.possibleTypo) {
+    if (scan?.existingRecord && !scan.knownIssue && !scan.related.message) {
       setDismissedAttentionKey(`existing-${scan.tagNumber}-${scan.existingRecord.id}`);
     }
     setOutcome(null);
@@ -2274,15 +2265,7 @@ function AuditView({
               title: 'Esta tag já teve leitura',
               message: `Resultado anterior: ${statusLabel(scan.existingRecord.status)}. Se continuar, a nova confirmação ficará registrada no histórico.`
             }
-          : scan.possibleTypo
-            ? {
-                key: `typo-${scan.tagNumber}-${scan.possibleTypo.tagNumber}`,
-                icon: <IssuesIcon size={42} />,
-                eyebrow: 'ATENÇÃO NO CADASTRO',
-                title: 'Possível erro de digitação',
-                message: `Registro suspeito: ${scan.possibleTypo.tagNumber}. Confira o brinco físico antes de confirmar.`
-              }
-            : null
+          : null
     : null;
   const showAttentionOverlay = Boolean(attentionAlert && dismissedAttentionKey !== attentionAlert.key);
 
@@ -2301,10 +2284,17 @@ function AuditView({
           </details>
         </div>
       </div>
-      <div className="audit-workspace__progress" aria-label="Progresso da auditoria">
-        <span><strong>{fieldMetrics.auditedUnique}</strong> de {activeAudit.validTags ?? activeAudit.totalTags} conferidas</span>
-        <span>{fieldMetrics.pending} restantes</span>
-        <div className="audit-workspace__progress-track"><span style={{ width: `${fieldMetrics.percent}%` }} /></div>
+      <div className="audit-workspace__progress-pair" aria-label="Progresso da auditoria">
+        <div className="audit-workspace__progress audit-workspace__progress--field" aria-label="Tags lidas em campo">
+          <span><strong>{fieldMetrics.readCount}</strong> {fieldMetrics.readCount === 1 ? 'tag lida' : 'tags lidas'}</span>
+          <span>{fieldMetrics.outsideBase} fora da planilha</span>
+          <div className="audit-workspace__progress-track"><span style={{ width: `${fieldMetrics.fieldPercent}%` }} /></div>
+        </div>
+        <div className="audit-workspace__progress" aria-label="Progresso da planilha">
+          <span>Planilha: <strong>{fieldMetrics.auditedUnique}</strong> de {activeAudit.validTags ?? activeAudit.totalTags}</span>
+          <span>{fieldMetrics.pending} {fieldMetrics.pending === 1 ? 'restante' : 'restantes'}</span>
+          <div className="audit-workspace__progress-track"><span style={{ width: `${fieldMetrics.percent}%` }} /></div>
+        </div>
       </div>
       {lastSuccess && !scan && !outcome && <div className="audit-save-receipt">
         <CheckIcon size={24} />
@@ -2662,6 +2652,11 @@ function GuidedDecision({
       <span className="eyebrow">CONFIRME SOMENTE O QUE ESTÁ VENDO</span>
       <h2>{content.title}</h2>
       <p>{content.subtitle}</p>
+      {decision.status === 'possible_typo' && <div className="tag-typo-comparison">
+        <div><span>Tag lida no animal {observed}</span><strong>{scan.tagNumber}</strong></div>
+        {decision.typoCandidates.map((candidate) => <div key={candidate.tagNumber}><span>Planilha · animal {candidate.expectedAnimal}</span><strong>{[...candidate.tagNumber].map((digit, index) => digit === scan.tagNumber[index] ? digit : <mark key={index}>{digit}</mark>)}</strong></div>)}
+        <p>A diferença é de um dígito. Confira a etiqueta da tag e o brinco antes de confirmar.</p>
+      </div>}
       {isReplacement && (
         <div className="replacement-summary">
           <div><span>Tag atual do animal</span><strong>{previousTag}</strong></div>
@@ -2679,6 +2674,11 @@ function GuidedDecision({
 }
 
 function decisionCopy(status: Exclude<RecordStatus, 'correct'>, expected: string | null, observed: string, isReplacement = false) {
+  if (status === 'possible_typo') return {
+    title: 'Possível erro de digitação na planilha',
+    subtitle: `O animal ${observed} possui uma SmartTag com número parecido na planilha.`,
+    confirmLabel: `Confirmar tag lida no ${observed}`
+  };
   if (isReplacement) {
     return {
       title: `Você está vendo o brinco ${observed}?`,
@@ -2743,6 +2743,7 @@ function decisionCopy(status: Exclude<RecordStatus, 'correct'>, expected: string
 }
 
 function issueSavedTitle(status: RecordStatus) {
+  if (status === 'possible_typo') return 'Possível erro de cadastro salvo';
   if (status === 'tag_not_registered' || status === 'new_tag') return 'Nova tag registrada';
   if (status === 'divergence' || status === 'reassignment') return 'Movimentação registrada';
   if (status === 'audit_conflict' || status === 'new_tag_conflict') return 'Revisão necessária';
@@ -2756,6 +2757,7 @@ function issueSavedTitle(status: RecordStatus) {
 }
 
 function issueSavedMessage(status: RecordStatus, observed: string | null) {
+  if (status === 'possible_typo') return `A tag lida foi preservada no animal ${observed ?? ''}. Confira a diferença no cadastro antes de alterar o Nedap.`;
   if (status === 'tag_not_registered') return `Evidencia salva no brinco ${observed ?? ''}. A acao fica para revisao.`;
   if (status === 'divergence' || status === 'reassignment') return 'Brinco confirmado. O ajuste do vínculo está indicado no relatório.';
   if (status === 'audit_conflict' || status === 'new_tag_conflict') return 'Esta leitura possui informacoes conflitantes com uma ocorrencia anterior. Registramos para revisao.';
@@ -3016,7 +3018,7 @@ function IssuesView({
         </ReviewSection>
 
         <ReviewSection eyebrow="PRE-VALIDACAO" title="Pre-validacao da planilha" emptyText="Nenhum problema encontrado na importacao.">
-          {issues.map((issue) => <IssueRow key={issue.id} issue={issue} />)}
+          {issues.length > 0 && <ImportValidationIssues issues={issues} />}
         </ReviewSection>
 
         <ReviewSection eyebrow="ACOES NEDAP" title="Acoes para executar no Nedap" emptyText="Nenhuma acao operacional pendente.">
@@ -3223,18 +3225,6 @@ function showEffectiveDetails(item: EffectiveTagAssignment) {
     ].join('\n'),
     tone: 'warning'
   });
-}
-
-function IssueRow({ issue }: { issue: ImportIssue }) {
-  return (
-    <div className="issue-row">
-      <span className="issue-row__icon"><IssuesIcon /></span>
-      <div>
-        <strong>{issue.type === 'tag_without_animal' ? 'Tag sem vínculo' : issue.type === 'duplicate_tag' ? 'Tag duplicada' : 'Animal com múltiplas tags'}</strong>
-        <span>{issue.detail}</span>
-      </div>
-    </div>
-  );
 }
 
 function SettingsView() {

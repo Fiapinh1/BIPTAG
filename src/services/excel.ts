@@ -110,14 +110,16 @@ export async function parseNedapWorkbook(file: File, patternOverride?: SmartTagP
   const issues: ImportPreview['issues'] = [];
   const rawItems: Omit<TagAssignment, 'id' | 'auditId'>[] = [];
 
-  for (const row of rows) {
+  for (const [rowIndex, row] of rows.entries()) {
     const tagNumber = normalizeTag(getValue(row, 'Numero de tag'));
+    const animal = text(getValue(row, 'Animal'));
+    if (!tagNumber && !animal) continue;
     if (!tagNumber) {
       issues.push({
         type: 'invalid_tag',
         tagNumber: null,
-        animal: text(getValue(row, 'Animal')),
-        detail: 'Linha sem numero de SmartTag.'
+        animal,
+        detail: `Linha ${typeof row.__rowNum__ === 'number' ? row.__rowNum__ + 1 : rowIndex + 2}: animal ${animal} sem número de SmartTag.`
       });
       continue;
     }
@@ -176,7 +178,7 @@ export async function parseNedapWorkbook(file: File, patternOverride?: SmartTagP
         animal: null,
         detail: `Tag ${item.tagNumber} sem animal vinculado.`
       });
-    } else {
+    } else if (item.validationStatus !== 'invalid_tag') {
       const tags = animalMap.get(item.expectedAnimal) ?? new Set<string>();
       tags.add(item.tagNumber);
       animalMap.set(item.expectedAnimal, tags);
@@ -207,6 +209,7 @@ export async function parseNedapWorkbook(file: File, patternOverride?: SmartTagP
   }
 
   const validTags = assignments.filter((item) => item.validationStatus === 'valid_tag');
+  const uniqueValidTags = new Set(validTags.map((item) => item.tagNumber));
   const validSuffixes = new Set(validTags.map((item) => item.tagNumber.slice(PREFIX_LENGTH)));
 
   for (const item of assignments.filter((assignment) => assignment.validationStatus === 'suspicious_tag')) {
@@ -225,12 +228,12 @@ export async function parseNedapWorkbook(file: File, patternOverride?: SmartTagP
     issues,
     stats: {
       totalRows: rows.length,
-      totalTags: validTags.length,
-      validTags: validTags.length,
+      totalTags: uniqueValidTags.size,
+      validTags: uniqueValidTags.size,
       suspiciousTags: assignments.filter((item) => item.validationStatus === 'suspicious_tag').length,
-      invalidTags: assignments.filter((item) => item.validationStatus === 'invalid_tag').length,
-      linkedTags: validTags.filter((item) => Boolean(item.expectedAnimal)).length,
-      tagsWithoutAnimal: issues.filter((item) => item.type === 'tag_without_animal').length,
+      invalidTags: issues.filter((item) => item.type === 'invalid_tag').length,
+      linkedTags: new Set(validTags.flatMap((item) => item.expectedAnimal ? [item.expectedAnimal] : [])).size,
+      tagsWithoutAnimal: new Set(issues.filter((item) => item.type === 'tag_without_animal').map((item) => item.tagNumber)).size,
       duplicateTags: issues.filter((item) => item.type === 'duplicate_tag').length,
       animalsWithMultipleTags: issues.filter((item) => item.type === 'multiple_tags_same_animal').length
     },

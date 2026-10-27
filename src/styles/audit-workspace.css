@@ -61,6 +61,25 @@
 .audit-workspace__progress strong { color: var(--graphite); }
 .audit-workspace__progress-track { grid-column: 1 / -1; height: 5px; border-radius: 8px; overflow: hidden; background: #E0DCD2; }
 .audit-workspace__progress-track > span { display: block; height: 100%; border-radius: inherit; background: #427D61; transition: width .2s; }
+.audit-workspace__progress-pair { display: grid; gap: 12px; }
+.audit-workspace__progress--field .audit-workspace__progress-track > span { background: #B36840; }
+.tag-typo-comparison { display: grid; gap: 10px; min-width: 0; padding: 14px; border: 1px solid #DDC69B; border-radius: 14px; background: #FFF9ED; text-align: left; }
+.tag-typo-comparison > div { display: grid; gap: 4px; }
+.tag-typo-comparison span { color: #8A744E; font-size: 11px; }
+.tag-typo-comparison strong { color: #483F32; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: clamp(15px, 4.2vw, 20px); overflow-wrap: anywhere; }
+.tag-typo-comparison mark { padding: 0 1px; border-radius: 3px; color: #8A3F20; background: #F6D891; }
+.tag-typo-comparison > p { margin: 0; color: #84704F; font-size: 11px; line-height: 1.5; }
+.import-validation { display: grid; gap: 8px; min-width: 0; }
+.import-validation > p { margin: 0 0 3px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.import-validation__group { min-width: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.import-validation__group > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 50px; padding: 12px; color: #665440; font-size: 12px; cursor: pointer; }
+.import-validation__group > summary > span::before { content: '▸'; margin-right: 7px; }
+.import-validation__group[open] > summary > span::before { content: '▾'; }
+.import-validation__group > summary > strong { padding: 3px 7px; border-radius: 7px; background: #F4E9D5; color: #8D6937; }
+.import-validation__group > ul { display: grid; gap: 10px; max-height: 280px; margin: 0; padding: 0 12px 12px; overflow-y: auto; list-style: none; }
+.import-validation__group li { padding-top: 10px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.import-validation__group li > strong { display: block; color: #5F5548; font-size: 12px; }
+.import-validation__group li > p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .audit-workspace__back { width: fit-content; min-height: 40px; margin: -5px 0; padding: 4px 0; border: 0; color: var(--muted); background: transparent; font-size: 13px; font-weight: 700; text-align: left; cursor: pointer; }
 .audit-mode-picker { display: grid; gap: 12px; }
 .audit-mode-picker__intro { margin: 8px 0; }

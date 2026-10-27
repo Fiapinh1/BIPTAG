@@ -1,5 +1,6 @@
 import { db, newId } from '../db/db';
 import { chronologicalRecords, deriveReconciliation } from './reconciliation';
+import { findTagTypoCandidates } from './tag-typos';
 import type { AuditRecord, EffectiveTagAssignment, EffectiveTagStatus, OperationalAction, RecordStatus, TagAssignment } from '../types/domain';
 
 export type RelatedContext = {
@@ -81,71 +82,10 @@ export async function observedAnimalExists(auditId: string, animal: string | nul
   return Boolean(await db.tagAssignments.where('[auditId+expectedAnimal]').equals([auditId, animal]).first());
 }
 
-async function findSuspiciousMatch(auditId: string, tagNumber: string): Promise<TagAssignment | null> {
-  // CRITICAL: Find potential typo/registry error only with strong confidence.
-  // Physical evidence must not be silently replaced by incorrect registry.
-
-  // Only numeric tags can match with typos
-  if (!/^\d+$/.test(tagNumber)) return null;
-
-  const suspiciousTags = await db.tagAssignments
-    .where('auditId')
-    .equals(auditId)
-    .toArray()
-    .then((tags) =>
-      tags.filter((tag) => tag.validationStatus === 'suspicious_tag' && /^\d+$/.test(tag.tagNumber))
-    );
-
-  if (!suspiciousTags.length) return null;
-
-  // Conservative similarity: same length + small difference
-  const candidates = suspiciousTags.filter((suspicious) => {
-    if (suspicious.tagNumber.length !== tagNumber.length) return false;
-
-    // Count position differences
-    let differences = 0;
-    let maxConsecutiveDiff = 0;
-    let currentConsecutiveDiff = 0;
-
-    for (let i = 0; i < tagNumber.length; i++) {
-      if (tagNumber[i] !== suspicious.tagNumber[i]) {
-        differences++;
-        currentConsecutiveDiff++;
-        maxConsecutiveDiff = Math.max(maxConsecutiveDiff, currentConsecutiveDiff);
-      } else {
-        currentConsecutiveDiff = 0;
-      }
-    }
-
-    // STRICT: Allow only 1-3 differences, concentrated in a few positions
-    // Prefer matches concentrated in prefix (first 3-5 digits)
-    if (differences > 3) return false;
-
-    // Check if difference is concentrated in prefix (common typo location)
-    const prefixLength = 7; // Typical SmartTag prefix length
-    let prefixDifferences = 0;
-    for (let i = 0; i < Math.min(prefixLength, tagNumber.length); i++) {
-      if (tagNumber[i] !== suspicious.tagNumber[i]) prefixDifferences++;
-    }
-
-    // Strong match: concentrated in prefix OR very few total differences
-    return differences <= 2 || (differences === 3 && prefixDifferences >= differences - 1);
-  });
-
-  // Return best candidate (closest match by differences)
-  if (!candidates.length) return null;
-
-  candidates.sort((a, b) => {
-    let diffA = 0;
-    let diffB = 0;
-    for (let i = 0; i < a.tagNumber.length; i++) {
-      if (a.tagNumber[i] !== tagNumber[i]) diffA++;
-      if (b.tagNumber[i] !== tagNumber[i]) diffB++;
-    }
-    return diffA - diffB;
-  });
-
-  return candidates[0] ?? null;
+export async function getPossibleTagTypos(auditId: string, tagNumber: string, observedAnimal: string | null) {
+  if (!observedAnimal) return [];
+  const assignments = await db.tagAssignments.where('[auditId+expectedAnimal]').equals([auditId, observedAnimal]).toArray();
+  return findTagTypoCandidates(assignments, tagNumber, observedAnimal);
 }
 
 export async function classifyReading(
@@ -157,8 +97,8 @@ export async function classifyReading(
   if (!observedAnimal) return 'unconfirmed';
   if (!assignment) {
     // Tag not found in registry. Check for possible registry typo before classifying as new.
-    const suspiciousMatch = await findSuspiciousMatch(auditId, tagNumber);
-    if (suspiciousMatch) {
+    const typoCandidates = await getPossibleTagTypos(auditId, tagNumber, observedAnimal);
+    if (typoCandidates.length) {
       // Strong evidence of registry error/typo. Physical tag takes precedence.
       return 'possible_typo';
     }
@@ -412,15 +352,15 @@ export async function correctConfirmedReading(input: {
   const observedAnimal = input.observedAnimal.trim();
   if (!observedAnimal || input.originalRecord.fieldDecision === 'could_not_confirm') return null;
 
-  const status: RecordStatus = input.originalRecord.expectedAnimal === observedAnimal
+  const status: RecordStatus = !input.assignment
+    ? await classifyReading(input.auditId, input.originalRecord.tagNumber, null, observedAnimal)
+    : input.originalRecord.expectedAnimal === observedAnimal
     ? 'correct'
     : ['new_tag', 'tag_not_registered'].includes(input.originalRecord.status)
       ? 'new_tag'
       : ['linked', 'tag_without_animal'].includes(input.originalRecord.status)
         ? 'linked'
-        : input.originalRecord.status === 'possible_typo'
-          ? 'possible_typo'
-          : 'reassignment';
+        : 'reassignment';
   const corrected = await saveReading({
     auditId: input.auditId,
     tagNumber: input.originalRecord.tagNumber,

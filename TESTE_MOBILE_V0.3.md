@@ -17,6 +17,8 @@ O endereço local HTTP serve para testar interface, digitação manual, importa�
 - [ ] Importar o `Tags.xlsx` original do Nedap.
 - [ ] Confirmar nome da fazenda.
 - [ ] Confirmar pre-validacao da planilha.
+- [ ] Verificar que os avisos estão agrupados por tipo e que números ausentes/inválidos não recebem o título de animal com múltiplas tags.
+- [ ] Conferir uma linha com animal e sem tag: o aviso deve indicar o animal e a linha do Excel. Linhas sem tag nem animal devem ser ignoradas.
 - [ ] Confirmar prefixo e quantidade de digitos da SmartTag.
 - [ ] Salvar auditoria no aparelho.
 - [ ] Confirmar que a criação abre o Resumo da fazenda recém-criada, inclusive quando já existem outras fazendas salvas.
@@ -77,6 +79,14 @@ O endereço local HTTP serve para testar interface, digitação manual, importa�
 - [ ] Em `Ações desta tag`, testar `Remover vínculo`, `Substituir tag`, `Adicionar observação` e `Tag fora de uso`.
 - [ ] Confirmar que as ações atingem a tag selecionada, mesmo quando outra já foi conferida depois.
 - [ ] Adicionar observação a uma tag com remoção registrada e confirmar que a remoção continua no relatório.
+
+## Possível erro de digitação e contagens
+
+- [ ] Importar `984000009256954` no animal 751, ler `984000009156954` e informar o brinco 751. O app deve mostrar os dois números e destacar o dígito diferente antes de salvar.
+- [ ] Informar outro animal: não sugerir erro de digitação com base apenas na semelhança do número.
+- [ ] Confirmar que salvar preserva a tag lida, mantém a base original e inclui os candidatos na observação do histórico exportado.
+- [ ] Com dez tags da base, ler nove delas e uma tag fora da planilha: conferir `10 tags lidas`, `1 fora da planilha`, `Planilha: 9 de 10` e `1 restante`.
+- [ ] Reler ou corrigir a mesma tag: a contagem de tags distintas não pode aumentar. Marcar pendentes como não localizadas também não aumenta essa contagem.
 
 ## Divergencia
 

@@ -59,6 +59,8 @@ O pedido de acesso ao Bluetooth/NFC ocorre no próprio toque em conectar/ativar.
 
 Uma leitura nova não substitui uma conferência ou decisão em andamento. É necessário terminar ou cancelar a tag atual antes de ler outra.
 
+A conferência mostra duas barras: `Tags lidas` conta SmartTags distintas registradas em campo, incluindo as que não constam na planilha, e informa quantas estão fora da base; `Planilha` mantém o progresso dos identificadores exatos importados e o número de restantes. Releituras e correções da mesma tag não aumentam a primeira contagem. Marcar uma tag não localizada também não conta como leitura física. Assim, dez tags lidas podem coexistir com nove de dez identificadores da planilha conferidos quando um número foi cadastrado incorretamente.
+
 Ao ler uma tag, o sistema procura a SmartTag na base importada e mostra:
 
 - numero da tag lida;
@@ -70,6 +72,10 @@ Ao ler uma tag, o sistema procura a SmartTag na base importada e mostra:
 ## Confirmacao do brinco
 
 Depois da leitura, o usuario informa o numero do brinco visto no animal.
+
+Quando a tag não existe na base e há uma SmartTag do mesmo animal com exatamente um dígito diferente, o app alerta `Possível erro de digitação na planilha`, mostra os dois números e destaca o dígito divergente. A regra também considera números que passaram na validação de formato. Havendo mais de um candidato, todos são mostrados. A confirmação preserva a tag física lida e registra os candidatos na observação do histórico, sem corrigir a planilha automaticamente. Alterar o brinco observado refaz essa comparação.
+
+Os avisos de pré-validação são apresentados por tipo, em grupos recolhidos, tanto no preparo quanto na Revisão. Linhas sem SmartTag com animal informado são identificadas como número ausente/inválido e incluem a linha original do Excel. Linhas sem tag nem animal são ignoradas. Apenas identificadores com formato utilizável entram no aviso de múltiplas tags; repetições da mesma tag geram aviso de duplicidade, sem inventar outro identificador para o animal. O resumo conta identificadores e animais distintos, sem inflar os totais com linhas repetidas.
 
 Se o brinco informado for igual ao animal esperado no Nedap, a leitura recebe o status de tag correta.
 
