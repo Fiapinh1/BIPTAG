@@ -44,38 +44,87 @@ function decodeUtf8(bytes: number[]) {
   }
 }
 
-function normalizeHHR5000Value(value: string) {
-  const trimmed = value.trim();
-  const numericGroups = trimmed.match(/\d{10,}/g) ?? [];
-  const strongestGroup = numericGroups.sort((a, b) => b.length - a.length)[0];
-  if (strongestGroup) return strongestGroup;
-
-  const digitsOnly = trimmed.replace(/[^0-9]/g, '');
-  return digitsOnly || trimmed;
+function normalizeHHR5000Value(value: string, expectedLength: number): string | null {
+  // Never turn status messages, truncated tags, or a longer numeric ID into a tag.
+  if (/^[0-9\s-]+$/.test(value)) {
+    // Some readers separate the country code from the rest of the identifier.
+    const digits = value.replace(/[^0-9]/g, '');
+    return digits.length === expectedLength ? digits : null;
+  }
+  const groups = value.match(/[0-9]+/g) ?? [];
+  const candidates = groups.filter((group) => group.length === expectedLength);
+  return candidates.length === 1 ? candidates[0] : null;
 }
 
-function parseHHR5000Value(value: DataView): HHR5000ScanResult | null {
-  const bytes = bytesFromDataView(value);
+function parseHHR5000Value(bytes: number[], expectedLength: number): HHR5000ScanResult | null {
   const hex = bytesToHex(bytes);
   const ascii = bytesToAscii(bytes);
   const utf8 = decodeUtf8(bytes);
   const finalString = utf8.trim() || ascii.trim();
-  const tagNumber = normalizeHHR5000Value(finalString);
-
-  console.debug('[HHR5000SN] Bytes recebidos', bytes);
-  console.debug('[HHR5000SN] HEX recebido', hex);
-  console.debug('[HHR5000SN] ASCII convertido', ascii);
-  console.debug('[HHR5000SN] UTF8 convertido', utf8);
-  console.debug('[HHR5000SN] String final', finalString);
+  const tagNumber = normalizeHHR5000Value(finalString, expectedLength);
 
   if (!tagNumber) return null;
   return { tagNumber, rawValue: finalString, bytes, hex, ascii, utf8, finalString };
 }
 
+function createHHR5000Stream(onRead: (result: HHR5000ScanResult) => void, getExpectedTagLength: () => number) {
+  // A Bluetooth notification is a transport fragment, not a complete reader message.
+  const IDLE_MS = 250;
+  const PARTIAL_TIMEOUT_MS = 2000;
+  const MAX_FRAME_BYTES = 512;
+  let bytes: number[] = [];
+  let overflow = false;
+  let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  let expiryTimer: ReturnType<typeof setTimeout> | undefined;
+  let expectedLength = getExpectedTagLength();
+
+  function reset() {
+    clearTimeout(idleTimer);
+    clearTimeout(expiryTimer);
+    idleTimer = undefined;
+    expiryTimer = undefined;
+    bytes = [];
+    overflow = false;
+  }
+
+  function finish() {
+    const result = !overflow && bytes.length ? parseHHR5000Value(bytes, expectedLength) : null;
+    reset();
+    if (result) onRead(result);
+  }
+
+  function push(value: DataView) {
+    const nextLength = getExpectedTagLength();
+    if (nextLength !== expectedLength) { reset(); expectedLength = nextLength; }
+    clearTimeout(idleTimer);
+    clearTimeout(expiryTimer);
+
+    for (const byte of bytesFromDataView(value)) {
+      if (byte === 2) { reset(); continue; } // STX starts a new frame.
+      if (byte === 0 || byte === 3 || byte === 10 || byte === 13) {
+        finish(); // NUL, ETX, CR and LF terminate a frame, even across notifications.
+      } else if (!overflow) {
+        if (bytes.length < MAX_FRAME_BYTES) bytes.push(byte);
+        else { bytes = []; overflow = true; }
+      }
+    }
+
+    if (!bytes.length && !overflow) return;
+    idleTimer = setTimeout(() => {
+      // Readers without a terminator can finish after a quiet interval, but only
+      // when the entire identifier is present. Keep short fragments for later packets.
+      if (!overflow && parseHHR5000Value(bytes, expectedLength)) finish();
+    }, IDLE_MS);
+    expiryTimer = setTimeout(reset, PARTIAL_TIMEOUT_MS);
+  }
+
+  return { push, reset };
+}
+
 export async function connectHHR5000(
   onRead: (result: HHR5000ScanResult) => void,
   onDisconnect?: () => void,
-  options: { device?: BluetoothDevice; signal?: AbortSignal; onDeviceSelected?: (device: BluetoothDevice) => void } = {}
+  options: { device?: BluetoothDevice; signal?: AbortSignal; onDeviceSelected?: (device: BluetoothDevice) => void; getExpectedTagLength?: () => number } = {}
 ): Promise<HHR5000Connection> {
   if (!isWebBluetoothSupported()) {
     throw new Error('Web Bluetooth nao esta disponivel neste navegador. Use Chrome ou Edge em HTTPS.');
@@ -92,10 +141,12 @@ export async function connectHHR5000(
   options.onDeviceSelected?.(device);
   let primaryCharacteristic: BluetoothRemoteGATTCharacteristic | undefined;
   let closed = false;
+  const stream = createHHR5000Stream((result) => { if (!closed) onRead(result); }, options.getExpectedTagLength ?? (() => 15));
 
   function cleanup() {
     if (closed) return;
     closed = true;
+    stream.reset();
     primaryCharacteristic?.removeEventListener('characteristicvaluechanged', handleValueChanged);
     device.removeEventListener('gattserverdisconnected', handleDisconnect);
     options.signal?.removeEventListener('abort', disconnect);
@@ -111,8 +162,7 @@ export async function connectHHR5000(
     const characteristic = event.target as BluetoothRemoteGATTCharacteristic | null;
     if (closed || !characteristic?.value) return;
 
-    const result = parseHHR5000Value(characteristic.value);
-    if (result) onRead(result);
+    stream.push(characteristic.value);
   };
 
   const handleDisconnect = () => {

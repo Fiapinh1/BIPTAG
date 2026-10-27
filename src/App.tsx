@@ -254,7 +254,6 @@ function App() {
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(() => readStoredAuditId());
   const autoSyncBusy = useRef(false);
   const bluetoothReadHandler = useRef<((tagNumber: string, rawValue: string) => void) | null>(null);
-  const hhr5000 = useHHR5000((tag, raw) => bluetoothReadHandler.current?.(tag, raw));
 
   const audits = useLiveQuery(() => db.audits.orderBy('createdAt').reverse().toArray(), [], []);
   const pendingSyncSignal = useLiveQuery(async () => {
@@ -274,6 +273,7 @@ function App() {
     if (!audits.length || !selectedAuditId) return null;
     return audits.find((audit) => audit.id === selectedAuditId) ?? null;
   }, [audits, selectedAuditId]);
+  const hhr5000 = useHHR5000((tag, raw) => bluetoothReadHandler.current?.(tag, raw), selectedAudit?.tagPattern?.length ?? MAX_SMARTTAG_DIGITS);
 
   useEffect(() => {
     if (!selectedAuditId || audits.some((audit) => audit.id === selectedAuditId)) return;
@@ -1693,6 +1693,7 @@ function AuditView({
 
   function handleHHR5000Read(tagNumber: string, rawValue: string) {
     if (!audit || audit.status === 'finished' || readMode !== 'bluetooth') return;
+    if (tagNumber.length !== (audit.tagPattern?.length ?? MAX_SMARTTAG_DIGITS)) return;
     void processRead(tagNumber, rawValue, 'nfc');
   }
 

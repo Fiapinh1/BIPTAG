@@ -38,6 +38,11 @@ O endereço local HTTP serve para testar interface, digitação manual, importa�
 
 - [ ] Em HTTPS, escolher `Usar bastão Bluetooth` e conectar o HHR5000SN.
 - [ ] Confirmar que o ícone no canto fica verde e que os detalhes só aparecem ao tocar nele.
+- [ ] Ler a tag com transmissão fragmentada: a tela deve aguardar todos os dígitos, mostrando a SmartTag completa da etiqueta.
+- [ ] Confirmar que mensagens curtas do bastão (por exemplo `2`) não abrem `Confirmar leitura?` nem exigem cancelar para tentar novamente.
+- [ ] Interromper uma transmissão, aguardar mais de dois segundos e repetir a leitura: o fragmento antigo não pode entrar no número novo.
+- [ ] Desconectar durante uma leitura parcial, reconectar e conferir que só uma nova tag completa chega à conferência.
+- [ ] Ler uma tag completa com prefixo diferente: deve continuar pedindo confirmação de padrão, com todos os dígitos originais preservados.
 - [ ] Ler uma tag e manter o campo do brinco aberto; ler outra tag e confirmar que a primeira não é substituída.
 - [ ] Confirmar o brinco e finalizar a decisão antes de ler a próxima tag.
 - [ ] Desligar e ligar o mesmo bastão, mantendo o app visível; aguardar a reconexão sem um novo seletor de dispositivos.

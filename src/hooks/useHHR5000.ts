@@ -16,13 +16,15 @@ function saveReader(reader: SavedReader) {
   try { localStorage.setItem(READER_STORAGE_KEY, JSON.stringify(reader)); } catch { /* Keep the live connection when storage is unavailable. */ }
 }
 
-export function useHHR5000(onTagRead: (tagNumber: string, rawValue: string) => void) {
+export function useHHR5000(onTagRead: (tagNumber: string, rawValue: string) => void, expectedTagLength = 15) {
   const [status, setStatus] = useState<HHR5000Status>('desconectado');
   const [message, setMessage] = useState('Conecte seu bastão para começar.');
   const [deviceName, setDeviceName] = useState<string | null>(null);
   const [lastTagRead, setLastTagRead] = useState<string | null>(null);
   const onTagReadRef = useRef(onTagRead);
   onTagReadRef.current = onTagRead;
+  const expectedTagLengthRef = useRef(expectedTagLength);
+  expectedTagLengthRef.current = expectedTagLength;
   const actionsRef = useRef({ connect: async () => {}, chooseDevice: async () => {}, disconnect: () => {} });
 
   useEffect(() => {
@@ -85,7 +87,7 @@ export function useHHR5000(onTagRead: (tagNumber: string, rawValue: string) => v
             setMessage('Bastão desconectado. Tentando reconectar…');
             scheduleRetry();
           },
-          { device: knownDevice, signal: controller.signal, onDeviceSelected: (selected) => { device = selected; } }
+          { device: knownDevice, signal: controller.signal, onDeviceSelected: (selected) => { device = selected; }, getExpectedTagLength: () => expectedTagLengthRef.current }
         );
         if (disposed || !wanted || thisGeneration !== generation) {
           next.disconnect();

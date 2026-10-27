@@ -51,6 +51,8 @@ O botão `Trocar modo de conferência` retorna à escolha sem apagar os registro
 
 O ícone de Bluetooth no canto mostra verde quando conectado e cinza quando desconectado. Ao tocar nele, é possível consultar o bastão, conectar, desconectar ou escolher outro dispositivo.
 
+Os pacotes Bluetooth são reunidos antes de abrir a conferência. O app aceita uma SmartTag apenas quando recebeu a quantidade de dígitos configurada na auditoria (normalmente 15), preservando zeros e o prefixo original. Mensagens curtas de estado e transmissões incompletas não abrem a confirmação de padrão. CR, LF, NUL e ETX encerram a mensagem; sem terminador, o app aguarda 250 ms sem novos pacotes antes de aceitar um identificador completo. Fragmentos incompletos expiram após dois segundos sem dados e também são descartados ao desconectar. O app não completa números faltantes nem corta uma sequência longa para fazê-la caber no padrão.
+
 Após a primeira conexão, o app tenta reconectar ao mesmo bastão se houver uma queda, com intervalos de até 15 segundos e enquanto a página estiver visível. Ao reabrir o app, a reconexão depende de o navegador disponibilizar os dispositivos já autorizados (`getDevices`). Quando essa função não existe ou a permissão foi removida, o usuário conecta pelo botão. Desconectar manualmente interrompe as tentativas automáticas, inclusive após reabrir o app.
 
 Uma leitura nova não substitui uma conferência ou decisão em andamento. É necessário terminar ou cancelar a tag atual antes de ler outra.
