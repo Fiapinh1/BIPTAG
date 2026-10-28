@@ -129,7 +129,7 @@ export interface AuditRecord {
   updatedAt: string;
   syncedAt: string | null;
   syncStatus: SyncStatus;
-  source: 'nfc' | 'manual';
+  source: 'nfc' | 'bluetooth' | 'manual';
   isCurrent: boolean;
   supersedesRecordId: string | null;
   pairId: string | null;

@@ -37,7 +37,17 @@ function createNfc() {
     });
     instances.at(-1)?.dispatchEvent(event);
   };
-  return { scan, instances, read };
+  const readText = (value: string) => {
+    const event = Object.assign(new Event('reading'), {
+      message: { records: [{ recordType: 'text', data: new DataView(new TextEncoder().encode(value).buffer) }] }
+    });
+    instances.at(-1)?.dispatchEvent(event);
+  };
+  const readWithoutRecords = () => {
+    const event = Object.assign(new Event('reading'), { message: { records: [] } });
+    instances.at(-1)?.dispatchEvent(event);
+  };
+  return { scan, instances, read, readText, readWithoutRecords };
 }
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
@@ -91,6 +101,29 @@ describe('NFC permission and activation lifecycle', () => {
     stop();
     nfc.read();
     expect(onRead).toHaveBeenCalledOnce();
+  });
+
+  it('explains that a detected tag without NDEF data cannot be read by phone NFC', async () => {
+    const nfc = createNfc();
+    const onRead = vi.fn();
+    const onError = vi.fn();
+    const stop = await startNfcReader(onRead, onError);
+    nfc.readWithoutRecords();
+    expect(onRead).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining('não trouxe conteúdo NDEF legível'));
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining('bastão Bluetooth HHR5000SN'));
+    stop();
+  });
+
+  it('rejects an all-zero NDEF value instead of treating it as a SmartTag number', async () => {
+    const nfc = createNfc();
+    const onRead = vi.fn();
+    const onError = vi.fn();
+    const stop = await startNfcReader(onRead, onError);
+    nfc.readText('000000000000000');
+    expect(onRead).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining('somente zeros'));
+    stop();
   });
 
   it('surfaces permission denial and aborts its reader rather than leaving it running', async () => {

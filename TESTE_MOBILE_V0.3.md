@@ -194,15 +194,12 @@ O endereço local HTTP serve para testar interface, digitação manual, importa�
 
 - [ ] Exportar relatorio.
 - [ ] Confirmar que o arquivo abre no celular ou computador.
-- [ ] Confirmar as abas:
-  - RESULTADO FINAL
-  - CORRIGIR NO NEDAP
-  - HISTORICO
-  - ANIMAIS SEM TAG
-- [ ] Confirmar que `RESULTADO FINAL` começa com a fazenda e as datas de início e fim e usa apenas `SMARTTAG`, `ANIMAL NEDAP`, `ANIMAL CAMPO`, `RESULTADO` e `ULTIMA CONFIRMACAO`.
-- [ ] Confirmar que as tags corretas ficam verdes e os demais resultados ficam amarelos, com os números completos como texto.
-- [ ] Confirmar que `CORRIGIR NO NEDAP` contém somente os resultados finais que exigem atenção, incluindo tags não encontradas, sem tags corretas ou ainda não conferidas.
-- [ ] Confirmar que o histórico mantém todas as leituras em ordem e as observações, enquanto o resultado final usa apenas o estado final de cada tag.
+- [ ] Confirmar as abas, nesta ordem: `CORRIGIR NO NEDAP`, `REVISAR`, `CONFERÊNCIA`, `RESUMO`.
+- [ ] Confirmar que `CORRIGIR NO NEDAP` contém somente ações do estado final, sem `MANTER TAG`, leituras não confirmadas ou tags não localizadas.
+- [ ] Confirmar que uma troca recíproca aparece como uma única operação `TROCAR TAGS`.
+- [ ] Confirmar que `REVISAR` mostra somente itens que ainda precisam de investigação.
+- [ ] Confirmar que `CONFERÊNCIA` mantém todas as leituras em ordem, inclusive eventos anteriores à correção, com origem e observações.
+- [ ] Confirmar que `RESUMO` contém os indicadores da auditoria e que as SmartTags são exportadas como texto, sem notação científica.
 
 ## Offline e persistencia
 

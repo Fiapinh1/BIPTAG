@@ -273,14 +273,14 @@ Essa tela serve para acompanhamento durante e depois da auditoria.
 
 O relatorio Excel e operacional. Ele nao mostra apenas problemas; ele mostra o que aconteceu, o que foi decidido em campo e o que precisa ser feito depois.
 
-O arquivo usa quatro abas:
+O arquivo usa quatro abas principais, nesta ordem:
 
-- `RESULTADO FINAL`: fazenda, datas de início e fim e uma linha por tag. As cinco colunas são `SMARTTAG`, `ANIMAL NEDAP`, `ANIMAL CAMPO`, `RESULTADO` e `ULTIMA CONFIRMACAO`.
-- `CORRIGIR NO NEDAP`: as mesmas cinco colunas, com os resultados finais que precisam de atenção. Tags corretas, ainda não conferidas ou guardadas sem necessidade de alterar o cadastro ficam fora dessa lista.
-- `HISTORICO`: todas as leituras em ordem, inclusive as anteriores a uma correção, com as observações.
-- `ANIMAIS SEM TAG`: animal e SmartTag original dos animais que terminaram sem tag confirmada.
+- `CORRIGIR NO NEDAP`: somente ações finais necessárias. Não inclui `MANTER TAG`; movimentos e vínculos são derivados do estado físico confirmado, e uma troca recíproca aparece como uma única operação.
+- `REVISAR`: leituras não confirmadas, conflitos, cadastros suspeitos e tags não localizadas que ainda exigem investigação.
+- `CONFERÊNCIA`: histórico cronológico completo com sequência, data/hora, tag, animal Nedap, animal observado, confirmação, origem, decisão, evento relacionado e observações.
+- `RESUMO`: fazenda, período, cobertura da base, tags corretas, correções, revisões, tags não localizadas, animais sem tag, tags novas e registros suspeitos.
 
-O resultado resume a ação em uma frase, como `CORRETO`, `MOVER 336 -> 337`, `TAG NÃO ENCONTRADA` ou `CADASTRAR TAG -> 402`. Linhas corretas ficam verdes; resultados que exigem atenção ficam amarelos. As SmartTags são exportadas como texto, sem notação científica.
+As SmartTags são exportadas como texto, sem notação científica.
 
 Na Revisão, as tags ainda sem resultado e as marcadas como não localizadas aparecem em listas com o número completo, o animal da base, busca e rolagem.
 

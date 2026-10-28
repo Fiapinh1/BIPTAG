@@ -38,12 +38,12 @@ import {
   TagIcon
 } from './icons/Icons';
 import { parseNedapWorkbook, exportAuditWorkbook, validateSmartTag, buildAuditWhatsAppText } from './services/excel';
-import { knownIssueActionLabel, knownIssueLabel, operationalActionLabel, statusLabel } from './services/audit-labels';
+import { knownIssueActionLabel, knownIssueLabel, operationalActionLabel, readingSourceLabel, statusLabel } from './services/audit-labels';
 import { composeKnownIssueTag, knownIssueTagError } from './services/known-issues';
 import { feedbackCorrect, feedbackWarning, primeFeedbackAudio } from './services/feedback';
 import { useHHR5000, type HHR5000Reader } from './hooks/useHHR5000';
 import { isWebNfcSupported, startNfcReader } from './services/nfc';
-import { deriveReconciliation, hasPhysicalEvidence, type ReconciledAnimalGap } from './services/reconciliation';
+import { deriveReconciliation, hasPhysicalEvidence, isConfirmedEvidence, type ReconciledAnimalGap } from './services/reconciliation';
 import { isSupabaseConfigured, isUsingBundledSupabaseConfig, supabase } from './services/supabase';
 import { deleteAuditEverywhere, pullAuditsFromSupabase, syncAllAuditsToSupabase, syncAuditToSupabase } from './services/cloud-sync';
 import {
@@ -170,7 +170,7 @@ type ScanState = {
   patternWarning: { status: 'suspicious_tag' | 'invalid_tag'; reason: string } | null;
   patternConfirmed: boolean;
   knownIssue: KnownIssue | null;
-  source: 'nfc' | 'manual';
+  source: AuditRecord['source'];
 };
 
 const KNOWN_ISSUE_OPTIONS: { value: KnownIssueType; label: string }[] = [
@@ -1713,13 +1713,13 @@ function AuditView({
       .filter((record) =>
         record.isCurrent !== false &&
         Boolean(record.observedAnimal) &&
-        (record.fieldDecision === 'confirmed_physical_animal' || record.fieldDecision === 'confirmed_match')
+        isConfirmedEvidence(record)
       )
       .sort((a, b) => (b.sequence ?? 0) - (a.sequence ?? 0) || b.scannedAt.localeCompare(a.scannedAt))
-      .slice(0, 3),
+      .slice(0, 2),
     [auditRecords]
   );
-  const manualRecentRecords = latestConfirmedRecords.slice(0, 2);
+  const manualRecentRecords = latestConfirmedRecords;
 
   const fieldMetrics = useMemo(() => {
     const current = auditRecords.filter((record) => record.isCurrent !== false);
@@ -1756,10 +1756,10 @@ function AuditView({
   function handleHHR5000Read(tagNumber: string, rawValue: string) {
     if (!audit || audit.status === 'finished' || readMode !== 'bluetooth') return;
     if (tagNumber.length !== (audit.tagPattern?.length ?? MAX_SMARTTAG_DIGITS)) return;
-    void processRead(tagNumber, rawValue, 'nfc');
+    void processRead(tagNumber, rawValue, 'bluetooth');
   }
 
-  async function processRead(tagNumber: string, rawValue = tagNumber, source: 'nfc' | 'manual' = 'nfc') {
+  async function processRead(tagNumber: string, rawValue = tagNumber, source: AuditRecord['source'] = 'nfc') {
     const normalized = tagNumber.replace(/[^0-9]/g, '').trim();
     if (!normalized) return false;
     if (savingReadingRef.current || readInFlight.current || scan || outcome || decision) {
@@ -1883,7 +1883,7 @@ function AuditView({
     if (!scan) return;
     const observed = observedAnimal.trim() || null;
     if (!observed) {
-      setToast('Digite o brinco visto ou escolha Tag sem animal / Animal sem brinco.');
+      setToast('Digite o brinco visto ou escolha Tag sem animal / Não consegui confirmar.');
       return;
     }
 
@@ -2428,7 +2428,7 @@ function AuditView({
                   {manualRecentRecords.map((record) => (
                     <button key={record.id} type="button" className="manual-recent__item" onClick={() => openCorrection(record)}>
                       <strong>{record.observedAnimal}</strong>
-                      <span>...{record.tagNumber.slice(-4)} · {record.source === 'nfc' ? 'NFC' : 'Manual'}</span>
+                      <span>...{record.tagNumber.slice(-4)} · {readingSourceLabel(record.source)}</span>
                     </button>
                   ))}
                 </div>
@@ -2473,7 +2473,7 @@ function AuditView({
                 <span className="latest-conference__animal">{record.observedAnimal}</span>
                 <span className="latest-conference__details">
                   <strong>Tag ...{record.tagNumber.slice(-4)}</strong>
-                  <small>{formatRelativeTime(record.scannedAt)} · {record.source === 'nfc' ? 'Leitor' : 'Manual'}</small>
+                  <small>{formatRelativeTime(record.scannedAt)} · {readingSourceLabel(record.source)}</small>
                 </span>
                 <ChevronRightIcon size={18} />
               </button>
@@ -2525,12 +2525,12 @@ function AuditView({
               <button className="button button--primary button--full button--field" disabled={!observedAnimal.trim() || savingReading} onClick={() => void runFieldSave(evaluateObserved)}>{savingReading ? 'Salvando…' : 'Conferir brinco'}</button>
               <div className="conference-alternatives"><span>Ou registre uma situação</span><div>
                 <button className="button button--ghost" disabled={savingReading} onClick={() => void runFieldSave(markTagWithoutAnimal)}>Tag sem animal</button>
-                <button className="button button--ghost" disabled={savingReading} onClick={() => void runFieldSave(markAnimalWithoutEarTag)}>Animal sem brinco</button>
+                <button className="button button--ghost" disabled={savingReading} onClick={() => void runFieldSave(couldNotConfirm)}>Não consegui confirmar</button>
               </div></div>
               <button className="conference-cancel" disabled={savingReading} onClick={cancelCurrentRead}><span aria-hidden="true">‹</span> {manualMode ? 'Digitar outra tag' : 'Ler outra tag'}</button>
             </div>
           ) : (
-            <GuidedDecision scan={scan} decision={decision} busy={savingReading} onConfirm={() => void runFieldSave(confirmPhysicalFact)} onCorrect={correctObservedNumber} onUnconfirmed={() => void runFieldSave(markAnimalWithoutEarTag)} onCancel={cancelCurrentRead} />
+            <GuidedDecision scan={scan} decision={decision} busy={savingReading} onConfirm={() => void runFieldSave(confirmPhysicalFact)} onCorrect={correctObservedNumber} onUnconfirmed={() => void runFieldSave(couldNotConfirm)} onCancel={cancelCurrentRead} />
           )}
         </div>
         )
@@ -2725,7 +2725,7 @@ function GuidedDecision({
       <div className="decision-number">{observed}</div>
       <button className="button button--primary button--full button--field" disabled={busy} onClick={onConfirm}>{busy ? 'Salvando…' : content.confirmLabel}</button>
       <button className="button button--secondary button--full" disabled={busy} onClick={onCorrect}>Digitei o brinco errado</button>
-      <button className="button button--ghost button--full" disabled={busy} onClick={onUnconfirmed}>Animal sem brinco</button>
+      <button className="button button--ghost button--full" disabled={busy} onClick={onUnconfirmed}>Não consegui confirmar</button>
       <button className="button button--ghost button--full" disabled={busy} onClick={onCancel}>Ler outra tag</button>
       <small className="decision-hint">O BIPTAG decide a classificação e cruza possíveis trocas depois. Você só confirma o fato físico.</small>
     </div>
@@ -3136,7 +3136,7 @@ function ReviewSwapCard({ record, other }: { record: AuditRecord; other: AuditRe
           <small>Animal: {record.expectedAnimal ?? '-'} / {record.observedAnimal ?? '-'}</small>
           <small>Tag: {record.tagNumber}{other ? ` / ${other.tagNumber}` : ''}</small>
           <small>Acao sugerida: TROCAR TAGS</small>
-          <small>Origem: {record.source === 'nfc' ? 'NFC' : 'Manual'}</small>
+          <small>Origem: {readingSourceLabel(record.source)}</small>
         </div>
         <button className="button button--ghost button--full" onClick={() => showSwapDetails(record, other)}>Ver detalhes</button>
       </div>
@@ -3156,7 +3156,7 @@ function ReviewRecordCard({ record, tone = 'default' }: { record: AuditRecord; t
           <small>Animal: {record.observedAnimal ?? record.expectedAnimal ?? '-'}</small>
           <small>Tag: {record.tagNumber}</small>
           <small>Acao sugerida: {action || 'INVESTIGAR'}</small>
-          <small>Origem: {record.source === 'nfc' ? 'NFC' : 'Manual'}</small>
+          <small>Origem: {readingSourceLabel(record.source)}</small>
         </div>
         <button className="button button--ghost button--full" onClick={() => showRecordDetails(record)}>Ver detalhes</button>
       </div>

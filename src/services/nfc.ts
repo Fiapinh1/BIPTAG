@@ -56,13 +56,19 @@ export async function startNfcReader(
 
     const rawValue = decoded[0] ?? '';
     if (!rawValue) {
-      onReadError?.('A tag foi detectada, mas nenhum conteúdo NDEF legível foi encontrado.');
+      onReadError?.('A tag respondeu, mas não trouxe conteúdo NDEF legível. O NFC do celular só lê números gravados em NDEF; use o bastão Bluetooth HHR5000SN ou digite o número.');
+      return;
+    }
+
+    const tagNumber = normalizeTagValue(rawValue);
+    if (/^0+$/.test(tagNumber)) {
+      onReadError?.('A tag enviou somente zeros no conteúdo NDEF. Esse valor não é um número de SmartTag; confira a etiqueta e tente o bastão Bluetooth HHR5000SN ou digite o número.');
       return;
     }
 
     onRead({
       rawValue,
-      tagNumber: normalizeTagValue(rawValue)
+      tagNumber
     });
   });
 

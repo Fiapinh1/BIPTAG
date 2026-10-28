@@ -10,6 +10,7 @@ Use este checklist depois que o BIPTAG estiver publicado no Vercel.
 - [ ] Aproximar a SmartTag
 - [ ] Confirmar que o BIPTAG mostra o número NDEF
 - [ ] Confirmar que o UID físico não é utilizado
+- [ ] Se a tag não trouxer dados NDEF ou retornar somente zeros, confirmar que o app não abre uma leitura e orientar o uso do bastão Bluetooth ou a digitação manual
 - [ ] Ler uma tag existente na planilha
 - [ ] Confirmar que aparece o animal esperado
 - [ ] Digitar o brinco correto e salvar

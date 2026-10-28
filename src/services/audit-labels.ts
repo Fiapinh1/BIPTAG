@@ -74,3 +74,9 @@ export function fieldDecisionLabel(decision: AuditRecord['fieldDecision']) {
   };
   return labels[decision];
 }
+
+export function readingSourceLabel(source: AuditRecord['source']) {
+  if (source === 'nfc') return 'NFC';
+  if (source === 'bluetooth') return 'Bluetooth';
+  return 'Manual';
+}

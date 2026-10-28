@@ -11,7 +11,7 @@ import type {
   TagAssignment,
   TagValidationStatus
 } from '../types/domain';
-import { fieldDecisionLabel, knownIssueActionLabel, knownIssueLabel, operationalActionLabel, statusLabel } from './audit-labels';
+import { fieldDecisionLabel, knownIssueActionLabel, knownIssueLabel, operationalActionLabel, readingSourceLabel, statusLabel } from './audit-labels';
 import { deriveReconciliation, hasPhysicalEvidence, isConfirmedEvidence, type ReconciledTagState } from './reconciliation';
 
 const REQUIRED_HEADERS = ['Numero de tag', 'Animal'];
@@ -438,8 +438,8 @@ function applyWorksheetPresentation(sheet: XLSX.WorkSheet, rows: SheetRows, opti
 function statusFillColor(status: string) {
   if (['CORRETA'].includes(status)) return 'E5F4EC';
   if (['MOVER', 'VINCULAR', 'NOVA', 'SUBSTITUIR', 'CADASTRAR TAG', 'VINCULAR TAG', 'MOVER TAG', 'SUBSTITUIR TAG'].includes(status)) return 'E8F0F7';
-  if (['TROCA', 'TROCAR TAGS', 'POSSIVEL ERRO CADASTRO', 'CADASTRO SUSPEITO', 'CORRIGIR NUMERO DA TAG'].includes(status)) return 'F8E8D8';
-  if (['SEM ANIMAL', 'TAG FORA DE USO', 'REMOVER VINCULO', 'CADASTRO INVALIDO', 'MARCAR TAG FORA DE USO'].includes(status)) return 'F8E1DE';
+  if (['TROCA', 'TROCAR TAGS', 'POSSIVEL ERRO CADASTRO', 'CADASTRO SUSPEITO', 'CORRIGIR TAG'].includes(status)) return 'F8E8D8';
+  if (['SEM ANIMAL', 'TAG FORA DE USO', 'REMOVER VINCULO', 'CADASTRO INVALIDO'].includes(status)) return 'F8E1DE';
   if (['ANIMAL SEM BRINCO', 'TAG NAO LOCALIZADA', 'ALERTA', 'PROBLEMA CONHECIDO', 'PENDENCIA', 'NAO CONFIRMADA', 'VERIFICAR NAO LOCALIZADA'].includes(status)) return 'FFF0C2';
   return '';
 }
@@ -579,7 +579,7 @@ function conferenceDecision(record: AuditRecord) {
   if (record.status === 'tag_stored') return 'TAG SEM ANIMAL';
   if (record.status === 'animal_without_ear_tag') return 'ANIMAL SEM BRINCO';
   if (record.status === 'correct') return 'CORRETA';
-  if (record.status === 'possible_typo') return 'CORRIGIR NUMERO DA TAG';
+  if (record.status === 'possible_typo') return 'CORRIGIR TAG';
   if (record.status === 'possible_swap') return 'TROCAR TAGS';
   if (record.status === 'new_tag' || record.status === 'tag_not_registered') return 'CADASTRAR TAG';
   if (record.status === 'linked' || record.status === 'tag_without_animal') return 'VINCULAR TAG';
@@ -823,7 +823,7 @@ export function buildAuditReportRows(
       continue;
     }
     if (record.operationalAction === 'tag_out_of_use') {
-      actionRows.push(['MARCAR TAG FORA DE USO', blank(state.tagNumber), blank(state.originalAnimal ?? state.finalAnimal), 'FORA DE USO', blank(state.originalAnimal ?? state.finalAnimal), blank(record.actionNote ?? record.note)]);
+      actionRows.push(['TAG FORA DE USO', blank(state.tagNumber), blank(state.originalAnimal ?? state.finalAnimal), 'FORA DE USO', blank(state.originalAnimal ?? state.finalAnimal), blank(record.actionNote ?? record.note)]);
       continue;
     }
     if (state.action === 'move_tag') {
@@ -838,7 +838,7 @@ export function buildAuditReportRows(
   for (const record of finalActionStates.map((state) => state.record!).filter((item) => item.status === 'possible_typo')) {
     const match = safeTypoMatch(record);
     if (match) {
-      actionRows.push(['CORRIGIR NUMERO DA TAG', blank(match.tagNumber), blank(match.tagNumber), blank(record.tagNumber), blank(record.observedAnimal), 'Relacao confirmada em campo; corrigir o cadastro da SmartTag.']);
+      actionRows.push(['CORRIGIR TAG', blank(match.tagNumber), blank(match.tagNumber), blank(record.tagNumber), blank(record.observedAnimal), 'Relacao confirmada em campo; corrigir o cadastro da SmartTag.']);
     } else {
       actionRows.push(['CADASTRAR TAG', blank(record.tagNumber), 'SEM CADASTRO', blank(record.observedAnimal), blank(record.observedAnimal), 'Possivel erro de cadastro, mas a evidencia fisica confirmada prevalece.']);
     }
@@ -903,7 +903,7 @@ export function buildAuditReportRows(
   }
 
   const conferenceRows: SheetRows = [
-    ['SEQUENCIA', 'DATA/HORA', 'TAG', 'ANIMAL NEDAP', 'ANIMAL OBSERVADO', 'CONFIRMADO?', 'ORIGEM', 'DECISAO', 'EVENTO RELACIONADO'],
+    ['SEQUÊNCIA', 'DATA/HORA', 'TAG', 'ANIMAL NEDAP', 'ANIMAL OBSERVADO', 'CONFIRMADO?', 'ORIGEM', 'DECISÃO', 'EVENTO RELACIONADO', 'OBSERVAÇÃO'],
     ...ordered.map((record) => [
       record.sequence ?? '',
       formatDateTime(record.scannedAt),
@@ -911,9 +911,10 @@ export function buildAuditReportRows(
       blank(record.expectedAnimal),
       blank(record.observedAnimal),
       conferenceConfirmedValue(record),
-      record.source === 'nfc' ? 'NFC' : 'Manual',
+      readingSourceLabel(record.source),
       conferenceDecision(record),
-      blank(record.relatedRecordId)
+      blank(record.relatedRecordId),
+      [record.note, record.actionNote].filter(Boolean).join(' | ')
     ])
   ];
 
@@ -1223,7 +1224,7 @@ function buildAuditReportRowsLegacy(
   for (const issue of issues.filter((item) => ['possible_typo', 'suspicious_tag', 'invalid_tag'].includes(item.type))) reviewRows.push(['CADASTRO SUSPEITO', blank(issue.tagNumber), blank(issue.animal), blank(issue.detail), '', 'INVESTIGAR']);
 
   const conferenceRows: (string | number)[][] = [
-    ['SEQUÊNCIA', 'DATA/HORA', 'TAG', 'ANIMAL NEDAP', 'ANIMAL OBSERVADO', 'CONFIRMADO?', 'ORIGEM', 'DECISÃO', 'EVENTO RELACIONADO'],
+    ['SEQUÊNCIA', 'DATA/HORA', 'TAG', 'ANIMAL NEDAP', 'ANIMAL OBSERVADO', 'CONFIRMADO?', 'ORIGEM', 'DECISÃO', 'EVENTO RELACIONADO', 'OBSERVAÇÃO'],
     ...ordered.map((record) => [
       record.sequence ?? '',
       formatDateTime(record.scannedAt),
@@ -1231,9 +1232,10 @@ function buildAuditReportRowsLegacy(
       blank(record.expectedAnimal),
       blank(record.observedAnimal),
       record.fieldDecision === 'confirmed_physical_animal' || record.fieldDecision === 'confirmed_match' ? 'SIM' : 'NÃO',
-      record.source === 'nfc' ? 'NFC' : 'Manual',
-      record.status === 'unconfirmed' ? 'NÃO CONFIRMADA' : record.status === 'tag_stored' ? 'TAG SEM ANIMAL' : record.status === 'animal_without_ear_tag' ? 'ANIMAL SEM BRINCO' : record.status === 'correct' ? 'CORRETA' : record.status === 'possible_typo' ? 'CORRIGIR TAG' : record.status === 'possible_swap' ? 'TROCAR TAGS' : record.status === 'reassignment' || record.status === 'divergence' ? 'MOVER TAG' : record.status === 'linked' || record.status === 'tag_without_animal' ? 'VINCULAR TAG' : 'REVISAR',
-      blank(record.relatedRecordId)
+      readingSourceLabel(record.source),
+      record.status === 'unconfirmed' ? 'NÃO CONFIRMADA' : record.status === 'tag_not_found' ? 'TAG NÃO LOCALIZADA' : record.status === 'tag_stored' ? 'TAG SEM ANIMAL' : record.status === 'animal_without_ear_tag' ? 'ANIMAL SEM BRINCO' : record.status === 'correct' ? 'CORRETA' : record.status === 'possible_typo' ? 'CORRIGIR TAG' : record.status === 'possible_swap' ? 'TROCAR TAGS' : record.status === 'reassignment' || record.status === 'divergence' ? 'MOVER TAG' : record.status === 'linked' || record.status === 'tag_without_animal' ? 'VINCULAR TAG' : 'REVISAR',
+      blank(record.relatedRecordId),
+      [record.note, record.actionNote].filter(Boolean).join(' | ')
     ])
   ];
 
@@ -1265,47 +1267,6 @@ function buildAuditReportRowsLegacy(
   return { actionRows, animalGapRows, reviewRows, conferenceRows, summaryRows };
 }
 
-const SIMPLE_RESULT_HEADER = ['SMARTTAG', 'ANIMAL NEDAP', 'ANIMAL CAMPO', 'RESULTADO', 'ULTIMA CONFIRMACAO'];
-
-function simpleFinalResult(row: ResultFinalRow) {
-  switch (row.status) {
-    case 'MOVER':
-    case 'TROCA': return `MOVER ${row.animalNedap} -> ${row.animalCampo}`;
-    case 'NOVA': return `CADASTRAR TAG -> ${row.animalCampo}`;
-    case 'VINCULAR': return `VINCULAR TAG -> ${row.animalCampo}`;
-    case 'TAG NAO LOCALIZADA': return 'TAG NÃO ENCONTRADA';
-    case 'SEM ANIMAL': return 'REMOVER VÍNCULO';
-    case 'SUBSTITUIR': return 'SUBSTITUIR TAG';
-    case 'TAG FORA DE USO': return 'TAG FORA DE USO';
-    case 'ANIMAL SEM BRINCO': return 'ANIMAL SEM BRINCO';
-    case 'CADASTRO INVALIDO': return 'CADASTRO INVÁLIDO';
-    case 'CADASTRO SUSPEITO': return 'CADASTRO SUSPEITO';
-    case 'POSSIVEL ERRO CADASTRO': return 'CORRIGIR NÚMERO DA TAG';
-    case 'PENDENTE': return 'NÃO CONFERIDA';
-    default:
-      if (row.resultado === 'CORRETA') return row.animalNedap === 'SEM ANIMAL' && !row.animalCampo ? 'TAG SEM ANIMAL' : 'CORRETO';
-      if (row.resultado === 'NAO CONFERIDA') return 'NÃO CONFERIDA';
-      return row.resultado;
-  }
-}
-
-function simpleHistoryResult(record: AuditRecord) {
-  if (record.status === 'unconfirmed') return 'NÃO CONFIRMADA';
-  if (record.status === 'tag_not_found') return 'TAG NÃO ENCONTRADA';
-  if (record.status === 'audit_conflict' || record.status === 'new_tag_conflict') return 'CONFLITO: REVISAR';
-  if (record.status === 'animal_without_ear_tag') return 'ANIMAL SEM BRINCO';
-  if (record.operationalAction === 'remove_tag') return 'REMOVER VÍNCULO';
-  if (record.operationalAction === 'replace_tag') return 'SUBSTITUIR TAG';
-  if (record.operationalAction === 'tag_out_of_use') return 'TAG FORA DE USO';
-  if (record.status === 'tag_stored') return 'TAG SEM ANIMAL';
-  if (record.status === 'correct') return 'CORRETO';
-  if (record.status === 'possible_typo') return 'CORRIGIR NÚMERO DA TAG';
-  if (record.status === 'new_tag' || record.status === 'tag_not_registered') return `CADASTRAR TAG -> ${record.observedAnimal ?? ''}`;
-  if (record.status === 'linked' || record.status === 'tag_without_animal') return `VINCULAR TAG -> ${record.observedAnimal ?? ''}`;
-  if (record.observedAnimal && ['reassignment', 'divergence', 'possible_swap', 'animal_not_in_base'].includes(record.status)) return `MOVER ${record.expectedAnimal ?? ''} -> ${record.observedAnimal}`;
-  return conferenceDecision(record);
-}
-
 function appendSimpleSheet(workbook: XLSX.WorkBook, rows: SheetRows, name: string, headerIndex: number, widths: number[], resultColumn?: number) {
   const sheet = XLSX.utils.aoa_to_sheet(rows);
   sheet['!cols'] = widths.map((wch) => ({ wch }));
@@ -1324,7 +1285,7 @@ function appendSimpleSheet(workbook: XLSX.WorkBook, rows: SheetRows, name: strin
         ...(fill ? { fill: { patternType: 'solid', fgColor: { rgb: fill } } } : {})
       });
       const header = String(rows[headerIndex][c] ?? '');
-      if (r > headerIndex && (header.includes('SMARTTAG') || header.includes('TAG ORIGINAL'))) asTextCell(sheet[address]);
+      if (r > headerIndex && (header.includes('SMARTTAG') || header === 'TAG' || header.includes('TAG ORIGINAL'))) asTextCell(sheet[address]);
     }
   }
   if (headerIndex > 0) sheet['!merges'] = [
@@ -1350,28 +1311,11 @@ export function createAuditWorkbook(
     knownIssues,
     assignments
   );
-  const finalRows = report.resultFinalRows.map((row) => [row.smartTag, row.animalNedap, row.animalCampo, simpleFinalResult(row), row.ultimaConfirmacao]);
-  const resultRows: SheetRows = [
-    ['BIPTAG - RESULTADO FINAL'],
-    ['Fazenda', audit.farmName],
-    ['Data inicio', formatDateTime(audit.startedAt)],
-    ['Data fim', audit.finishedAt ? formatDateTime(audit.finishedAt) : ''],
-    [],
-    SIMPLE_RESULT_HEADER,
-    ...finalRows
-  ];
-  const correctionRows: SheetRows = [SIMPLE_RESULT_HEADER, ...finalRows.filter((row) => !['CORRETO', 'NÃO CONFERIDA', 'TAG SEM ANIMAL'].includes(row[3]))];
-  const importedTagNumbers = new Set(assignments.map((item) => item.tagNumber));
-  const historyRows: SheetRows = [
-    ['SMARTTAG', 'ANIMAL NEDAP', 'ANIMAL CAMPO', 'RESULTADO', 'DATA/HORA', 'OBSERVACAO'],
-    ...chronological(records).map((record) => [record.tagNumber, record.expectedAnimal ?? (importedTagNumbers.has(record.tagNumber) ? 'SEM ANIMAL' : 'NAO CADASTRADA'), record.observedAnimal ?? '', simpleHistoryResult(record), formatDateTime(record.scannedAt), [...new Set([record.note, record.actionNote].filter(Boolean))].join(' | ')])
-  ];
-  const animalRows: SheetRows = [['ANIMAL', 'SMARTTAG ORIGINAL'], ...report.animalGapRows.slice(1).map((row) => [row[0], row[1]])];
   const workbook = XLSX.utils.book_new();
-  appendSimpleSheet(workbook, resultRows, 'RESULTADO FINAL', 5, [25, 20, 20, 40, 25], 3);
-  appendSimpleSheet(workbook, correctionRows, 'CORRIGIR NO NEDAP', 0, [25, 20, 20, 40, 25], 3);
-  appendSimpleSheet(workbook, historyRows, 'HISTORICO', 0, [25, 20, 20, 40, 25, 60]);
-  appendSimpleSheet(workbook, animalRows, 'ANIMAIS SEM TAG', 0, [20, 25]);
+  appendSimpleSheet(workbook, report.actionRows, 'CORRIGIR NO NEDAP', 0, [24, 22, 32, 32, 24, 55]);
+  appendSimpleSheet(workbook, report.reviewRows, 'REVISAR', 0, [24, 22, 24, 45, 24, 35]);
+  appendSimpleSheet(workbook, report.conferenceRows, 'CONFERÊNCIA', 0, [12, 22, 22, 20, 20, 14, 18, 24, 28, 55]);
+  appendSimpleSheet(workbook, report.summaryRows, 'RESUMO', 0, [30, 28]);
   return workbook;
 }
 

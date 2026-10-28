@@ -178,7 +178,6 @@ beforeEach(async () => {
 });
 
 describe('Simple Excel report', () => {
-  const headers = ['SMARTTAG', 'ANIMAL NEDAP', 'ANIMAL CAMPO', 'RESULTADO', 'ULTIMA CONFIRMACAO'];
   const rowsOf = (book: XLSX.WorkBook, sheet: string) => XLSX.utils.sheet_to_json<string[]>(book.Sheets[sheet], { header: 1, defval: '', raw: true });
 
   async function screenshotExample() {
@@ -202,42 +201,35 @@ describe('Simple Excel report', () => {
     return { audit, assignments, records, effective, workbook: createAuditWorkbook(audit, records, [], effective, [], assignments) };
   }
 
-  it('matches the five columns and four tabs from the supplied example', async () => {
+  it('exports the four primary report sections in the required order', async () => {
     const { workbook } = await screenshotExample();
-    expect(workbook.SheetNames).toEqual(['RESULTADO FINAL', 'CORRIGIR NO NEDAP', 'HISTORICO', 'ANIMAIS SEM TAG']);
-    const result = rowsOf(workbook, 'RESULTADO FINAL');
-    expect(result.slice(0, 4).map((row) => row[0])).toEqual(['BIPTAG - RESULTADO FINAL', 'Fazenda', 'Data inicio', 'Data fim']);
-    expect(result[1][1]).toBe('Fazenda Santá Fé');
-    expect(result[5]).toEqual(headers);
-    expect(result.slice(6).map((row) => row.slice(0, 4))).toEqual([
-      ['984000010772185', '348', '348', 'CORRETO'],
-      ['984000010772194', '336', '337', 'MOVER 336 -> 337'],
-      ['984000010772161', '2', '2', 'CORRETO'],
-      ['984000010772162', '237', '237', 'CORRETO'],
-      ['984000010772187', '347', '', 'TAG NÃO ENCONTRADA'],
-      ['984000010772175', '337', '999', 'MOVER 337 -> 999'],
-      ['984000010772999', 'NAO CADASTRADA', '402', 'CADASTRAR TAG -> 402']
+    expect(workbook.SheetNames).toEqual(['CORRIGIR NO NEDAP', 'REVISAR', 'CONFERÊNCIA', 'RESUMO']);
+    const actions = rowsOf(workbook, 'CORRIGIR NO NEDAP');
+    expect(actions[0]).toEqual(['ACAO', 'SMARTTAG', 'CADASTRO ATUAL', 'CORRIGIR PARA', 'ANIMAL', 'OBSERVACAO']);
+    expect(actions.slice(1).map((row) => [row[0], row[2], row[3], row[4]])).toEqual([
+      ['MOVER TAG', '336', '337', '337'],
+      ['MOVER TAG', '337', '999', '999'],
+      ['CADASTRAR TAG', 'SEM CADASTRO', '402', '402']
     ]);
-    const corrections = rowsOf(workbook, 'CORRIGIR NO NEDAP');
-    expect(corrections[0]).toEqual(headers);
-    expect(corrections.slice(1)).toEqual(result.slice(6).filter((row) => row[3] !== 'CORRETO'));
-    expect(workbook.Sheets['RESULTADO FINAL']['!autofilter']?.ref).toBe('A6:E13');
+    expect(rowsOf(workbook, 'REVISAR').some((row) => row[0] === 'TAG NAO LOCALIZADA')).toBe(true);
+    expect(rowsOf(workbook, 'CONFERÊNCIA')[0]).toEqual([
+      'SEQUÊNCIA', 'DATA/HORA', 'TAG', 'ANIMAL NEDAP', 'ANIMAL OBSERVADO', 'CONFIRMADO?', 'ORIGEM', 'DECISÃO', 'EVENTO RELACIONADO', 'OBSERVAÇÃO'
+    ]);
+    expect(rowsOf(workbook, 'RESUMO').find((row) => row[0] === 'Fazenda')?.[1]).toBe('Fazenda Santá Fé');
+    expect(workbook.Sheets['CORRIGIR NO NEDAP']['!autofilter']?.ref).toBe('A1:F4');
   });
 
   it('preserves the row colors, filters and full SmartTag numbers in a real XLSX file', async () => {
     const { workbook } = await screenshotExample();
     const bytes = await writeStyledAuditWorkbook(workbook);
     const parsed = XLSX.read(bytes, { type: 'array', cellStyles: true, cellNF: true });
-    const sheet = parsed.Sheets['RESULTADO FINAL'];
-    expect(sheet.A6.s.fgColor.rgb).toBe('C5D9F1');
-    expect(sheet.A7.s.fgColor.rgb).toBe('EBF1DE');
-    expect(sheet.A8.s.fgColor.rgb).toBe('FFFF99');
-    expect(sheet.A11.s.fgColor.rgb).toBe('FFFF99');
-    expect(sheet.A7.t).toBe('s');
-    expect(sheet.A7.z).toBe('@');
-    expect(sheet.A7.v).toBe('984000010772185');
-    expect(sheet['!autofilter']?.ref).toBe('A6:E13');
-    expect(rowsOf(parsed, 'CORRIGIR NO NEDAP')).toHaveLength(5);
+    const sheet = parsed.Sheets['CORRIGIR NO NEDAP'];
+    expect(sheet.A1.s.fgColor.rgb).toBe('C5D9F1');
+    expect(sheet.B2.t).toBe('s');
+    expect(sheet.B2.z).toBe('@');
+    expect(sheet.B2.v).toBe('984000010772194');
+    expect(sheet['!autofilter']?.ref).toBe('A1:F4');
+    expect(rowsOf(parsed, 'REVISAR').length).toBeGreaterThan(1);
   });
 
   it('keeps only the final correction and all previous readings in history', async () => {
@@ -247,17 +239,17 @@ describe('Simple Excel report', () => {
     const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
     const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
     const workbook = createAuditWorkbook(audit, records, [], effective, [], assignments);
-    expect(rowsOf(workbook, 'CORRIGIR NO NEDAP').slice(1).map((row) => row[3])).toEqual(['MOVER 1001 -> 3001']);
-    expect(rowsOf(workbook, 'HISTORICO').slice(1).map((row) => row[2])).toEqual(['2001', '3001']);
+    expect(rowsOf(workbook, 'CORRIGIR NO NEDAP').slice(1).map((row) => [row[0], row[3]])).toEqual([['MOVER TAG', '3001']]);
+    expect(rowsOf(workbook, 'CONFERÊNCIA').slice(1).map((row) => row[4])).toEqual(['2001', '3001']);
   });
 
   it('does not mark unread tags as missing or put them among Nedap corrections', async () => {
     const { audit, assignments } = await seedAudit([{ tag: '984000010514961', animal: '1001' }]);
     const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
     const workbook = createAuditWorkbook(audit, [], [], effective, [], assignments);
-    expect(rowsOf(workbook, 'RESULTADO FINAL')[6].slice(2)).toEqual(['', 'NÃO CONFERIDA', '']);
     expect(rowsOf(workbook, 'CORRIGIR NO NEDAP')).toHaveLength(1);
-    expect(rowsOf(workbook, 'HISTORICO')).toHaveLength(1);
+    expect(rowsOf(workbook, 'REVISAR')).toHaveLength(1);
+    expect(rowsOf(workbook, 'CONFERÊNCIA')).toHaveLength(1);
   });
 
   it('keeps removals, replacements and out-of-use decisions explicit, and retains both notes', async () => {
@@ -274,9 +266,12 @@ describe('Simple Excel report', () => {
     const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
     const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
     const workbook = createAuditWorkbook(audit, records, [], effective, [], assignments);
-    expect(rowsOf(workbook, 'RESULTADO FINAL').slice(6).map((row) => row[3])).toEqual(['REMOVER VÍNCULO', 'SUBSTITUIR TAG', 'TAG FORA DE USO', 'TAG SEM ANIMAL']);
-    expect(rowsOf(workbook, 'CORRIGIR NO NEDAP').slice(1).map((row) => row[3])).toEqual(['REMOVER VÍNCULO', 'SUBSTITUIR TAG', 'TAG FORA DE USO']);
-    expect(rowsOf(workbook, 'HISTORICO')[1][5]).toBe('Observação do operador | Decisão operacional');
+    expect(rowsOf(workbook, 'CORRIGIR NO NEDAP').slice(1).map((row) => [row[0], row[3]])).toEqual([
+      ['REMOVER VINCULO', 'SEM ANIMAL'],
+      ['SUBSTITUIR TAG', 'NOVA TAG'],
+      ['TAG FORA DE USO', 'FORA DE USO']
+    ]);
+    expect(rowsOf(workbook, 'CONFERÊNCIA')[1][9]).toBe('Observação do operador | Decisão operacional');
   });
 
   it('exports both final movements of a reciprocal swap as separate tag rows', async () => {
@@ -287,10 +282,13 @@ describe('Simple Excel report', () => {
     const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
     const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
     const workbook = createAuditWorkbook(audit, records, [], effective, [], assignments);
-    expect(rowsOf(workbook, 'CORRIGIR NO NEDAP').slice(1).map((row) => row.slice(0, 4))).toEqual([
-      ['984000010514961', '1001', '1002', 'MOVER 1001 -> 1002'],
-      ['984000010514962', '1002', '1001', 'MOVER 1002 -> 1001']
-    ]);
+    const actionRows = rowsOf(workbook, 'CORRIGIR NO NEDAP').slice(1);
+    expect(actionRows).toHaveLength(1);
+    expect(actionRows[0][0]).toBe('TROCAR TAGS');
+    expect(actionRows[0][2]).toContain('1001: 984000010514961');
+    expect(actionRows[0][2]).toContain('1002: 984000010514962');
+    expect(actionRows[0][3]).toContain('1001: 984000010514962');
+    expect(actionRows[0][3]).toContain('1002: 984000010514961');
   });
 
   it('removes a missing result after the tag is physically confirmed', async () => {
@@ -301,9 +299,8 @@ describe('Simple Excel report', () => {
     const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
     const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
     const workbook = createAuditWorkbook(audit, records, [], effective, [], assignments);
-    expect(rowsOf(workbook, 'RESULTADO FINAL')[6][3]).toBe('CORRETO');
     expect(rowsOf(workbook, 'CORRIGIR NO NEDAP')).toHaveLength(1);
-    expect(rowsOf(workbook, 'HISTORICO').slice(1).map((row) => row[3])).toEqual(['TAG NÃO ENCONTRADA', 'CORRETO']);
+    expect(rowsOf(workbook, 'CONFERÊNCIA').slice(1).map((row) => row[7])).toEqual(['TAG NAO LOCALIZADA', 'CORRETA']);
   });
 });
 
@@ -1118,5 +1115,27 @@ describe('BIPTAG audit rules', () => {
     expect(rows.actionRows).toContainEqual(expect.arrayContaining(['MOVER TAG', assignments[0].tagNumber, '6004', '6204']));
     expect(rows.actionRows.flat().join(' ')).not.toContain('6104');
     expect(rows.actionRows.map((row) => row[0])).not.toContain('MANTER TAG');
+  });
+
+  it('keeps Bluetooth as the source in the conference history', async () => {
+    const { audit, assignments } = await seedAudit([{ tag: '984000012350004', animal: '6004' }]);
+
+    await saveReading({
+      auditId: AUDIT_ID,
+      tagNumber: assignments[0].tagNumber,
+      assignment: assignments[0],
+      expectedAnimal: assignments[0].expectedAnimal,
+      observedAnimal: '6004',
+      status: 'correct',
+      fieldDecision: 'confirmed_match',
+      source: 'bluetooth',
+      existingRecord: null
+    });
+
+    const records = await db.auditRecords.where('auditId').equals(AUDIT_ID).toArray();
+    const effective = await db.effectiveTagAssignments.where('auditId').equals(AUDIT_ID).toArray();
+    const rows = buildAuditReportRows(audit, records, [], effective, [], assignments);
+
+    expect(rows.conferenceRows.find((row) => row[2] === assignments[0].tagNumber)?.[6]).toBe('Bluetooth');
   });
 });
