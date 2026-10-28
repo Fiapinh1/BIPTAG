@@ -75,9 +75,11 @@ Ao ler uma tag, o sistema procura a SmartTag na base importada e mostra:
 
 ## Navegação
 
-`Início` e o logo BIPTAG abrem a lista de fazendas. O resumo da fazenda tem `Voltar ao início`, e as telas internas oferecem `Voltar` com o destino indicado e um botão separado `Início`. Em Configurações, o retorno leva à tela de onde ela foi aberta; após recarregar o app, o destino padrão é o resumo ou a lista de fazendas. Sair de uma leitura ainda não confirmada pede escolher entre continuar conferindo ou sair daquela leitura, preservando os registros já salvos. Uma conferência concluída não exige essa etapa.
+`Início` e o logo BIPTAG abrem a lista de fazendas. O resumo da fazenda tem `Voltar ao início`, e as telas de consulta, revisão e configurações oferecem `Voltar` com o destino indicado e um botão separado `Início`. Durante a auditoria, esses botões grandes não aparecem: `Voltar ao resumo`, `Ir para início` e a troca da forma de leitura ficam em `Opções`. Em Configurações, o retorno leva à tela de onde ela foi aberta; após recarregar o app, o destino padrão é o resumo ou a lista de fazendas. Sair de uma leitura ainda não confirmada pede escolher entre continuar conferindo ou sair daquela leitura, preservando os registros já salvos. Uma conferência concluída não exige essa etapa.
 
-Os controles de retorno usam texto e ícone, áreas de toque maiores e foco visível. O menu inferior distingue a página atual e exibe os nomes completos, incluindo `Revisão`. A mudança do modo de leitura fica em `Trocar forma de leitura`, e os retornos do preparo indicam `Voltar ao resumo` ou `Voltar ao padrão`. Compartilhar por WhatsApp e exportar Excel também mostram rótulos.
+O menu das páginas ocupa uma área própria no rodapé da janela e permanece visível em todas as páginas, antes e depois de rolar. Apenas o conteúdo central rola, sem colocar campos ou botões por baixo do menu. A altura da área acompanha a janela visível do navegador, inclusive ao abrir o teclado. Ao trocar de página ou de fazenda, a rolagem do conteúdo volta ao início.
+
+Os controles de retorno usam texto e ícone, áreas de toque maiores e foco visível. O menu inferior distingue a página atual e exibe os nomes completos, incluindo `Revisão`. A mudança do modo de leitura fica em `Opções → Trocar forma de leitura`, e os retornos do preparo indicam `Voltar ao resumo` ou `Voltar ao padrão`. Compartilhar por WhatsApp e exportar Excel também mostram rótulos.
 
 ## Confirmacao do brinco
 

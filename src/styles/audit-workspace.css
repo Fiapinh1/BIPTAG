@@ -1,12 +1,4 @@
 .app-shell--audit:has(.audit-workspace) .topbar { display: none; }
-.app-shell--audit:has(.audit-workspace) .bottom-nav {
-  display: grid;
-  width: min(620px, calc(100% - 24px));
-  min-height: 70px;
-  padding: 6px;
-  bottom: max(8px, env(safe-area-inset-bottom));
-  border-radius: 20px;
-}
 .app-shell--audit:has(.audit-workspace) .nav-button {
   min-height: 54px;
   padding: 5px;
@@ -142,21 +134,6 @@
 .audit-workspace .conference-alternatives .button { min-width: 0; min-height: 48px; padding: 9px 6px; border: 1px solid #E2D8CA; border-radius: 11px; color: #655B4D; background: #FBF8F2; font-size: 12px; line-height: 1.4; font-weight: 700; box-shadow: none; }
 .conference-cancel { justify-self: center; min-height: 40px; padding: 7px 12px; border: 0; border-radius: 10px; color: #8E6244; background: transparent; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
 
-/* The menu follows the form in the document, so it cannot cover a field or the keyboard. */
-.app-shell--audit:has(.audit-workspace--manual) .bottom-nav,
-.app-shell--audit:has(.audit-workspace--confirming) .bottom-nav {
-  position: static;
-  left: auto;
-  right: auto;
-  bottom: auto;
-  transform: none;
-  margin: 0 auto;
-  box-shadow: none;
-}
-.app-shell--audit:has(.audit-workspace--manual),
-.app-shell--audit:has(.audit-workspace--confirming) { display: flex; flex-direction: column; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
-.app-shell--audit:has(.audit-workspace--manual) .main-content,
-.app-shell--audit:has(.audit-workspace--confirming) .main-content { flex: 1 0 auto; }
 .app-shell--audit .field-page.audit-workspace.audit-workspace--manual,
 .app-shell--audit .field-page.audit-workspace.audit-workspace--confirming { padding-bottom: 16px; }
 .app-shell--audit .field-page.audit-workspace.audit-workspace--confirming { gap: 12px; }

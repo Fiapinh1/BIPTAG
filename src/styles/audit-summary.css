@@ -1,7 +1,4 @@
-.app-shell--home:has(.audit-summary) { display: flex; flex-direction: column; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
-.app-shell--home:has(.audit-summary) .main-content { flex: 1 0 auto; }
 .app-shell--home:has(.audit-summary) .topbar { box-shadow: none; }
-.app-shell--home:has(.audit-summary) .bottom-nav { position: static; left: auto; right: auto; bottom: auto; transform: none; width: min(620px, calc(100% - 24px)); margin: 0 auto; min-height: 70px; border-radius: 18px; box-shadow: none; }
 .page.audit-summary { display: grid; align-content: start; gap: 20px; width: min(760px, 100%); margin: 0 auto; padding: 20px 18px 20px; }
 .audit-summary__back { justify-self: start; min-height: 36px; padding: 4px 0; border: 0; color: #8B6143; background: transparent; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .audit-summary__heading h1 { margin: 5px 0 10px; color: #302A23; font-size: clamp(28px, 7vw, 36px); line-height: 1.2; overflow-wrap: anywhere; }

@@ -39,9 +39,12 @@ O endereço local HTTP serve para testar interface, digitação manual, importa�
 ## Navegação e botões
 
 - [ ] No resumo da fazenda, usar `Voltar ao início` e confirmar que abre a lista, mantendo a auditoria salva.
-- [ ] Em Auditar, Consultar e Revisão, conferir os botões `Voltar` com destino e `Início` no topo.
+- [ ] Em Consultar e Revisão, conferir os botões `Voltar` com destino e `Início` no topo. Em Auditar, esses botões grandes não devem aparecer; os retornos ficam em `Opções`.
+- [ ] Abrir o resumo de uma fazenda com muitas tags: o menu deve estar visível antes de rolar e continuar no mesmo lugar ao rolar até o fim.
+- [ ] Repetir a verificação em Revisão, Configurações e Conferência manual, sem botões da página cobertos pelo menu.
+- [ ] Abrir o teclado no campo do brinco e conferir que a área de leitura pode rolar acima do menu, mantendo os atalhos de páginas disponíveis.
 - [ ] Abrir Configurações a partir de Consultar e usar Voltar: deve retornar à Consulta da mesma fazenda.
-- [ ] Iniciar uma leitura e digitar o brinco; ao tocar Início, escolher `Continuar conferindo` e conferir que os dados digitados continuam na tela.
+- [ ] Iniciar uma leitura e digitar o brinco; em `Opções → Ir para início`, escolher `Continuar conferindo` e conferir que os dados digitados continuam na tela.
 - [ ] Salvar uma tag correta e voltar ao resumo: não pedir uma nova confirmação nem perder o registro salvo.
 - [ ] Em telas de 320 e 390 px, verificar que `Consultar` e `Revisão` aparecem completos e que nenhum botão está coberto pelo menu inferior.
 - [ ] Navegar pelo teclado e conferir o foco visível nos botões de retorno e do menu.

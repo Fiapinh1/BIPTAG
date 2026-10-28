@@ -12,6 +12,7 @@ import { AuditResultCard } from './components/AuditResultCard';
 import { ImportValidationIssues } from './components/ImportValidationIssues';
 import { ReaderPermissionsPanel } from './components/ReaderPermissionsPanel';
 import { PageNavigation } from './components/PageNavigation';
+import { scrollPageToTop } from './services/page-scroll';
 import { getFieldReadingProgress } from './services/audit-progress';
 import { describeReaderError } from './services/reader-access';
 import { StatCard } from './components/StatCard';
@@ -285,6 +286,28 @@ function App() {
   const hhr5000 = useHHR5000((tag, raw) => bluetoothReadHandler.current?.(tag, raw), selectedAudit?.tagPattern?.length ?? MAX_SMARTTAG_DIGITS);
 
   useEffect(() => {
+    const viewport = window.visualViewport;
+    const update = () => {
+      if (viewport && Math.abs(viewport.scale - 1) > 0.05) return;
+      document.documentElement.style.setProperty('--app-viewport-height', `${Math.round(viewport?.height ?? window.innerHeight)}px`);
+      document.documentElement.style.setProperty('--app-viewport-top', `${Math.round(viewport?.offsetTop ?? 0)}px`);
+    };
+    update();
+    viewport?.addEventListener('resize', update);
+    viewport?.addEventListener('scroll', update);
+    window.addEventListener('resize', update);
+    return () => {
+      viewport?.removeEventListener('resize', update);
+      viewport?.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+      document.documentElement.style.removeProperty('--app-viewport-height');
+      document.documentElement.style.removeProperty('--app-viewport-top');
+    };
+  }, []);
+
+  useEffect(() => { scrollPageToTop(); }, [view, selectedAudit?.id]);
+
+  useEffect(() => {
     if (!selectedAuditId || audits.some((audit) => audit.id === selectedAuditId)) return;
     let cancelled = false;
     // A committed import can be selected before the live audit list refreshes.
@@ -504,7 +527,7 @@ function App() {
     if (next === 'settings' && view !== 'settings') setSettingsReturnView(view);
     if (allFarms) setSelectedAuditId(null);
     setView(next);
-    window.scrollTo({ top: 0, behavior: 'auto' });
+    scrollPageToTop();
   }
 
   return (
@@ -525,7 +548,7 @@ function App() {
       </header>
 
       <main className="main-content">
-        {view !== 'home' && <PageNavigation onHome={() => void navigate('home', true)}
+        {view !== 'home' && view !== 'audit' && <PageNavigation onHome={() => void navigate('home', true)}
           onBack={selectedAudit || backView !== 'home' ? () => void navigate(backView) : undefined} backHint={viewTitles[backView]} />}
         {view === 'home' && (
           <HomeView
@@ -557,7 +580,7 @@ function App() {
           />
         )}
         {view === 'audit' && (
-          <AuditView key={selectedAudit?.id} audit={selectedAudit} hhr5000={hhr5000} bluetoothReadHandler={bluetoothReadHandler} pendingRead={pendingAuditRead} onNeedImport={() => setView('import')} setToast={setToast} onPaused={() => setView('home')} onAuditChanged={(auditId) => syncAuditInBackground(auditId)} />
+          <AuditView key={selectedAudit?.id} audit={selectedAudit} hhr5000={hhr5000} bluetoothReadHandler={bluetoothReadHandler} pendingRead={pendingAuditRead} onBack={() => void navigate('home')} onHome={() => void navigate('home', true)} onNeedImport={() => setView('import')} setToast={setToast} onPaused={() => setView('home')} onAuditChanged={(auditId) => syncAuditInBackground(auditId)} />
         )}
         {view === 'lookup' && (
           <LookupView audit={selectedAudit} onNeedImport={() => setView('import')} />
@@ -1438,7 +1461,7 @@ function KnownIssuesView({
     setTagNumber(issuePrefix && digits.startsWith(issuePrefix) ? digits.slice(issuePrefix.length) : digits);
     setType(issue.type);
     setNote(issue.note ?? '');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollPageToTop('smooth');
   }
 
   async function saveKnownIssue() {
@@ -1586,6 +1609,8 @@ function AuditView({
   hhr5000,
   bluetoothReadHandler,
   pendingRead,
+  onBack,
+  onHome,
   onNeedImport,
   setToast,
   onPaused,
@@ -1595,6 +1620,8 @@ function AuditView({
   hhr5000: HHR5000Reader;
   bluetoothReadHandler: RefObject<((tagNumber: string, rawValue: string) => void) | null>;
   pendingRead: RefObject<boolean>;
+  onBack: () => void;
+  onHome: () => void;
   onNeedImport: () => void;
   setToast: (value: string) => void;
   onPaused: () => void;
@@ -1662,12 +1689,12 @@ function AuditView({
   useEffect(() => {
     if (!manualMode || scan || outcome) return;
     const timer = window.setTimeout(() => {
-      window.scrollTo({ top: 0, behavior: 'auto' });
+      scrollPageToTop();
     }, 0);
     return () => window.clearTimeout(timer);
   }, [manualMode, scan, outcome]);
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'auto' });
+    scrollPageToTop();
   }, [readMode, scan?.tagNumber, outcome?.kind, Boolean(decision)]);
 
   const auditRecords = useLiveQuery(
@@ -2132,7 +2159,7 @@ function AuditView({
     currentReadMode.current = mode;
     setReadMode(mode);
     setManualTag('');
-    window.scrollTo({ top: 0, behavior: 'auto' });
+    scrollPageToTop();
   }
 
   async function saveSmartTagPattern() {
@@ -2308,6 +2335,9 @@ function AuditView({
           <details className="audit-workspace__options">
             <summary aria-label="Opções da conferência"><MoreIcon size={20} /><span>Opções</span></summary>
             <div>
+              <button onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); onBack(); }}><ArrowLeftIcon size={18} /> Voltar ao resumo</button>
+              <button onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); onHome(); }}><HomeIcon size={18} /> Ir para início</button>
+              {readMode !== 'choose' && !scan && !outcome && <button onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); selectReadMode('choose'); }}><SwapIcon size={18} /> Trocar forma de leitura</button>}
               <button onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setShowPatternModal(true); }}><TagIcon size={18} /> Ajustar padrão</button>
               <button onClick={() => void pauseAudit()}><PauseIcon size={18} /> Pausar auditoria</button>
             </div>
@@ -2331,7 +2361,6 @@ function AuditView({
         <div role="status"><strong>Tag correta e salva</strong><span>Animal {lastSuccess.observedAnimal} · <span className="audit-save-receipt__tag">{lastSuccess.tagNumber}</span></span></div>
         <button aria-label="Ver detalhes da tag correta" onClick={() => openCorrection(lastSuccess)}>Detalhes</button>
       </div>}
-      {readMode !== 'choose' && !scan && !outcome && <button className="audit-workspace__back" onClick={() => selectReadMode('choose')}><ArrowLeftIcon size={20} aria-hidden="true" /> Trocar forma de leitura</button>}
       {readMode === 'choose' && !scan && !outcome && <AuditReadModePicker onSelect={selectReadMode} />}
 
       {attentionAlert && showAttentionOverlay && (

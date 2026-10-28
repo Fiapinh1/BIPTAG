@@ -67,3 +67,53 @@
   .app-shell .topbar .brand small { display: none; }
   .app-shell .topbar .connection-pill--settings > span { font-size: 12px; }
 }
+
+/* The footer owns a viewport row. Only the page content scrolls behind the header. */
+body:has(#root > .app-shell) { overflow: hidden; }
+.app-shell:has(> .bottom-nav) {
+  position: fixed;
+  top: var(--app-viewport-top, 0px);
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: var(--app-viewport-height, 100dvh);
+  min-height: 0;
+  max-height: var(--app-viewport-height, 100dvh);
+  padding-bottom: 0;
+  overflow: hidden;
+}
+.app-shell:has(> .bottom-nav) > .topbar { position: relative; top: auto; flex: 0 0 auto; }
+.app-shell:has(> .bottom-nav) > .main-content {
+  flex: 1 1 0%;
+  min-width: 0;
+  min-height: 0;
+  max-height: none;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  scroll-padding: 16px;
+}
+.app-shell:has(> .bottom-nav) > .bottom-nav {
+  position: relative;
+  flex: 0 0 auto;
+  display: grid;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  transform: none;
+  width: min(760px, calc(100% - 16px));
+  min-height: 0;
+  margin: 0 auto;
+  padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+  border: 1px solid #DED4C7;
+  border-radius: 16px;
+  background: #FFFDF9;
+  box-shadow: 0 -3px 14px #31261A08;
+}
+.app-shell:has(> .bottom-nav) .bottom-nav .nav-button { min-height: 56px; padding-block: 6px; gap: 4px; }
+.app-shell--audit:has(> .bottom-nav) > .bottom-nav { width: min(680px, calc(100% - 16px)); }
+.app-shell .page { padding-bottom: 24px; }
+.app-shell--audit .field-page.audit-workspace { padding-top: max(14px, env(safe-area-inset-top)); padding-bottom: 16px; }
+.app-shell .audit-workspace__options > div { max-height: min(340px, calc(var(--app-viewport-height, 100dvh) - 120px)); overflow-y: auto; }
