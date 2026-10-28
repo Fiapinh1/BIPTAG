@@ -11,13 +11,16 @@ export default defineConfig({
       includeAssets: ['favicon.svg'],
       manifest: {
         name: 'BIPTAG',
+        id: '/',
         short_name: 'BIPTAG',
-        description: 'Auditoria de SmartTags via NFC',
+        description: 'Auditoria de SmartTags com bastão Bluetooth, NFC ou digitação manual.',
         theme_color: '#231E1A',
         background_color: '#F4EFE7',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',
+        scope: '/',
+        lang: 'pt-BR',
         icons: [
           {
             src: '/icons/biptag-logo-192.png',

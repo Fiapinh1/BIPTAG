@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronRightIcon, FarmIcon, ImportIcon, MoreIcon, PlusIcon, SearchIcon, TrashIcon } from '../icons/Icons';
 import type { Audit } from '../types/domain';
+import { AppInstallPanel } from './AppInstallPanel';
 
 const statuses = {
   in_progress: { label: 'Em andamento', filter: 'Em andamento' },
@@ -73,7 +74,7 @@ export function FarmDirectory({ audits, onOpen, onResume, onCreate, onDelete }: 
     <section className="page farm-directory" ref={directoryRef}>
       <div className="farm-directory__heading">
         <div><span className="eyebrow">AUDITORIAS DE SMARTTAGS</span><h1>Fazendas</h1><p>Suas auditorias, prontas para continuar.</p></div>
-        {audits.length > 0 && <button className="button button--primary farm-directory__create" onClick={onCreate}><PlusIcon size={19} /> Nova auditoria</button>}
+        <div className="farm-directory__actions"><AppInstallPanel compact />{audits.length > 0 && <button className="button button--primary farm-directory__create" onClick={onCreate}><PlusIcon size={19} /> Nova auditoria</button>}</div>
       </div>
 
       {audits.length > 1 && recent && (

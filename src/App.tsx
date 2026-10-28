@@ -12,6 +12,8 @@ import { AuditResultCard } from './components/AuditResultCard';
 import { ImportValidationIssues } from './components/ImportValidationIssues';
 import { ReaderPermissionsPanel } from './components/ReaderPermissionsPanel';
 import { ReaderSetupNotice } from './components/ReaderSetupNotice';
+import { AppInstallPanel } from './components/AppInstallPanel';
+import { blockAppUpdates } from './services/app-updates';
 import { PageNavigation } from './components/PageNavigation';
 import { scrollPageToTop } from './services/page-scroll';
 import { getFieldReadingProgress } from './services/audit-progress';
@@ -285,6 +287,10 @@ function App() {
     return audits.find((audit) => audit.id === selectedAuditId) ?? null;
   }, [audits, selectedAuditId]);
   const hhr5000 = useHHR5000((tag, raw) => bluetoothReadHandler.current?.(tag, raw), selectedAudit?.tagPattern?.length ?? MAX_SMARTTAG_DIGITS);
+
+  useEffect(() => {
+    if (view !== 'home' || hhr5000.status === 'conectando') return blockAppUpdates();
+  }, [view, hhr5000.status]);
 
   useEffect(() => {
     const viewport = window.visualViewport;
@@ -1020,6 +1026,7 @@ function LookupView({ audit, onNeedImport }: { audit: Audit | null; onNeedImport
 }
 
 function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: string) => void; embedded?: boolean }) {
+  useEffect(blockAppUpdates, []);
   const [farmName, setFarmName] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
@@ -3424,6 +3431,8 @@ function CloudSettingsView({ activeAudit, setToast, reader }: { activeAudit: Aud
       </div>
 
       <ReaderPermissionsPanel reader={reader} />
+
+      <AppInstallPanel />
 
       {isSupabaseConfigured && (
         <div className="form-card sync-card">

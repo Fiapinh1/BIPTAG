@@ -37,6 +37,10 @@ export function ArrowLeftIcon({ size = 22, ...props }: IconProps) {
   return <svg {...base(size)} {...props}><path d="M20 12H4m7-7-7 7 7 7" /></svg>;
 }
 
+export function DownloadIcon({ size = 22, ...props }: IconProps) {
+  return <svg {...base(size)} {...props}><path d="M12 3v12m-4-4 4 4 4-4M4 16v5h16v-5" /></svg>;
+}
+
 export function ImportIcon({ size = 22, ...props }: IconProps) {
   return (
     <svg {...base(size)} {...props}>

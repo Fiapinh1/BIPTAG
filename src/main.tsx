@@ -3,43 +3,26 @@ import { createRoot } from 'react-dom/client';
 import { registerSW } from 'virtual:pwa-register';
 import App from './App';
 import DesignPreview from './design-preview/DesignPreview';
+import { initializeAppInstall } from './services/app-install';
+import { deferAppUpdateReload, initializeAppUpdates, setUpdateRegistration } from './services/app-updates';
 import './styles.css';
 import './styles/audit-workspace.css';
 import './styles/farm-directory.css';
 import './styles/audit-summary.css';
 import './styles/navigation.css';
+import './styles/app-install.css';
 
-const SW_UPDATE_RELOAD_KEY = 'biptag-sw-update-reload-at';
-
-function reloadWhenUpdated() {
-  const lastReload = Number(sessionStorage.getItem(SW_UPDATE_RELOAD_KEY) ?? 0);
-  if (Date.now() - lastReload < 10_000) return;
-  sessionStorage.setItem(SW_UPDATE_RELOAD_KEY, String(Date.now()));
-  window.location.reload();
-}
-
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.addEventListener('controllerchange', reloadWhenUpdated);
-}
+initializeAppInstall();
+initializeAppUpdates();
 
 const updateServiceWorker = registerSW({
   immediate: true,
+  onNeedReload: deferAppUpdateReload,
   onNeedRefresh() {
     void updateServiceWorker(true);
   },
   onRegisteredSW(_swUrl, registration) {
-    if (!registration) return;
-
-    const checkForUpdate = () => {
-      if (document.visibilityState === 'visible' && navigator.onLine) {
-        void registration.update();
-      }
-    };
-
-    window.setTimeout(checkForUpdate, 3_000);
-    window.setInterval(checkForUpdate, 30_000);
-    window.addEventListener('online', checkForUpdate);
-    document.addEventListener('visibilitychange', checkForUpdate);
+    setUpdateRegistration(registration);
   },
   onRegisterError(error) {
     console.warn('Nao foi possivel registrar o atualizador do BIPTAG.', error);

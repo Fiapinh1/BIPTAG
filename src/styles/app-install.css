@@ -1,0 +1,18 @@
+.farm-directory__actions { display: flex; justify-content: flex-end; align-items: flex-start; flex-wrap: wrap; gap: 10px; }
+.app-install-button.button { min-height: 48px; gap: 8px; padding: 12px 16px; font-size: 13px; white-space: normal; }
+.app-install-compact { display: grid; gap: 8px; }
+.app-install-compact > small { max-width: 250px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.app-install-panel { display: grid; gap: 14px; margin: 20px 0; padding: 20px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); }
+.app-install-panel h2 { margin: 4px 0 8px; font-size: 24px; }
+.app-install-panel p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.app-install-panel > .button { justify-self: start; }
+.app-install-panel__updates { display: grid; gap: 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+.app-install-panel__updates > strong { font-size: 16px; }
+.app-install-panel__updates > .button { justify-self: start; min-height: 48px; font-size: 13px; }
+.app-install-panel__updates > small { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.app-install-guide ol { display: grid; gap: 12px; margin: 0; padding-left: 22px; font-size: 14px; line-height: 1.6; }
+.app-install-guide .reader-settings__heading h2 { font-size: 24px; }
+@media (max-width: 600px) {
+  .farm-directory__actions { justify-content: flex-start; width: 100%; }
+  .app-install-panel { padding: 16px; }
+}

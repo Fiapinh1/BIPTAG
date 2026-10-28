@@ -20,6 +20,14 @@ O fluxo do aplicativo e:
 
 O BIPTAG decide a classificacao da auditoria e cruza ocorrencias depois. O tecnico confirma o fato fisico.
 
+## Instalação e atualização do app
+
+A página inicial, junto das ações de Fazendas, oferece `Instalar no celular`. A mesma ação está em `Configurações → Instalação e atualizações`. Quando o navegador disponibiliza o pedido nativo, ele é aberto no toque do usuário. Cada pedido só é usado uma vez; cancelar não impede continuar usando o app. Sem pedido nativo disponível, o botão mostra instruções para o menu do Chrome/Android, Safari/iPhone ou instalação no computador. O app só informa instalação concluída após o evento do navegador ou ao detectar abertura em modo instalado. A ação da página inicial deixa de aparecer nesse caso.
+
+As versões novas são baixadas automaticamente com internet pelo service worker. O app procura atualizações três segundos após abrir, a cada 30 segundos enquanto visível, ao retornar à tela e quando a conexão volta. Há também `Verificar atualização agora` nas Configurações. Falhas de rede não interrompem o app e a busca é repetida posteriormente. O navegador controla quando as tarefas podem executar; não há garantia de atualização instantânea com o app fechado ou sem internet.
+
+Quando uma versão nova assume o controle, o app recarrega automaticamente em um momento seguro na página inicial ou no resumo. A conferência, outras páginas em uso, uma conexão Bluetooth sendo autorizada, a preparação de uma planilha, diálogos e campos preenchidos ou focados adiam a recarga. Ao liberar a tela e ficar sem interação por um breve intervalo, a versão nova entra sem exigir um botão de atualizar. A primeira instalação do service worker não dispara recarga. As auditorias permanecem no IndexedDB; atualização do app não apaga registros nem permissões.
+
 ## Base Nedap
 
 A auditoria comeca com a importacao do arquivo `Tags.xlsx` original exportado do Nedap Now.

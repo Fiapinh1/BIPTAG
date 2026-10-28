@@ -9,6 +9,12 @@ O endereço local HTTP serve para testar interface, digitação manual, importa�
 - [ ] Confirmar que a tela nao corta na largura do celular.
 - [ ] Confirmar que a logo aparece no início e no ícone do PWA; a conferência usa um cabeçalho compacto com a fazenda.
 - [ ] Confirmar que o app pode ser instalado na tela inicial.
+- [ ] Em Fazendas, tocar `Instalar no celular`. No Chrome Android com instalação disponível, deve abrir o pedido nativo apenas após o toque. Cancelar deve manter o app utilizável.
+- [ ] Sem pedido nativo disponível, conferir instruções de instalação; no iPhone, indicar Safari → Compartilhar → Adicionar à Tela de Início.
+- [ ] Abrir pelo ícone instalado: a página inicial deve esconder a oferta de instalação e as Configurações devem mostrar `App instalado`.
+- [ ] Conferir `Configurações → Instalação e atualizações`, versão carregada e `Verificar atualização agora`. Sem internet, informar que a busca voltará automaticamente.
+- [ ] Durante uma conferência com brinco digitado, publicar uma nova versão: o app deve baixar sem recarregar a tela nem perder a digitação. Ao salvar e voltar ao Resumo, deve recarregar automaticamente e manter a leitura salva.
+- [ ] Repetir a atualização com a preparação de planilha aberta: não recarregar até concluir ou fechar a preparação. A primeira instalação do app também não deve recarregar um formulário.
 - [ ] Confirmar que o modo instalado abre em retrato.
 - [ ] Confirmar que os botoes principais tem area de toque confortavel.
 
