@@ -6,6 +6,8 @@ import { describeReaderError } from '../services/reader-access';
 import { chromeReaderUrl, getReaderEnvironment, readNfcPermission, type NfcPermission } from '../services/reader-environment';
 import { ReaderHelp } from './ReaderHelp';
 import { BluetoothReadDiagnostics, bluetoothDiagnosticText } from './BluetoothReadDiagnostics';
+import { NfcReadDiagnostics } from './NfcReadDiagnostics';
+import { nfcDiagnosticText } from '../services/nfc-diagnostics';
 
 const permissionLabels: Record<NfcPermission, string> = {
   granted: 'Permitida neste site', denied: 'Bloqueada nas permissões do site',
@@ -98,7 +100,7 @@ export function ReaderPermissionsPanel({ reader }: { reader: HHR5000Reader }) {
   async function copyDiagnostics() {
     try {
       if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
-      await navigator.clipboard.writeText(diagnostics);
+      await navigator.clipboard.writeText(`${diagnostics}\n${nfcDiagnosticText()}`);
       setCopyMessage('Diagnóstico copiado.');
     } catch { setCopyMessage('Não foi possível copiar. Você pode enviar um print deste diagnóstico.'); }
   }
@@ -134,6 +136,7 @@ export function ReaderPermissionsPanel({ reader }: { reader: HHR5000Reader }) {
         {nfcState !== 'off' && <button className="button button--ghost" onClick={stopTest}>{nfcState === 'starting' ? 'Cancelar ativação do NFC' : 'Parar teste NFC'}</button>}
         {lastNfcTag && <p className="reader-permissions__last">Tag recebida: <strong>{lastNfcTag}</strong></p>}
         <ReaderHelp mode="phone" />
+        <NfcReadDiagnostics />
       </section>
     </div>
     <details className="reader-permissions__diagnostic"><summary>Ver diagnóstico deste acesso</summary><pre>{diagnostics}</pre>

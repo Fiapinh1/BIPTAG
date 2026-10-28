@@ -1,5 +1,6 @@
 import { ChevronRightIcon, KeyboardIcon, PhoneIcon, StickReaderIcon } from '../icons/Icons';
 import { ReaderHelp } from './ReaderHelp';
+import { NfcReadDiagnostics } from './NfcReadDiagnostics';
 
 export type AuditReadMode = 'choose' | 'manual' | 'bluetooth' | 'phone';
 
@@ -49,6 +50,7 @@ export function AuditReaderStandby({ mode, active, connecting, supported, messag
       {active && <button className="button button--ghost" onClick={onActivate}>{phone ? 'Reiniciar NFC' : 'Reconectar bastão'}</button>}
       {phone && <small className="audit-reader-standby__compatibility">O telefone lê tags NFC com conteúdo NDEF. Para tags que exigem o bastão, escolha Bluetooth.</small>}
       <ReaderHelp mode={mode} />
+      {phone && <NfcReadDiagnostics />}
     </div>
   );
 }

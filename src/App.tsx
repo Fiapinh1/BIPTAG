@@ -1669,6 +1669,8 @@ function AuditView({
   const nfcAttempt = useRef<AbortController | null>(null);
   const currentReadMode = useRef(readMode);
   currentReadMode.current = readMode;
+  const nfcExpectedLength = useRef(audit?.tagPattern?.length ?? MAX_SMARTTAG_DIGITS);
+  nfcExpectedLength.current = audit?.tagPattern?.length ?? MAX_SMARTTAG_DIGITS;
   useEffect(() => {
     pendingRead.current = Boolean(scan && !outcome);
     return () => { pendingRead.current = false; };
@@ -1838,7 +1840,8 @@ function AuditView({
       const stop = await startNfcReader(
         (result) => { if (currentReadMode.current === 'phone') phoneReadHandler.current?.(result.tagNumber, result.rawValue); },
         (message) => { if (!readInFlight.current) { setNfcError(message); feedbackWarning(); } },
-        controller.signal
+        controller.signal,
+        () => nfcExpectedLength.current
       );
       if (controller.signal.aborted) { stop(); return; }
       stopReader.current = stop;

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isWebNfcSupported, startNfcReader } from '../src/services/nfc';
+import { getNfcDiagnostics } from '../src/services/nfc-diagnostics';
 
 function mockNfc() {
   class Reader extends EventTarget {
@@ -47,7 +48,10 @@ function createNfc() {
     const event = Object.assign(new Event('reading'), { message: { records: [] } });
     instances.at(-1)?.dispatchEvent(event);
   };
-  return { scan, instances, read, readText, readWithoutRecords };
+  const readRecords = (records: NDEFRecord[]) => {
+    instances.at(-1)?.dispatchEvent(Object.assign(new Event('reading'), { serialNumber: '04:AA:BB:CC:DD:EE:FF', message: { records } }));
+  };
+  return { scan, instances, read, readText, readWithoutRecords, readRecords };
 }
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
@@ -90,6 +94,59 @@ describe('phone NFC lifecycle', () => {
 });
 
 describe('NFC permission and activation lifecycle', () => {
+  it('reads the FER UTF-8/en Text record from the supplied TagInfo bytes without using the physical UID', async () => {
+    const nfc = createNfc();
+    const onRead = vi.fn();
+    const stop = await startNfcReader(onRead);
+    const message = Uint8Array.from([0xD1, 0x01, 0x12, 0x54, 0x02, 0x65, 0x6E, 0x39, 0x38, 0x34, 0x30, 0x30, 0x30, 0x30, 0x30, 0x39, 0x31, 0x35, 0x39, 0x33, 0x33, 0x39]);
+    // Chrome exposes the text body after the NDEF header, status and language.
+    nfc.readRecords([{ recordType: 'text', encoding: 'utf-8', lang: 'en', data: new DataView(message.buffer, 7, 15) }]);
+    expect(onRead).toHaveBeenCalledExactlyOnceWith({ tagNumber: '984000009159339', rawValue: '984000009159339' });
+    expect(getNfcDiagnostics().at(-1)).toMatchObject({ event: 'reading', records: [{ type: 'text', encoding: 'utf-8', language: 'en', byteLength: 15, text: '984000009159339', hex: '39 38 34 30 30 30 30 30 39 31 35 39 33 33 39' }] });
+    stop();
+  });
+
+  it('finds a complete tag after empty, zero and metadata records instead of choosing only the first record', async () => {
+    const nfc = createNfc();
+    const onRead = vi.fn();
+    const stop = await startNfcReader(onRead);
+    const textRecord = (text: string) => ({ recordType: 'text', data: new DataView(new TextEncoder().encode(text).buffer) });
+    nfc.readRecords([{ recordType: 'empty' } as NDEFRecord, textRecord('000000000000000'), textRecord('Versão 2'), textRecord('984000009159339')]);
+    expect(onRead).toHaveBeenCalledExactlyOnceWith({ tagNumber: '984000009159339', rawValue: '984000009159339' });
+    stop();
+  });
+
+  it('refuses conflicting tag numbers across records and accepts the next unambiguous read', async () => {
+    const nfc = createNfc();
+    const onRead = vi.fn(); const onError = vi.fn();
+    const stop = await startNfcReader(onRead, onError);
+    nfc.readRecords(['984000009159339', '984000010317471'].map((text) => ({ recordType: 'text', data: new DataView(new TextEncoder().encode(text).buffer) })));
+    expect(onRead).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining('mais de um número'));
+    nfc.readText('984000010317471');
+    expect(onRead).toHaveBeenCalledExactlyOnceWith({ tagNumber: '984000010317471', rawValue: '984000010317471' });
+    stop();
+  });
+
+  it('uses the configured tag length to distinguish a number from metadata', async () => {
+    const nfc = createNfc(); const onRead = vi.fn();
+    const stop = await startNfcReader(onRead, undefined, undefined, () => 14);
+    nfc.readRecords(['Versão 2', '84000009159339'].map((text) => ({ recordType: 'text', data: new DataView(new TextEncoder().encode(text).buffer) })));
+    expect(onRead).toHaveBeenCalledExactlyOnceWith({ tagNumber: '84000009159339', rawValue: '84000009159339' });
+    stop();
+  });
+
+  it('does not turn a physical UID into a tag when no NDEF number was delivered', async () => {
+    const nfc = createNfc(); const onRead = vi.fn();
+    const stop = await startNfcReader(onRead, vi.fn());
+    nfc.readRecords([]);
+    expect(onRead).not.toHaveBeenCalled();
+    stop();
+    const diagnostics = getNfcDiagnostics();
+    nfc.instances.at(-1)?.dispatchEvent(new Event('readingerror'));
+    expect(getNfcDiagnostics()).toBe(diagnostics);
+  });
+
   it('requests NFC directly from the activation call without awaiting another permission API', async () => {
     const nfc = createNfc();
     const onRead = vi.fn();

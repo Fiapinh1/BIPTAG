@@ -174,6 +174,18 @@ describe('HHR5000 connection lifecycle', () => {
 describe('HHR5000 fragmented Bluetooth readings', () => {
   beforeEach(() => { vi.useFakeTimers(); });
 
+  it('reads the FER number and the existing tag format on the same connection while preserving zeros as invalid', async () => {
+    const reader = createReader(); const onRead = vi.fn();
+    const connection = await connectHHR5000(onRead);
+    reader.read('+KEY=2\r\n000000000000000\r\n');
+    expect(onRead).not.toHaveBeenCalled();
+    reader.read('984000009'); reader.read('159339\r\n');
+    reader.read('984000010317471\r\n');
+    expect(onRead.mock.calls.map(([result]) => result.tagNumber)).toEqual(['984000009159339', '984000010317471']);
+    expect(reader.gatt.connect).toHaveBeenCalledOnce();
+    connection.disconnect();
+  });
+
   it('rejects a zero placeholder and accepts the next real tag without confirmation or reconnecting', async () => {
     const reader = createReader();
     const onRead = vi.fn();
