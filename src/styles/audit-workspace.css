@@ -212,6 +212,15 @@
 .reader-permissions__diagnostic { padding-top: 10px; border-top: 1px solid var(--line); }
 .reader-permissions__diagnostic > summary { min-height: 44px; padding: 12px 0; color: #7F654A; font-size: 12px; cursor: pointer; }
 .reader-permissions__diagnostic pre { padding: 12px; border-radius: 10px; color: #665948; background: #F3EEE5; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; line-height: 1.7; }
+.reader-bluetooth-diagnostic { min-width: 0; }
+.reader-bluetooth-diagnostic pre { max-height: 240px; overflow-y: auto; padding: 12px; border-radius: 10px; color: #665948; background: #F3EEE5; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; line-height: 1.6; }
+.reader-settings__content .reader-bluetooth-error { padding: 12px; color: #8A4D1E; background: #FFF4DC; border-radius: 12px; }
+.reader-setup-notice { width: min(100% - 32px, 960px); display: grid; gap: 12px; margin: 16px auto 0; padding: 18px; border: 1px solid #DACCB8; border-radius: 16px; background: #FFFDF9; }
+.reader-setup-notice > div:first-child { display: flex; align-items: center; gap: 10px; color: #83502D; }
+.reader-setup-notice h2 { margin: 0; font-size: 18px; }
+.reader-setup-notice p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.reader-setup-notice__actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.reader-setup-notice__actions .button, .reader-setup-notice__actions .link-button { min-height: 48px; font-size: 13px; }
 @media (max-width: 600px) { .reader-permissions { padding: 14px; } .reader-permissions__grid { grid-template-columns: 1fr; } }
 @media (max-width: 380px) {
   .app-shell--audit .field-page.audit-workspace { padding-inline: 12px; gap: 12px; }

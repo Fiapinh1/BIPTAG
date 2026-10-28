@@ -22,6 +22,18 @@ export interface HHR5000Connection {
   disconnect: () => void;
 }
 
+export interface HHR5000Diagnostic {
+  at: string;
+  event: 'notification' | 'accepted' | 'rejected';
+  byteLength: number;
+  hex: string;
+  text: string;
+  expectedLength: number;
+  reason?: 'zeros' | 'incomplete' | 'invalid';
+}
+
+export const HHR5000_ZERO_MESSAGE = 'O bastão enviou somente zeros, sem um número de tag válido. Nada foi registrado. Aproxime novamente; se continuar, reconecte o bastão e confira se ele está desconectado de outros celulares ou apps.';
+
 export function isWebBluetoothSupported() {
   return isReaderSecureContext() && typeof navigator !== 'undefined' && typeof navigator.bluetooth?.requestDevice === 'function';
 }
@@ -67,11 +79,15 @@ function parseHHR5000Value(bytes: number[], expectedLength: number): HHR5000Scan
   const finalString = utf8.trim() || ascii.trim();
   const tagNumber = normalizeHHR5000Value(finalString, expectedLength);
 
-  if (!tagNumber) return null;
+  if (!tagNumber || /^0+$/.test(tagNumber)) return null;
   return { tagNumber, rawValue: finalString, bytes, hex, ascii, utf8, finalString };
 }
 
-function createHHR5000Stream(onRead: (result: HHR5000ScanResult) => void, getExpectedTagLength: () => number) {
+function createHHR5000Stream(
+  onRead: (result: HHR5000ScanResult) => void,
+  getExpectedTagLength: () => number,
+  onFrame: (bytes: number[], expectedLength: number, result: HHR5000ScanResult | null) => void
+) {
   // A Bluetooth notification is a transport fragment, not a complete reader message.
   const IDLE_MS = 250;
   const PARTIAL_TIMEOUT_MS = 2000;
@@ -93,6 +109,7 @@ function createHHR5000Stream(onRead: (result: HHR5000ScanResult) => void, getExp
 
   function finish() {
     const result = !overflow && bytes.length ? parseHHR5000Value(bytes, expectedLength) : null;
+    if (bytes.length || overflow) onFrame(bytes, expectedLength, result);
     reset();
     if (result) onRead(result);
   }
@@ -117,9 +134,11 @@ function createHHR5000Stream(onRead: (result: HHR5000ScanResult) => void, getExp
     idleTimer = setTimeout(() => {
       // Readers without a terminator can finish after a quiet interval, but only
       // when the entire identifier is present. Keep short fragments for later packets.
-      if (!overflow && parseHHR5000Value(bytes, expectedLength)) finish();
+      const text = decodeUtf8(bytes).trim();
+      const zeroFrame = /^[0\s-]+$/.test(text) && text.replace(/[^0-9]/g, '').length === expectedLength;
+      if (!overflow && (zeroFrame || parseHHR5000Value(bytes, expectedLength))) finish();
     }, IDLE_MS);
-    expiryTimer = setTimeout(reset, PARTIAL_TIMEOUT_MS);
+    expiryTimer = setTimeout(finish, PARTIAL_TIMEOUT_MS);
   }
 
   return { push, reset };
@@ -128,7 +147,7 @@ function createHHR5000Stream(onRead: (result: HHR5000ScanResult) => void, getExp
 export async function connectHHR5000(
   onRead: (result: HHR5000ScanResult) => void,
   onDisconnect?: () => void,
-  options: { device?: BluetoothDevice; signal?: AbortSignal; onDeviceSelected?: (device: BluetoothDevice) => void; getExpectedTagLength?: () => number; acceptAllDevices?: boolean } = {}
+  options: { device?: BluetoothDevice; signal?: AbortSignal; onDeviceSelected?: (device: BluetoothDevice) => void; getExpectedTagLength?: () => number; acceptAllDevices?: boolean; onReadError?: (message: string) => void; onDiagnostic?: (entry: HHR5000Diagnostic) => void } = {}
 ): Promise<HHR5000Connection> {
   if (!isReaderSecureContext()) throw new Error('Abra o BIPTAG pelo endereço HTTPS para permitir acesso ao Bluetooth.');
   if (!isWebBluetoothSupported()) {
@@ -151,7 +170,25 @@ export async function connectHHR5000(
   let closed = false;
   let opening = true;
   const ownsConnection = () => connectionOwners.get(device.id) === owner;
-  const stream = createHHR5000Stream((result) => { if (!closed && ownsConnection()) onRead(result); }, options.getExpectedTagLength ?? (() => 15));
+  const getExpectedLength = options.getExpectedTagLength ?? (() => 15);
+  function diagnose(bytes: number[], event: HHR5000Diagnostic['event'], expectedLength: number, reason?: HHR5000Diagnostic['reason']) {
+    if (closed || !ownsConnection()) return;
+    // A bounded copy preserves the actual transport data, including zero bytes.
+    // Never persist it to the audit or reinterpret undocumented binary formats.
+    const sample = bytes.slice(0, 96);
+    options.onDiagnostic?.({ at: new Date().toISOString(), event, byteLength: bytes.length,
+      hex: bytesToHex(sample), text: decodeUtf8(sample), expectedLength, reason });
+  }
+  const stream = createHHR5000Stream((result) => { if (!closed && ownsConnection()) onRead(result); }, getExpectedLength,
+    (bytes, expectedLength, result) => {
+      const text = decodeUtf8(bytes).trim();
+      const digits = text.replace(/[^0-9]/g, '');
+      const reason = result ? undefined : digits && /^0+$/.test(digits) ? 'zeros'
+        : digits.length > 0 && digits.length < expectedLength ? 'incomplete' : 'invalid';
+      diagnose(bytes, result ? 'accepted' : 'rejected', expectedLength, reason);
+      const zeroIdentifier = reason === 'zeros' && (digits.length === expectedLength || /^[0\s-]+$/.test(text) && digits.length > 1);
+      if (zeroIdentifier && !closed && ownsConnection()) options.onReadError?.(HHR5000_ZERO_MESSAGE);
+    });
 
   function ensureOpen() {
     throwIfReaderAborted(options.signal);
@@ -181,6 +218,7 @@ export async function connectHHR5000(
     const characteristic = event.target as BluetoothRemoteGATTCharacteristic | null;
     if (closed || !characteristic?.value) return;
 
+    diagnose(bytesFromDataView(characteristic.value), 'notification', getExpectedLength());
     stream.push(characteristic.value);
   };
 

@@ -11,6 +11,7 @@ import { AuditScanSummary } from './components/AuditScanSummary';
 import { AuditResultCard } from './components/AuditResultCard';
 import { ImportValidationIssues } from './components/ImportValidationIssues';
 import { ReaderPermissionsPanel } from './components/ReaderPermissionsPanel';
+import { ReaderSetupNotice } from './components/ReaderSetupNotice';
 import { PageNavigation } from './components/PageNavigation';
 import { scrollPageToTop } from './services/page-scroll';
 import { getFieldReadingProgress } from './services/audit-progress';
@@ -548,6 +549,7 @@ function App() {
       </header>
 
       <main className="main-content">
+        {view === 'home' && <ReaderSetupNotice reader={hhr5000} onSettings={() => void navigate('settings')} />}
         {view !== 'home' && view !== 'audit' && <PageNavigation onHome={() => void navigate('home', true)}
           onBack={selectedAudit || backView !== 'home' ? () => void navigate(backView) : undefined} backHint={viewTitles[backView]} />}
         {view === 'home' && (
@@ -1762,6 +1764,7 @@ function AuditView({
   async function processRead(tagNumber: string, rawValue = tagNumber, source: AuditRecord['source'] = 'nfc') {
     const normalized = tagNumber.replace(/[^0-9]/g, '').trim();
     if (!normalized) return false;
+    if (source !== 'manual' && /^0+$/.test(normalized)) return false;
     if (savingReadingRef.current || readInFlight.current || scan || outcome || decision) {
       if (source !== 'manual' && lastRead.current?.tag !== normalized) setToast('Conclua a tag atual antes de ler outra.');
       return false;
@@ -2456,7 +2459,7 @@ function AuditView({
           connecting={readMode === 'phone' ? nfcStarting : hhr5000.status === 'conectando'}
           supported={readMode === 'phone' ? isWebNfcSupported() : hhr5000.isSupported}
           message={readMode === 'phone' ? readerMessage : hhr5000.message}
-          error={readMode === 'phone' ? nfcError : null}
+          error={readMode === 'phone' ? nfcError : hhr5000.readError}
           onActivate={() => { void (readMode === 'phone' ? activateReader() : hhr5000.connect()); primeFeedbackAudio(); }}
           onStop={readMode === 'phone' ? deactivateReader : hhr5000.disconnect}
         />

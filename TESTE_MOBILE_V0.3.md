@@ -58,7 +58,10 @@ O endereço local HTTP serve para testar interface, digitação manual, importa�
 - [ ] Verificar os estados NFC permitida, bloqueada, aguardando autorização e não informada. Se o navegador não oferece NFC, mostrar indisponibilidade sem simular um pedido de permissão.
 - [ ] No ícone instalado em Android, conferir o atalho para abrir o app no Chrome e o botão `Copiar diagnóstico`.
 
+- [ ] No primeiro acesso à página inicial no Android, conferir `Prepare os leitores neste celular`. Nenhum seletor ou NFC deve iniciar sem toque; `Autorizar bastão` deve abrir o seletor pelo gesto do usuário. `Agora não` dispensa o aviso após reabrir, mantendo as Configurações acessíveis.
 - [ ] Em HTTPS, escolher `Usar bastão Bluetooth` e conectar o HHR5000SN.
+- [ ] Se o bastão transmitir somente zeros, conferir que nada é registrado nem abre `Confirmar leitura?`. A próxima tag completa deve entrar sem cancelar, confirmar ou reconectar. O aviso deve sumir após uma leitura válida.
+- [ ] No Galaxy A56, testar o mesmo bastão e a mesma tag usados no celular que funciona. Se continuar recebendo zeros, abrir o ícone `Bastão → Dados recebidos do bastão → Copiar diagnóstico do bastão` logo após a tentativa. O diagnóstico deve preservar os bytes recebidos; não transformar zeros em um número presumido.
 - [ ] Negar o acesso ao Bluetooth no navegador/Android e verificar a orientação sobre Dispositivos próximos e permissões do site, sem tentativas automáticas repetidas enquanto o acesso estiver bloqueado.
 - [ ] Restaurar a permissão, tocar em conectar e confirmar que funciona sem reiniciar a auditoria.
 - [ ] Confirmar que o ícone no canto fica verde e que os detalhes só aparecem ao tocar nele.

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { connectHHR5000, isWebBluetoothSupported, type HHR5000Connection } from '../services/hhr5000';
+import { connectHHR5000, isWebBluetoothSupported, type HHR5000Connection, type HHR5000Diagnostic } from '../services/hhr5000';
 import { describeReaderError } from '../services/reader-access';
 
 export type HHR5000Status = 'desconectado' | 'conectando' | 'conectado' | 'erro';
@@ -22,6 +22,8 @@ export function useHHR5000(onTagRead: (tagNumber: string, rawValue: string) => v
   const [message, setMessage] = useState('Conecte seu bastão para começar.');
   const [deviceName, setDeviceName] = useState<string | null>(null);
   const [lastTagRead, setLastTagRead] = useState<string | null>(null);
+  const [readError, setReadError] = useState<string | null>(null);
+  const [diagnostics, setDiagnostics] = useState<HHR5000Diagnostic[]>([]);
   const onTagReadRef = useRef(onTagRead);
   onTagReadRef.current = onTagRead;
   const expectedTagLengthRef = useRef(expectedTagLength);
@@ -73,11 +75,14 @@ export function useHHR5000(onTagRead: (tagNumber: string, rawValue: string) => v
       const controller = new AbortController();
       attemptAbort = controller;
       setStatus('conectando');
+      setReadError(null);
+      setDiagnostics([]);
       setMessage(knownDevice ? 'Reconectando ao bastão…' : 'Selecione seu bastão…');
       try {
         const next = await connectHHR5000(
           (result) => {
             if (disposed || !wanted || thisGeneration !== generation) return;
+            setReadError(null);
             setLastTagRead(result.tagNumber);
             onTagReadRef.current(result.tagNumber, result.rawValue);
           },
@@ -88,7 +93,10 @@ export function useHHR5000(onTagRead: (tagNumber: string, rawValue: string) => v
             setMessage('Bastão desconectado. Tentando reconectar…');
             scheduleRetry();
           },
-          { device: knownDevice, signal: controller.signal, onDeviceSelected: (selected) => { device = selected; }, getExpectedTagLength: () => expectedTagLengthRef.current, acceptAllDevices: showAllDevices }
+          { device: knownDevice, signal: controller.signal, onDeviceSelected: (selected) => { device = selected; }, getExpectedTagLength: () => expectedTagLengthRef.current, acceptAllDevices: showAllDevices,
+            onReadError: (error) => { if (!disposed && thisGeneration === generation) setReadError(error); },
+            onDiagnostic: (entry) => { if (!disposed && thisGeneration === generation) setDiagnostics((entries) => [...entries.slice(-11), entry]); }
+          }
         );
         if (disposed || !wanted || thisGeneration !== generation) {
           next.disconnect();
@@ -145,6 +153,7 @@ export function useHHR5000(onTagRead: (tagNumber: string, rawValue: string) => v
         remember(false);
         stop();
         setStatus('desconectado');
+        setReadError(null);
         setMessage('Bastão desconectado por você. Toque em conectar para voltar.');
       }
     };
@@ -183,7 +192,7 @@ export function useHHR5000(onTagRead: (tagNumber: string, rawValue: string) => v
   }, []);
 
   return {
-    status, message, deviceName, lastTagRead,
+    status, message, deviceName, lastTagRead, readError, diagnostics,
     isSupported: isWebBluetoothSupported(),
     connect: () => actionsRef.current.connect(),
     chooseDevice: (showAllDevices = false) => actionsRef.current.chooseDevice(showAllDevices),

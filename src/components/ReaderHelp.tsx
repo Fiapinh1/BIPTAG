@@ -14,6 +14,7 @@ export function ReaderHelp({ mode }: { mode: 'bluetooth' | 'phone' }) {
         <li>No Android: Configurações → Aplicativos → Chrome → Permissões → Dispositivos próximos, se essa opção aparecer.</li>
         <li>Toque em Conectar bastão e selecione o HHR5000 na lista. Se o Android solicitar Localização para procurar dispositivos, confira essa permissão também.</li>
         <li>Se o bastão já foi autorizado e não conecta, abra o ícone de Bluetooth e toque em Escolher outro bastão para selecionar novamente.</li>
+        <li>Se chegar somente zeros, a conexão recebeu dados, mas não um número válido de tag. Reconecte, teste a mesma tag e confira se o bastão está livre de outros apps. Em Dados recebidos do bastão, copie o diagnóstico se persistir.</li>
       </>}
     </ol>
   </details>;

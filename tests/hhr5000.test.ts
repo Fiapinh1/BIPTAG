@@ -174,6 +174,64 @@ describe('HHR5000 connection lifecycle', () => {
 describe('HHR5000 fragmented Bluetooth readings', () => {
   beforeEach(() => { vi.useFakeTimers(); });
 
+  it('rejects a zero placeholder and accepts the next real tag without confirmation or reconnecting', async () => {
+    const reader = createReader();
+    const onRead = vi.fn();
+    const onReadError = vi.fn();
+    const onDiagnostic = vi.fn();
+    const connection = await connectHHR5000(onRead, undefined, { onReadError, onDiagnostic });
+    reader.read('0000000000');
+    reader.read('00000\r\n984000010772813\r\n');
+    expect(onReadError).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('somente zeros'));
+    expect(onRead).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ tagNumber: '984000010772813' }));
+    expect(onDiagnostic).toHaveBeenCalledWith(expect.objectContaining({ event: 'rejected', reason: 'zeros', text: '000000000000000' }));
+    expect(onDiagnostic).toHaveBeenCalledWith(expect.objectContaining({ event: 'accepted', text: '984000010772813' }));
+    expect(reader.gatt.connect).toHaveBeenCalledOnce();
+    connection.disconnect();
+  });
+
+  it('discards an unframed zero placeholder after idle and remains ready for the following tag', async () => {
+    const reader = createReader();
+    const onRead = vi.fn();
+    const onReadError = vi.fn();
+    const connection = await connectHHR5000(onRead, undefined, { onReadError });
+    reader.read('000 000000000000');
+    await vi.advanceTimersByTimeAsync(300);
+    expect(onRead).not.toHaveBeenCalled();
+    expect(onReadError).toHaveBeenCalledOnce();
+    reader.read('984000010772887');
+    await vi.advanceTimersByTimeAsync(300);
+    expect(onRead).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ tagNumber: '984000010772887' }));
+    connection.disconnect();
+  });
+
+  it('copies only the notification DataView slice and preserves the original zero/binary bytes for diagnostics', async () => {
+    const reader = createReader();
+    const onRead = vi.fn();
+    const onDiagnostic = vi.fn();
+    const connection = await connectHHR5000(onRead, undefined, { onDiagnostic });
+    const storage = new Uint8Array([99, 0, 0, 0, 99]);
+    reader.read(storage.subarray(1, 4));
+    storage.fill(88);
+    expect(onDiagnostic).toHaveBeenCalledWith(expect.objectContaining({ event: 'notification', byteLength: 3, hex: '00 00 00', text: '\u0000\u0000\u0000' }));
+    expect(onRead).not.toHaveBeenCalled();
+    const framed = new TextEncoder().encode('X984000010772813\r\nY');
+    reader.read(framed.subarray(1, framed.length - 1));
+    expect(onRead).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ tagNumber: '984000010772813' }));
+    connection.disconnect();
+  });
+
+  it('does not accept a zero candidate embedded in a reader status message as a tag', async () => {
+    const reader = createReader();
+    const onRead = vi.fn();
+    const connection = await connectHHR5000(onRead);
+    reader.read('TAG: 000000000000000\r\n');
+    expect(onRead).not.toHaveBeenCalled();
+    reader.read('000000010772887\r\n');
+    expect(onRead).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ tagNumber: '000000010772887' }));
+    connection.disconnect();
+  });
+
   it('waits for all fragments instead of treating the first digit as a tag', async () => {
     const reader = createReader();
     const onRead = vi.fn();

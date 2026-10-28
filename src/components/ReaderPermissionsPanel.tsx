@@ -5,6 +5,7 @@ import { startNfcReader } from '../services/nfc';
 import { describeReaderError } from '../services/reader-access';
 import { chromeReaderUrl, getReaderEnvironment, readNfcPermission, type NfcPermission } from '../services/reader-environment';
 import { ReaderHelp } from './ReaderHelp';
+import { BluetoothReadDiagnostics, bluetoothDiagnosticText } from './BluetoothReadDiagnostics';
 
 const permissionLabels: Record<NfcPermission, string> = {
   granted: 'Permitida neste site', denied: 'Bloqueada nas permissões do site',
@@ -88,6 +89,7 @@ export function ReaderPermissionsPanel({ reader }: { reader: HHR5000Reader }) {
     `Página principal: ${environment.topLevel ? 'sim' : 'não'}`,
     `Bluetooth no navegador: ${environment.bluetoothSupported ? 'disponível' : 'indisponível'}`,
     `Bastão: ${reader.status} — ${reader.message}`,
+    bluetoothDiagnosticText(reader),
     `NFC no navegador: ${environment.nfcSupported ? 'disponível' : 'indisponível'}`,
     `Permissão NFC: ${environment.nfcSupported ? permissionLabels[permission] : 'NFC indisponível neste navegador'}`,
     ...(nfcError ? [`Erro NFC: ${nfcError}`] : [])
@@ -114,12 +116,14 @@ export function ReaderPermissionsPanel({ reader }: { reader: HHR5000Reader }) {
       <section className="reader-permissions__device" aria-label="Permissão do bastão Bluetooth">
         <h3><BluetoothIcon size={23} /> Bastão Bluetooth</h3>
         <p role="status">{reader.status === 'conectado' ? 'Bastão autorizado e conectado' : reader.message}</p>
+        {reader.readError && <p className="reader-permissions__error" role="alert">{reader.readError}</p>}
         <button className="button button--primary button--full" disabled={!environment.bluetoothSupported || reader.status === 'conectando'} onClick={() => void reader.chooseDevice()}>{reader.status === 'conectando' ? 'Conectando…' : 'Autorizar e selecionar bastão'}</button>
         <button className="button button--ghost button--full" disabled={!environment.bluetoothSupported || reader.status === 'conectando'} onClick={() => void reader.chooseDevice(true)}>Bastão não aparece? Procurar todos</button>
         {['conectado', 'conectando'].includes(reader.status) && <button className="button button--ghost" onClick={reader.disconnect}>{reader.status === 'conectando' ? 'Cancelar conexão' : 'Desconectar bastão'}</button>}
         <small>Deixe o bastão ligado e próximo. Desconecte-o do outro celular antes de procurar neste.</small>
         {reader.lastTagRead && <p className="reader-permissions__last">Última tag recebida: <strong>{reader.lastTagRead}</strong></p>}
         <ReaderHelp mode="bluetooth" />
+        <BluetoothReadDiagnostics reader={reader} />
       </section>
       <section className="reader-permissions__device" aria-label="Permissão do NFC">
         <h3><PhoneIcon size={23} /> NFC do celular</h3>
