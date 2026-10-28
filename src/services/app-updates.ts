@@ -1,7 +1,7 @@
-type UpdateState = { pending: boolean; checking: boolean; message: string };
+type UpdateState = { pending: boolean; available: boolean; checking: boolean; message: string };
 const listeners = new Set<() => void>();
 const blockers = new Set<symbol>();
-let state: UpdateState = { pending: false, checking: false, message: '' };
+let state: UpdateState = { pending: false, available: false, checking: false, message: '' };
 let registration: ServiceWorkerRegistration | undefined;
 let reloadTimer: ReturnType<typeof setTimeout> | undefined;
 let reloading = false;
@@ -39,7 +39,7 @@ function scheduleReload(delay = 1500) {
 }
 
 export function deferAppUpdateReload() {
-  publish({ pending: true, message: 'Atualização pronta. Ela será aplicada automaticamente assim que você terminar a tela em uso.' });
+  publish({ pending: true, available: true, message: 'Atualização pronta. Volte ao Resumo para aplicar automaticamente ou toque em Aplicar atualização.' });
   scheduleReload();
 }
 
@@ -57,12 +57,23 @@ export async function checkForAppUpdate() {
   publish({ checking: true, message: 'Buscando atualização…' });
   try {
     await registration.update();
-    if (!state.pending) publish({ message: 'Busca realizada. Novas versões serão aplicadas automaticamente quando estiverem prontas.' });
+    try {
+      const response = await fetch(`/version.json?t=${Date.now()}`, { cache: 'no-store' });
+      if (response.ok) {
+        const published = await response.json();
+        if (typeof published.build === 'string' && published.build !== import.meta.env.VITE_BIPTAG_BUILD) {
+          publish({ available: true, message: 'Uma nova versão está disponível. Toque em Aplicar atualização para carregá-la.' });
+        }
+      }
+    } catch { /* A failed version lookup must not prevent normal worker updates. */ }
+    if (!state.pending && !state.available) publish({ message: 'Busca realizada. Novas versões serão aplicadas automaticamente quando estiverem prontas.' });
   } catch { publish({ message: 'Não foi possível buscar agora. Tentaremos novamente automaticamente.' }); }
   finally { publish({ checking: false }); }
 }
 
 export function setUpdateRegistration(value: ServiceWorkerRegistration | undefined) { registration = value; }
+
+export function applyAppUpdate() { window.location.assign('/atualizar.html'); }
 
 export function initializeAppUpdates() {
   if (!('serviceWorker' in navigator)) return () => {};

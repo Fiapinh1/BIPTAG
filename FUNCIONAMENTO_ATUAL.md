@@ -28,6 +28,10 @@ As versões novas são baixadas automaticamente com internet pelo service worker
 
 Quando uma versão nova assume o controle, o app recarrega automaticamente em um momento seguro na página inicial ou no resumo. A conferência, outras páginas em uso, uma conexão Bluetooth sendo autorizada, a preparação de uma planilha, diálogos e campos preenchidos ou focados adiam a recarga. Ao liberar a tela e ficar sem interação por um breve intervalo, a versão nova entra sem exigir um botão de atualizar. A primeira instalação do service worker não dispara recarga. As auditorias permanecem no IndexedDB; atualização do app não apaga registros nem permissões.
 
+A busca também consulta `version.json` sem cache para identificar uma versão publicada diferente, mesmo se a tela perdeu o aviso de troca do service worker. Uma versão disponível mostra `Aplicar atualização` em Configurações e um aviso no Início/Resumo, sem acrescentar botões à conferência. As Configurações também oferecem `Abrir atualização do aplicativo`.
+
+O endereço `/atualizar.html` é uma página de recuperação independente do código antigo. Com internet, `Atualizar agora` verifica a versão, atualiza o service worker e abre um documento novo do app com endereço temporário que não usa o fallback de navegação em cache. O app remove esse endereço temporário após abrir, mantendo o funcionamento offline normal. Nenhuma auditoria, cache de auditoria, permissão ou registro local é apagado; a navegação volta ao Início/Resumo. Uma leitura ainda não salva deve ser concluída antes de abrir a página. Caso um worker antigo intercepte inicialmente esse endereço, o worker novo, ao ativar, renavega somente a página de recuperação para entregar a interface correta. Essa renavegação não afeta páginas normais de auditoria ou Configurações.
+
 ## Base Nedap
 
 A auditoria comeca com a importacao do arquivo `Tags.xlsx` original exportado do Nedap Now.

@@ -12,7 +12,7 @@ import { AuditResultCard } from './components/AuditResultCard';
 import { ImportValidationIssues } from './components/ImportValidationIssues';
 import { ReaderPermissionsPanel } from './components/ReaderPermissionsPanel';
 import { ReaderSetupNotice } from './components/ReaderSetupNotice';
-import { AppInstallPanel } from './components/AppInstallPanel';
+import { AppInstallPanel, AppUpdateNotice } from './components/AppInstallPanel';
 import { blockAppUpdates } from './services/app-updates';
 import { PageNavigation } from './components/PageNavigation';
 import { scrollPageToTop } from './services/page-scroll';
@@ -555,6 +555,7 @@ function App() {
       </header>
 
       <main className="main-content">
+        {view === 'home' && <AppUpdateNotice />}
         {view === 'home' && <ReaderSetupNotice reader={hhr5000} onSettings={() => void navigate('settings')} />}
         {view !== 'home' && view !== 'audit' && <PageNavigation onHome={() => void navigate('home', true)}
           onBack={selectedAudit || backView !== 'home' ? () => void navigate(backView) : undefined} backHint={viewTitles[backView]} />}

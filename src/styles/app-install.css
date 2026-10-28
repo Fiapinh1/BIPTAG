@@ -12,6 +12,11 @@
 .app-install-panel__updates > small { color: var(--muted); font-size: 11px; line-height: 1.5; }
 .app-install-guide ol { display: grid; gap: 12px; margin: 0; padding-left: 22px; font-size: 14px; line-height: 1.6; }
 .app-install-guide .reader-settings__heading h2 { font-size: 24px; }
+.app-update-notice { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; width: min(960px, calc(100% - 32px)); margin: 16px auto 0; padding: 16px; border: 1px solid #D7C4AC; border-radius: 15px; background: #FFF8EA; }
+.app-update-notice strong { font-size: 15px; }
+.app-update-notice p { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.app-update-notice .button { min-height: 48px; font-size: 13px; }
+.app-install-panel__updates > a { justify-self: start; padding: 12px 0; color: #865638; font-size: 13px; font-weight: 700; }
 @media (max-width: 600px) {
   .farm-directory__actions { justify-content: flex-start; width: 100%; }
   .app-install-panel { padding: 16px; }

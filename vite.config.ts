@@ -2,10 +2,15 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+const buildId = new Date().toISOString();
+
 export default defineConfig({
-  define: { 'import.meta.env.VITE_BIPTAG_BUILD': JSON.stringify(new Date().toISOString()) },
+  define: { 'import.meta.env.VITE_BIPTAG_BUILD': JSON.stringify(buildId) },
   plugins: [
     react(),
+    { name: 'biptag-build-info', generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ build: buildId }) });
+    } },
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
@@ -43,7 +48,10 @@ export default defineConfig({
       workbox: {
         cleanupOutdatedCaches: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        globIgnores: ['**/atualizar.html', '**/update-app.js', '**/update-recovery-worker.js'],
+        importScripts: ['/update-recovery-worker.js'],
         navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/atualizar\.html(?:\?|$)/, /^\/index\.html\?biptag-update=/],
         clientsClaim: true,
         skipWaiting: true
       }

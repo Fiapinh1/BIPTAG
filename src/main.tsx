@@ -14,6 +14,9 @@ import './styles/app-install.css';
 
 initializeAppInstall();
 initializeAppUpdates();
+if (window.location.pathname === '/index.html' && new URLSearchParams(window.location.search).has('biptag-update')) {
+  window.history.replaceState(null, '', '/');
+}
 
 const updateServiceWorker = registerSW({
   immediate: true,

@@ -20,6 +20,19 @@ beforeEach(() => { vi.useFakeTimers(); vi.resetModules(); });
 afterEach(() => { cleanup(); cleanup = () => {}; vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('automatic app updates', () => {
+  it('detects a different published version even if a controller-change notification was missed', async () => {
+    const env = environment();
+    const fetch = vi.fn(async () => ({ ok: true, json: async () => ({ build: 'published-new-build' }) }));
+    vi.stubGlobal('fetch', fetch);
+    const updates = await import('../src/services/app-updates');
+    cleanup = updates.initializeAppUpdates();
+    updates.setUpdateRegistration({ update: vi.fn(async () => {}) } as unknown as ServiceWorkerRegistration);
+    await updates.checkForAppUpdate();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/version.json?'), { cache: 'no-store' });
+    expect(updates.getAppUpdateState()).toMatchObject({ available: true, pending: false });
+    expect(env.reload).not.toHaveBeenCalled();
+  });
+
   it('waits for all protected screens to finish before applying an update once', async () => {
     const env = environment();
     const updates = await import('../src/services/app-updates');

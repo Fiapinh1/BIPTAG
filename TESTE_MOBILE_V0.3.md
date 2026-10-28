@@ -13,6 +13,8 @@ O endereço local HTTP serve para testar interface, digitação manual, importa�
 - [ ] Sem pedido nativo disponível, conferir instruções de instalação; no iPhone, indicar Safari → Compartilhar → Adicionar à Tela de Início.
 - [ ] Abrir pelo ícone instalado: a página inicial deve esconder a oferta de instalação e as Configurações devem mostrar `App instalado`.
 - [ ] Conferir `Configurações → Instalação e atualizações`, versão carregada e `Verificar atualização agora`. Sem internet, informar que a busca voltará automaticamente.
+- [ ] Com uma versão antiga aberta em Configurações, publicar uma nova versão e abrir `/atualizar.html`. Mesmo se a primeira navegação cair no app em cache, após o novo worker ativar deve aparecer `Atualizar aplicativo` sem limpar armazenamento.
+- [ ] Tocar `Atualizar agora` na recuperação: conferir a versão nova, a opção `Dados recebidos pelo NFC` e a preservação de uma leitura salva anteriormente. A URL temporária de atualização deve ser removida; ao recarregar depois sem internet, o app deve continuar abrindo.
 - [ ] Durante uma conferência com brinco digitado, publicar uma nova versão: o app deve baixar sem recarregar a tela nem perder a digitação. Ao salvar e voltar ao Resumo, deve recarregar automaticamente e manter a leitura salva.
 - [ ] Repetir a atualização com a preparação de planilha aberta: não recarregar até concluir ou fechar a preparação. A primeira instalação do app também não deve recarregar um formulário.
 - [ ] Confirmar que o modo instalado abre em retrato.

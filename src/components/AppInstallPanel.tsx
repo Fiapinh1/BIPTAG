@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { CheckIcon, DownloadIcon } from '../icons/Icons';
 import { getInstallState, requestAppInstall, subscribeInstallState } from '../services/app-install';
-import { checkForAppUpdate, getAppUpdateState, subscribeAppUpdates } from '../services/app-updates';
+import { applyAppUpdate, checkForAppUpdate, getAppUpdateState, subscribeAppUpdates } from '../services/app-updates';
+
+export function AppUpdateNotice() {
+  const update = useSyncExternalStore(subscribeAppUpdates, getAppUpdateState);
+  if (!update.available && !update.pending) return null;
+  return <section className="app-update-notice" aria-label="Atualização do aplicativo">
+    <div><strong>Nova versão disponível</strong><p>Aplique a atualização mantendo as auditorias salvas neste aparelho.</p></div>
+    <button className="button button--primary" onClick={applyAppUpdate}>Aplicar atualização</button>
+  </section>;
+}
 
 export function AppInstallPanel({ compact = false }: { compact?: boolean }) {
   const install = useSyncExternalStore(subscribeInstallState, getInstallState);
@@ -46,8 +55,10 @@ export function AppInstallPanel({ compact = false }: { compact?: boolean }) {
     {install.message && <p role="status">{install.message}</p>}
     <div className="app-install-panel__updates"><strong>Atualizações automáticas</strong><p>Com internet, o app busca e baixa novas versões sozinho. A atualização é aplicada fora da conferência, sem interromper o preenchimento de uma tela.</p>
       <button className="button button--ghost" disabled={update.checking} onClick={() => void checkForAppUpdate()}>{update.checking ? 'Verificando…' : 'Verificar atualização agora'}</button>
+      {(update.available || update.pending) && <button className="button button--primary" onClick={applyAppUpdate}>Aplicar atualização</button>}
       {update.message && <p role="status">{update.message}</p>}
       <small>Versão carregada: {import.meta.env.VITE_BIPTAG_BUILD ? new Date(import.meta.env.VITE_BIPTAG_BUILD).toLocaleString('pt-BR') : 'desenvolvimento'}</small>
+      <a href="/atualizar.html">Abrir atualização do aplicativo</a>
     </div>
     {guide}
   </section>;
