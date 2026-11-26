@@ -10,6 +10,7 @@ import { NewAuditForm } from './components/NewAuditForm';
 import { TagReadOnlyList } from './components/TagReadOnlyList';
 import { HHR5000Connector } from './components/HHR5000Connector';
 import { AuditReadModePicker, AuditReaderStandby, type AuditReadMode } from './components/AuditReaderWorkspace';
+import { AuditConferenceHistory } from './components/BluetoothAuditStandby';
 import { AuditScanSummary } from './components/AuditScanSummary';
 import { AuditResultCard } from './components/AuditResultCard';
 import { ImportValidationIssues } from './components/ImportValidationIssues';
@@ -2468,6 +2469,7 @@ function AuditView({
       {(readMode === 'bluetooth' || readMode === 'phone') && !scan && !outcome && (
         <AuditReaderStandby
           mode={readMode}
+          bluetoothStatus={hhr5000.status}
           active={readMode === 'phone' ? readerActive : hhr5000.status === 'conectado'}
           connecting={readMode === 'phone' ? nfcStarting : hhr5000.status === 'conectando'}
           supported={readMode === 'phone' ? isWebNfcSupported() : hhr5000.isSupported}
@@ -2479,6 +2481,7 @@ function AuditView({
       )}
 
       {!scan && !outcome && (readMode === 'bluetooth' || readMode === 'phone') && latestConfirmedRecords.length > 0 && (
+        <AuditConferenceHistory collapsible={readMode === 'bluetooth'}>
         <section className="latest-conferences latest-conferences--bottom" aria-labelledby="latest-conferences-title-bottom">
           <div className="section-heading section-heading--compact">
             <div><span className="eyebrow">REGISTROS CONFIRMADOS</span><h2 id="latest-conferences-title-bottom">Ultimas conferencias</h2></div>
@@ -2499,6 +2502,7 @@ function AuditView({
             Corrigir ultima leitura
           </button>
         </section>
+        </AuditConferenceHistory>
       )}
 
       {scan && !outcome && !showAttentionOverlay && (

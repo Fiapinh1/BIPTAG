@@ -1,0 +1,61 @@
+.hhr5000-icon { display: inline-block; flex-shrink: 0; overflow: visible; }
+.hhr5000-icon--disconnected { color: #78847D; }
+.hhr5000-icon--connecting { color: #78847D; }
+.hhr5000-icon--connected, .hhr5000-icon--waiting { color: #278123; }
+.hhr5000-icon--warning { color: #A66C13; }
+.hhr5000-icon--error { color: #B54C45; }
+.hhr5000-icon__loading { stroke: #278123; stroke-width: 2; stroke-dasharray: 34 150; transform-origin: 32px 32px; animation: hhr5000-loading 1.5s linear infinite; }
+.hhr5000-icon--waiting .hhr5000-icon__body { animation: hhr5000-waiting 2.8s ease-in-out infinite; }
+@keyframes hhr5000-loading { to { transform: rotate(360deg); } }
+@keyframes hhr5000-waiting { 50% { opacity: .65; } }
+.bluetooth-connection-notice { position: fixed; top: max(12px, env(safe-area-inset-top)); left: 50%; z-index: 160; display: flex; align-items: center; gap: 10px; width: min(340px, calc(100% - 24px)); padding: 12px 14px; border: 1px solid #AED3A2; border-radius: 14px; color: #205526; background: #E8F5E5; box-shadow: 0 6px 24px #1220221A; transform: translateX(-50%); pointer-events: none; }
+.bluetooth-connection-notice > svg { flex-shrink: 0; }
+.bluetooth-connection-notice strong { display: block; font-size: 14px; line-height: 1.35; }
+.bluetooth-connection-notice span { display: block; margin-top: 3px; font-size: 12px; line-height: 1.35; }
+.app-shell .audit-workspace--bluetooth:has(> .audit-reader-standby--bluetooth) { gap: 10px; padding-top: max(12px, env(safe-area-inset-top)); padding-bottom: 12px; }
+.audit-workspace--bluetooth:has(> .audit-reader-standby--bluetooth) .audit-workspace__heading h1 { font-size: clamp(23px, 5.8vw, 28px); }
+.audit-workspace--bluetooth:has(> .audit-reader-standby--bluetooth) .audit-workspace__heading .eyebrow { font-size: 9px; }
+.audit-workspace--bluetooth:has(> .audit-reader-standby--bluetooth) .audit-workspace__progress-pair { gap: 8px; }
+.audit-workspace--bluetooth:has(> .audit-reader-standby--bluetooth) .audit-workspace__progress { gap: 6px; font-size: 11px; }
+.audit-workspace--bluetooth:has(> .audit-reader-standby--bluetooth) .audit-workspace__progress-track { height: 4px; background: #E4ECE4; }
+.audit-workspace--bluetooth:has(> .audit-reader-standby--bluetooth) .audit-workspace__progress-track > span { background: #278123; }
+.audit-workspace--bluetooth:has(> .audit-reader-standby--bluetooth) .audit-workspace__progress--field .audit-workspace__progress-track > span { background: #85AD7C; }
+.audit-reader-standby.audit-reader-standby--bluetooth { justify-items: stretch; align-content: start; gap: 9px; min-height: 0; padding: 14px; border-color: #DCE5DE; border-radius: 18px; background: #FFFFFF; text-align: left; }
+.bluetooth-standby__heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.bluetooth-standby__heading > div { min-width: 0; }
+.bluetooth-standby__icon { display: grid; flex: 0 0 52px; place-items: center; width: 52px; height: 52px; border-radius: 14px; background: #F4F7F3; }
+.bluetooth-standby__status { display: flex; align-items: center; gap: 5px; color: #65776B; font-size: 10px; font-weight: 750; line-height: 1.4; }
+.bluetooth-standby__status > span { flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.is-ready .bluetooth-standby__status { color: #267229; }
+.audit-reader-standby--bluetooth .bluetooth-standby__heading h2 { margin: 4px 0 0; color: #19362A; font-size: clamp(20px, 5.4vw, 24px); line-height: 1.2; letter-spacing: -.025em; }
+.audit-reader-standby--bluetooth p.bluetooth-standby__caption { max-width: none; margin: 0; color: #60726A; font-size: 12px; line-height: 1.45; }
+.app-shell .audit-reader-standby--bluetooth > .button { justify-self: start; gap: 7px; min-height: 44px; width: auto; max-width: 100%; margin: 0; padding: 9px 12px; border-radius: 11px; font-size: 12px; }
+.app-shell .audit-reader-standby--bluetooth > .button--primary { border: 1px solid #16731D; color: #FFFFFF; background: linear-gradient(115deg, #138307, #126218); }
+.app-shell .audit-reader-standby--bluetooth > .button--ghost { border-color: #CEDBCF; color: #3B6245; background: #FFFFFF; }
+.bluetooth-standby__alert { display: flex; align-items: start; gap: 8px; padding: 9px 10px; border: 1px solid #E5D4B3; border-radius: 11px; color: #8B5C0E; background: #FFF8EB; }
+.bluetooth-standby__alert--danger { border-color: #E4C6BE; color: #A0473A; background: #FCF0ED; }
+.bluetooth-standby__alert > svg { flex-shrink: 0; margin-top: 1px; }
+.bluetooth-standby__alert strong { display: block; font-size: 12px; line-height: 1.4; }
+.bluetooth-standby__alert span { display: block; margin-top: 2px; font-size: 12px; line-height: 1.45; }
+.reader-help--bluetooth > summary { display: flex; align-items: center; gap: 7px; list-style: none; }
+.reader-help--bluetooth > summary::-webkit-details-marker { display: none; }
+.reader-help--bluetooth > summary > span { flex: 1; }
+.reader-help--bluetooth > summary > svg { flex-shrink: 0; }
+.reader-help--bluetooth[open] > summary > svg:last-child { transform: rotate(90deg); }
+.audit-reader-standby--bluetooth .reader-help { margin: 0; padding-top: 0; border-color: #E4EBE5; }
+.audit-reader-standby--bluetooth .reader-help > summary { min-height: 44px; padding: 9px 0; color: #477753; font-size: 12px; }
+.reader-help__technical { padding: 10px; border-radius: 10px; color: #526B5B; background: #F4F7F3; font-size: 11px; line-height: 1.5; }
+.audit-reader-standby--bluetooth .reader-help__technical p { max-width: none; margin: 5px 0 0; font-size: 11px; line-height: 1.5; }
+.audit-reader-standby--bluetooth .reader-help > ol { font-size: 11px; line-height: 1.5; }
+.bluetooth-conference-history { min-width: 0; border: 1px solid #DCE5DE; border-radius: 13px; background: #FFFFFF; }
+.bluetooth-conference-history > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 10px 12px; color: #3B6245; font-size: 12px; font-weight: 750; list-style: none; cursor: pointer; }
+.bluetooth-conference-history > summary::-webkit-details-marker { display: none; }
+.bluetooth-conference-history[open] > summary > svg { transform: rotate(90deg); }
+.bluetooth-conference-history .latest-conferences .section-heading { display: none; }
+.bluetooth-conference-history .latest-conferences { border: 0; border-radius: 0 0 13px 13px; }
+@media (max-height: 660px) {
+  .app-shell .audit-workspace--bluetooth:has(> .audit-reader-standby--bluetooth) { gap: 8px; padding-block: max(8px, env(safe-area-inset-top)) 8px; }
+  .audit-reader-standby.audit-reader-standby--bluetooth { gap: 8px; padding: 12px; }
+  .bluetooth-standby__icon { flex-basis: 46px; width: 46px; height: 46px; }
+}
+@media (prefers-reduced-motion: reduce) { .hhr5000-icon__loading, .hhr5000-icon--waiting .hhr5000-icon__body { animation: none; } }

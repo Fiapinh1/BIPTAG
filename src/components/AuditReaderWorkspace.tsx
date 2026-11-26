@@ -1,6 +1,8 @@
 import { ChevronRightIcon, KeyboardIcon, PhoneIcon, StickReaderIcon } from '../icons/Icons';
 import { ReaderHelp } from './ReaderHelp';
 import { NfcReadDiagnostics } from './NfcReadDiagnostics';
+import type { HHR5000Status } from '../hooks/useHHR5000';
+import { BluetoothAuditStandby } from './BluetoothAuditStandby';
 
 export type AuditReadMode = 'choose' | 'manual' | 'bluetooth' | 'phone';
 
@@ -23,7 +25,7 @@ export function AuditReadModePicker({ onSelect }: { onSelect: (mode: AuditReadMo
   );
 }
 
-export function AuditReaderStandby({ mode, active, connecting, supported, message, error, onActivate, onStop }: {
+export function AuditReaderStandby({ mode, active, connecting, supported, message, error, onActivate, onStop, bluetoothStatus }: {
   mode: 'bluetooth' | 'phone';
   active: boolean;
   connecting: boolean;
@@ -32,7 +34,9 @@ export function AuditReaderStandby({ mode, active, connecting, supported, messag
   error?: string | null;
   onActivate: () => void;
   onStop: () => void;
+  bluetoothStatus?: HHR5000Status;
 }) {
+  if (mode === 'bluetooth') return <BluetoothAuditStandby status={bluetoothStatus ?? (active ? 'conectado' : connecting ? 'conectando' : 'desconectado')} supported={supported} message={message} error={error} onActivate={onActivate} onStop={onStop} />;
   const phone = mode === 'phone';
   return (
     <div className={`audit-reader-standby ${active ? 'is-ready' : ''}`}>

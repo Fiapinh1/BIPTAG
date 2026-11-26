@@ -1,0 +1,3 @@
+/* Keep one-finger page and table scrolling while excluding pinch/double-tap zoom.
+   Browsers may still honor their own accessibility zoom settings. */
+html, body, #root, #root * { touch-action: pan-x pan-y; }

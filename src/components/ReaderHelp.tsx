@@ -1,7 +1,10 @@
-export function ReaderHelp({ mode }: { mode: 'bluetooth' | 'phone' }) {
+import { ChevronRightIcon, HelpCircleIcon } from '../icons/Icons';
+
+export function ReaderHelp({ mode, technicalMessages = [] }: { mode: 'bluetooth' | 'phone'; technicalMessages?: string[] }) {
   const phone = mode === 'phone';
-  return <details className="reader-help">
-    <summary>{phone ? 'Ajuda com NFC e permissões' : 'Ajuda com Bluetooth e permissões'}</summary>
+  return <details className={`reader-help ${phone ? '' : 'reader-help--bluetooth'}`}>
+    <summary>{phone ? 'Ajuda com NFC e permissões' : <><HelpCircleIcon size={18} /><span>Ajuda com Bluetooth</span><ChevronRightIcon size={16} /></>}</summary>
+    {technicalMessages.length > 0 && <div className="reader-help__technical"><strong>Detalhes do leitor</strong>{[...new Set(technicalMessages)].filter(Boolean).map(text => <p key={text}>{text}</p>)}</div>}
     <ol>
       <li>Abra o BIPTAG no Chrome atualizado para Android, pelo endereço HTTPS.</li>
       {phone ? <>

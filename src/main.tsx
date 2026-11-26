@@ -24,6 +24,8 @@ import './styles/audit-mode-picker.css';
 import './styles/home-hero.css';
 import './styles/registration-setup.css';
 import './styles/audit-directory-theme.css';
+import './styles/bluetooth-conference.css';
+import './styles/touch-viewport.css';
 
 initializeAppInstall();
 initializeAppUpdates();

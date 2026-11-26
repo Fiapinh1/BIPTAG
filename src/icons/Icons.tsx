@@ -1,4 +1,5 @@
 import type { SVGProps } from 'react';
+import { HHR5000Icon } from '../components/HHR5000Icon';
 
 type IconProps = SVGProps<SVGSVGElement> & { size?: number };
 
@@ -94,11 +95,7 @@ export function PhoneIcon({ size = 22, ...props }: IconProps) {
 }
 
 export function StickReaderIcon({ size = 22, ...props }: IconProps) {
-  return <svg {...base(size)} {...props}>
-    <rect x="6" y="2" width="12" height="10" rx="3.5" />
-    <path d="M9.5 12v7.5a2.5 2.5 0 0 0 5 0V12M9 6a4.5 4.5 0 0 1 6 0M10.5 8.3a2.3 2.3 0 0 1 3 0" />
-    <circle cx="12" cy="16.5" r=".8" fill="currentColor" stroke="none" />
-  </svg>;
+  return <HHR5000Icon size={size} {...props} />;
 }
 
 export function IssuesIcon({ size = 22, ...props }: IconProps) {
