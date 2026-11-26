@@ -283,3 +283,11 @@ export function SpreadsheetIcon({ size = 22, ...props }: IconProps) {
 export function HelpCircleIcon({ size = 22, ...props }: IconProps) {
   return <svg {...base(size)} {...props}><circle cx="12" cy="12" r="9" /><path d="M9.5 8.5a2.5 2.5 0 0 1 5 .5c0 1.8-2.5 2-2.5 3.5" /><circle cx="12" cy="16" r=".65" fill="currentColor" stroke="none" /></svg>;
 }
+
+export function ClockIcon({ size = 22, ...props }: IconProps) {
+  return <svg {...base(size)} {...props}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>;
+}
+
+export function CalendarIcon({ size = 22, ...props }: IconProps) {
+  return <svg {...base(size)} {...props}><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M7 3v4m10-4v4M3 10h18" /></svg>;
+}

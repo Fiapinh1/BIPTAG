@@ -17,6 +17,7 @@ import './styles/experience.css';
 import './styles/wave-header.css';
 import './styles/context-help.css';
 import './styles/bottom-navigation.css';
+import './styles/audit-directory.css';
 
 initializeAppInstall();
 initializeAppUpdates();
