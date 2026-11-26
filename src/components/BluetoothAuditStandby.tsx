@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { HHR5000Status } from '../hooks/useHHR5000';
-import { CheckIcon, ChevronRightIcon, IssuesIcon, RefreshIcon } from '../icons/Icons';
+import { BluetoothIcon, CheckIcon, ChevronRightIcon, IssuesIcon, RefreshIcon } from '../icons/Icons';
 import { bluetoothConnectionAlert, bluetoothReadingAlert, type BluetoothAlert } from '../presentation/bluetooth-feedback';
 import { HHR5000Icon, type HHR5000IconState } from './HHR5000Icon';
 import { ReaderHelp } from './ReaderHelp';
@@ -36,18 +36,16 @@ export function BluetoothAuditStandby({ status, supported, message, error, onAct
     else if (status !== 'conectando') setPersistentAlert(bluetoothConnectionAlert(status, supported, message));
   }, [status, supported, message]);
   const alert = connectionAlert ?? (!connected ? persistentAlert : null) ?? (connected ? bluetoothReadingAlert(error) : null);
-  const iconState: HHR5000IconState = connecting ? 'connecting' : alert ? alert.tone === 'danger' ? 'error' : 'warning' : connected ? 'waiting' : 'disconnected';
-  const reconnect = Boolean(alert?.reconnect);
+  const iconState: HHR5000IconState = connecting ? 'connecting' : connected ? 'waiting' : alert ? alert.tone === 'danger' ? 'error' : 'warning' : 'disconnected';
   return <div className={`audit-reader-standby audit-reader-standby--bluetooth ${connected ? 'is-ready' : ''}`} data-reader-state={iconState}>
-    <div className="bluetooth-standby__heading">
-      <span className="bluetooth-standby__icon"><HHR5000Icon size={46} state={iconState} /></span>
-      <div><span className="bluetooth-standby__status" role="status"><span aria-hidden="true" />{connected ? 'Bastão conectado' : connecting ? 'Conectando bastão…' : 'Bastão desconectado'}</span><h2>{connected ? 'Leia a próxima tag' : connecting ? 'Conectando ao bastão' : 'Conecte seu bastão'}</h2></div>
-    </div>
+    <span className="bluetooth-standby__icon"><HHR5000Icon size={60} state={iconState} />{connected && <svg className="bluetooth-standby__signal" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M5 5a14 14 0 0 1 14 14" /><path d="M5 11a8 8 0 0 1 8 8" /></svg>}</span>
+    <span className="bluetooth-standby__status" role="status">{connected ? <CheckIcon size={14} /> : connecting ? <RefreshIcon size={14} /> : <BluetoothIcon size={14} />}{connected ? 'Bastão conectado' : connecting ? 'Conectando bastão…' : 'Bastão desconectado'}</span>
+    <h2>{connected ? 'Leia a próxima tag' : connecting ? 'Conectando ao bastão' : 'Conecte seu bastão'}</h2>
     <p className="bluetooth-standby__caption">{connected ? 'Aguardando leitura do bastão...' : connecting ? 'Aguarde a conexão.' : 'Conecte o bastão para começar.'}</p>
     {alert && <div className={`bluetooth-standby__alert bluetooth-standby__alert--${alert.tone}`} role="alert"><IssuesIcon size={19} /><div><strong>{alert.title}</strong><span>{alert.message}</span></div></div>}
-    <button className={`button ${connected ? 'button--ghost' : 'button--primary'}`} disabled={!supported || connecting} onClick={onActivate}><RefreshIcon size={17} />{connecting ? 'Conectando…' : connected || reconnect ? 'Reconectar bastão' : 'Conectar bastão'}</button>
+    {!connected && <button className="button button--primary" disabled={!supported || connecting} onClick={onActivate}>{connecting ? 'Conectando…' : 'Conectar bastão'}</button>}
     {connecting && <button className="button button--ghost" onClick={onStop}>Cancelar conexão</button>}
-    <ReaderHelp mode="bluetooth" technicalMessages={[...(alert ? [message] : []), ...(error ? [error] : [])]} />
+    {!connected && <ReaderHelp mode="bluetooth" technicalMessages={[...(alert ? [message] : []), ...(error ? [error] : [])]} />}
   </div>;
 }
 

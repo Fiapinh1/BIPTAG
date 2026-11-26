@@ -20,19 +20,23 @@
 .audit-workspace--bluetooth:has(> .audit-reader-standby--bluetooth) .audit-workspace__progress-track { height: 4px; background: #E4ECE4; }
 .audit-workspace--bluetooth:has(> .audit-reader-standby--bluetooth) .audit-workspace__progress-track > span { background: #278123; }
 .audit-workspace--bluetooth:has(> .audit-reader-standby--bluetooth) .audit-workspace__progress--field .audit-workspace__progress-track > span { background: #85AD7C; }
-.audit-reader-standby.audit-reader-standby--bluetooth { justify-items: stretch; align-content: start; gap: 9px; min-height: 0; padding: 14px; border-color: #DCE5DE; border-radius: 18px; background: #FFFFFF; text-align: left; }
-.bluetooth-standby__heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.bluetooth-standby__heading > div { min-width: 0; }
-.bluetooth-standby__icon { display: grid; flex: 0 0 52px; place-items: center; width: 52px; height: 52px; border-radius: 14px; background: #F4F7F3; }
-.bluetooth-standby__status { display: flex; align-items: center; gap: 5px; color: #65776B; font-size: 10px; font-weight: 750; line-height: 1.4; }
-.bluetooth-standby__status > span { flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.is-ready .bluetooth-standby__status { color: #267229; }
-.audit-reader-standby--bluetooth .bluetooth-standby__heading h2 { margin: 4px 0 0; color: #19362A; font-size: clamp(20px, 5.4vw, 24px); line-height: 1.2; letter-spacing: -.025em; }
+.audit-reader-standby.audit-reader-standby--bluetooth { justify-items: center; align-content: start; gap: 10px; min-height: 0; padding: 18px 16px; border-color: #DCE5DE; border-radius: 18px; background: #FFFFFF; text-align: center; }
+.bluetooth-standby__icon { position: relative; display: grid; place-items: center; width: 76px; height: 76px; border-radius: 21px; background: #F0F3F2; }
+.is-ready .bluetooth-standby__icon { background: #E8F5E5; }
+.bluetooth-standby__icon .hhr5000-icon__body { animation: none; }
+.bluetooth-standby__signal { position: absolute; top: 7px; right: 5px; width: 22px; height: 22px; color: #25CC00; }
+.bluetooth-standby__signal path { animation: bluetooth-standby-signal 2.6s ease-in-out infinite; }
+.bluetooth-standby__signal path:first-child { animation-delay: .2s; }
+@keyframes bluetooth-standby-signal { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+.bluetooth-standby__status { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 6px 10px; border-radius: 999px; color: #65776B; background: #F0F3F2; font-size: 11px; font-weight: 650; line-height: 1.4; }
+.bluetooth-standby__status > svg { flex-shrink: 0; }
+.is-ready .bluetooth-standby__status { color: #267229; background: #E8F5E5; }
+.audit-reader-standby--bluetooth > h2 { margin: 2px 0 0; color: #19362A; font-size: clamp(20px, 5.4vw, 24px); line-height: 1.2; letter-spacing: -.025em; }
 .audit-reader-standby--bluetooth p.bluetooth-standby__caption { max-width: none; margin: 0; color: #60726A; font-size: 12px; line-height: 1.45; }
-.app-shell .audit-reader-standby--bluetooth > .button { justify-self: start; gap: 7px; min-height: 44px; width: auto; max-width: 100%; margin: 0; padding: 9px 12px; border-radius: 11px; font-size: 12px; }
+.app-shell .audit-reader-standby--bluetooth > .button { justify-self: stretch; gap: 7px; min-height: 44px; width: 100%; max-width: 100%; margin: 0; padding: 9px 12px; border-radius: 11px; font-size: 12px; }
 .app-shell .audit-reader-standby--bluetooth > .button--primary { border: 1px solid #16731D; color: #FFFFFF; background: linear-gradient(115deg, #138307, #126218); }
 .app-shell .audit-reader-standby--bluetooth > .button--ghost { border-color: #CEDBCF; color: #3B6245; background: #FFFFFF; }
-.bluetooth-standby__alert { display: flex; align-items: start; gap: 8px; padding: 9px 10px; border: 1px solid #E5D4B3; border-radius: 11px; color: #8B5C0E; background: #FFF8EB; }
+.bluetooth-standby__alert { display: flex; align-items: start; justify-self: stretch; gap: 8px; padding: 9px 10px; border: 1px solid #E5D4B3; border-radius: 11px; color: #8B5C0E; background: #FFF8EB; text-align: left; }
 .bluetooth-standby__alert--danger { border-color: #E4C6BE; color: #A0473A; background: #FCF0ED; }
 .bluetooth-standby__alert > svg { flex-shrink: 0; margin-top: 1px; }
 .bluetooth-standby__alert strong { display: block; font-size: 12px; line-height: 1.4; }
@@ -42,7 +46,7 @@
 .reader-help--bluetooth > summary > span { flex: 1; }
 .reader-help--bluetooth > summary > svg { flex-shrink: 0; }
 .reader-help--bluetooth[open] > summary > svg:last-child { transform: rotate(90deg); }
-.audit-reader-standby--bluetooth .reader-help { margin: 0; padding-top: 0; border-color: #E4EBE5; }
+.audit-reader-standby--bluetooth .reader-help { justify-self: stretch; width: 100%; margin: 0; padding-top: 0; border-color: #E4EBE5; text-align: left; }
 .audit-reader-standby--bluetooth .reader-help > summary { min-height: 44px; padding: 9px 0; color: #477753; font-size: 12px; }
 .reader-help__technical { padding: 10px; border-radius: 10px; color: #526B5B; background: #F4F7F3; font-size: 11px; line-height: 1.5; }
 .audit-reader-standby--bluetooth .reader-help__technical p { max-width: none; margin: 5px 0 0; font-size: 11px; line-height: 1.5; }
@@ -56,6 +60,8 @@
 @media (max-height: 660px) {
   .app-shell .audit-workspace--bluetooth:has(> .audit-reader-standby--bluetooth) { gap: 8px; padding-block: max(8px, env(safe-area-inset-top)) 8px; }
   .audit-reader-standby.audit-reader-standby--bluetooth { gap: 8px; padding: 12px; }
-  .bluetooth-standby__icon { flex-basis: 46px; width: 46px; height: 46px; }
+  .bluetooth-standby__icon { width: 64px; height: 64px; border-radius: 18px; }
+  .bluetooth-standby__icon > .hhr5000-icon { width: 52px; height: 52px; }
+  .bluetooth-standby__signal { top: 5px; right: 3px; width: 20px; height: 20px; }
 }
-@media (prefers-reduced-motion: reduce) { .hhr5000-icon__loading, .hhr5000-icon--waiting .hhr5000-icon__body { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .hhr5000-icon__loading, .hhr5000-icon--waiting .hhr5000-icon__body, .bluetooth-standby__signal path { animation: none; } }
