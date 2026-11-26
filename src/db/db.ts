@@ -1,8 +1,11 @@
 import Dexie, { type EntityTable } from 'dexie';
 import type { Audit, AuditRecord, EffectiveTagAssignment, ImportIssue, KnownIssue, TagAssignment } from '../types/domain';
 import { generateId } from '../utils/id';
+import type { RegisteredTag, RegistrationFarm } from '../types/registration';
 
 class BiptagDB extends Dexie {
+  registrationFarms!: EntityTable<RegistrationFarm, 'id'>;
+  registeredTags!: EntityTable<RegisteredTag, 'id'>;
   audits!: EntityTable<Audit, 'id'>;
   tagAssignments!: EntityTable<TagAssignment, 'id'>;
   effectiveTagAssignments!: EntityTable<EffectiveTagAssignment, 'id'>;
@@ -195,6 +198,11 @@ class BiptagDB extends Dexie {
         'id, auditId, sequence, tagNumber, status, operationalAction, isCurrent, reviewStatus, scannedAt, createdAt, updatedAt, syncStatus, expectedAnimal, observedAnimal, effectiveAnimal, pairId, [auditId+tagNumber], [auditId+sequence]',
       importIssues: 'id, auditId, type, tagNumber, animal',
       knownIssues: 'id, auditId, tagNumber, type, createdAt, updatedAt, syncStatus, [auditId+tagNumber], [auditId+type]'
+    });
+
+    this.version(7).stores({
+      registrationFarms: 'id, &nameKey, updatedAt',
+      registeredTags: 'id, farmId, tagNumber, animal, &[farmId+tagNumber], &[farmId+animal], updatedAt'
     });
   }
 }

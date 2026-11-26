@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRightIcon, FarmIcon, ImportIcon, MoreIcon, PlusIcon, SearchIcon, TrashIcon } from '../icons/Icons';
+import { ChevronRightIcon, FarmIcon, ImportIcon, MoreIcon, SearchIcon, TagIcon, TrashIcon } from '../icons/Icons';
 import type { Audit } from '../types/domain';
 import { AppInstallPanel } from './AppInstallPanel';
+import { RegistrationDirectory } from './TagRegistration';
 
 const statuses = {
   in_progress: { label: 'Em andamento', filter: 'Em andamento' },
@@ -27,12 +28,13 @@ function searchable(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
 }
 
-export function FarmDirectory({ audits, onOpen, onResume, onCreate, onDelete }: {
+export function FarmDirectory({ audits, onOpen, onResume, onCreate, onDelete, onRegister }: {
   audits: Audit[];
   onOpen: (audit: Audit) => void;
   onResume: (audit: Audit) => void;
   onCreate: () => void;
   onDelete: (audit: Audit) => void;
+  onRegister: (farmId?: string) => void;
 }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<'all' | StatusFilter>('all');
@@ -73,9 +75,16 @@ export function FarmDirectory({ audits, onOpen, onResume, onCreate, onDelete }: 
   return (
     <section className="page farm-directory" ref={directoryRef}>
       <div className="farm-directory__heading">
-        <div><span className="eyebrow">AUDITORIAS DE SMARTTAGS</span><h1>Fazendas</h1><p>Suas auditorias, prontas para continuar.</p></div>
-        <div className="farm-directory__actions"><AppInstallPanel compact />{audits.length > 0 && <button className="button button--primary farm-directory__create" onClick={onCreate}><PlusIcon size={19} /> Nova auditoria</button>}</div>
+        <div><span className="eyebrow">SUAS SMARTTAGS NO CAMPO</span><h1>Fazendas</h1><p>Cadastre novas tags ou confira os vínculos.</p></div>
+        <div className="farm-directory__actions"><AppInstallPanel compact /></div>
       </div>
+
+      <div className="farm-start-actions" aria-label="Começar um trabalho">
+        <button className="farm-start-action farm-start-action--registration" aria-labelledby="start-registration-title" aria-describedby="start-registration-description" onClick={() => onRegister()}><span className="farm-start-action__icon"><TagIcon size={25} /></span><span><strong id="start-registration-title">Cadastrar novas tags</strong><small id="start-registration-description">Primeiro vínculo com o animal. Sem planilha.</small></span><ChevronRightIcon size={20} /></button>
+        <button className="farm-start-action" aria-labelledby="start-audit-title" aria-describedby="start-audit-description" onClick={onCreate}><span className="farm-start-action__icon"><ImportIcon size={25} /></span><span><strong id="start-audit-title">Nova auditoria</strong><small id="start-audit-description">Importe a planilha e confira no campo.</small></span><ChevronRightIcon size={20} /></button>
+      </div>
+
+      <RegistrationDirectory onOpen={onRegister} />
 
       {audits.length > 1 && recent && (
         <div className="farm-resume">
@@ -107,15 +116,7 @@ export function FarmDirectory({ audits, onOpen, onResume, onCreate, onDelete }: 
             </li>)}
           </ul> : <div className="farm-directory__no-results"><SearchIcon size={28} /><h3>Nenhuma auditoria encontrada</h3><p>Tente outro nome ou escolha outro status.</p><button className="button button--ghost" onClick={() => { setQuery(''); setFilter('all'); }}>Limpar filtros</button></div>}
         </section>
-      ) : (
-        <div className="farm-directory__empty">
-          <span className="farm-directory__empty-icon"><ImportIcon size={32} /></span>
-          <h2>Sua primeira auditoria começa aqui</h2>
-          <p>Importe a planilha Tags.xlsx do Nedap. Depois, confira as tags pelo bastão, pelo telefone ou manualmente.</p>
-          <button className="button button--primary" onClick={onCreate}><PlusIcon size={19} /> Importar planilha</button>
-          <small>As auditorias ficam salvas neste aparelho.</small>
-        </div>
-      )}
+      ) : null}
     </section>
   );
 }

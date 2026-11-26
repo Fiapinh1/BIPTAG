@@ -11,6 +11,7 @@ import './styles/farm-directory.css';
 import './styles/audit-summary.css';
 import './styles/navigation.css';
 import './styles/app-install.css';
+import './styles/registration.css';
 
 initializeAppInstall();
 initializeAppUpdates();

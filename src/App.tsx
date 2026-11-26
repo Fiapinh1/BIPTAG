@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, newId } from './db/db';
 import { EmptyState } from './components/EmptyState';
 import { FarmDirectory } from './components/FarmDirectory';
+import { TagRegistration } from './components/TagRegistration';
 import { AuditSummary } from './components/AuditSummary';
 import { TagReadOnlyList } from './components/TagReadOnlyList';
 import { HHR5000Connector } from './components/HHR5000Connector';
@@ -79,11 +80,11 @@ import type {
 } from './types/domain';
 import type { Session } from '@supabase/supabase-js';
 
-type View = 'home' | 'import' | 'audit' | 'lookup' | 'issues' | 'knownIssues' | 'settings';
+type View = 'home' | 'import' | 'audit' | 'lookup' | 'issues' | 'knownIssues' | 'settings' | 'registration';
 
 const VIEW_STORAGE_KEY = 'biptag-current-view';
 const SELECTED_AUDIT_STORAGE_KEY = 'biptag-selected-audit';
-const RESTORABLE_VIEWS: View[] = ['home', 'import', 'audit', 'lookup', 'issues', 'knownIssues', 'settings'];
+const RESTORABLE_VIEWS: View[] = ['home', 'import', 'audit', 'lookup', 'issues', 'knownIssues', 'settings', 'registration'];
 
 function readStoredView(): View {
   try {
@@ -263,6 +264,9 @@ function App() {
   const [cloudSession, setCloudSession] = useState<Session | null>(null);
   const [pulledCloudUserId, setPulledCloudUserId] = useState<string | null>(null);
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(() => readStoredAuditId());
+  const [registrationFarmId, setRegistrationFarmId] = useState<string | null>(() => {
+    try { return localStorage.getItem('biptag-registration-farm'); } catch { return null; }
+  });
   const autoSyncBusy = useRef(false);
   const bluetoothReadHandler = useRef<((tagNumber: string, rawValue: string) => void) | null>(null);
   const pendingAuditRead = useRef(false);
@@ -286,7 +290,14 @@ function App() {
     if (!audits.length || !selectedAuditId) return null;
     return audits.find((audit) => audit.id === selectedAuditId) ?? null;
   }, [audits, selectedAuditId]);
-  const hhr5000 = useHHR5000((tag, raw) => bluetoothReadHandler.current?.(tag, raw), selectedAudit?.tagPattern?.length ?? MAX_SMARTTAG_DIGITS);
+  const hhr5000 = useHHR5000((tag, raw) => bluetoothReadHandler.current?.(tag, raw), view === 'registration' ? MAX_SMARTTAG_DIGITS : selectedAudit?.tagPattern?.length ?? MAX_SMARTTAG_DIGITS);
+
+  useEffect(() => {
+    try {
+      if (registrationFarmId) localStorage.setItem('biptag-registration-farm', registrationFarmId);
+      else localStorage.removeItem('biptag-registration-farm');
+    } catch { /* The active farm remains available in memory. */ }
+  }, [registrationFarmId]);
 
   useEffect(() => {
     if (view !== 'home' || hhr5000.status === 'conectando') return blockAppUpdates();
@@ -519,8 +530,8 @@ function App() {
     }
   }
 
-  const auditNavActive = Boolean(selectedAudit) && !['import', 'settings'].includes(view);
-  const viewTitles: Record<View, string> = { home: selectedAudit ? 'Resumo da fazenda' : 'Fazendas', import: 'Nova auditoria', audit: 'Conferência', lookup: 'Consulta', issues: 'Revisão', knownIssues: 'Problemas conhecidos', settings: 'Configurações' };
+  const auditNavActive = Boolean(selectedAudit) && !['import', 'settings', 'registration'].includes(view);
+  const viewTitles: Record<View, string> = { home: selectedAudit ? 'Resumo da fazenda' : 'Fazendas', import: 'Nova auditoria', audit: 'Conferência', lookup: 'Consulta', issues: 'Revisão', knownIssues: 'Problemas conhecidos', settings: 'Configurações', registration: 'Cadastro de tags' };
   const backView = view === 'settings' ? settingsReturnView : 'home';
 
   async function navigate(next: View, allFarms = false) {
@@ -544,7 +555,7 @@ function App() {
           <span className="brand__mark"><BiptagLogo /></span>
           <span>
             <strong>BIPTAG</strong>
-            <small>Auditoria de SmartTags</small>
+            <small>Gestão de SmartTags</small>
           </span>
         </button>
 
@@ -557,7 +568,7 @@ function App() {
       <main className="main-content">
         {view === 'home' && <AppUpdateNotice />}
         {view === 'home' && <ReaderSetupNotice reader={hhr5000} onSettings={() => void navigate('settings')} />}
-        {view !== 'home' && view !== 'audit' && <PageNavigation onHome={() => void navigate('home', true)}
+        {view !== 'home' && view !== 'audit' && view !== 'registration' && <PageNavigation onHome={() => void navigate('home', true)}
           onBack={selectedAudit || backView !== 'home' ? () => void navigate(backView) : undefined} backHint={viewTitles[backView]} />}
         {view === 'home' && (
           <HomeView
@@ -566,6 +577,7 @@ function App() {
             onSelectAudit={(audit) => void chooseAudit(audit)}
             onResumeAudit={(audit) => { void chooseAudit(audit).then(() => setView('audit')); }}
             onDeleteAudit={(audit) => void deleteAudit(audit)}
+            onRegister={(farmId) => { setRegistrationFarmId(farmId ?? null); setView('registration'); }}
             onClearAudit={() => setSelectedAuditId(null)}
             onImportCreated={(auditId) => {
               setSelectedAuditId(auditId);
@@ -601,6 +613,9 @@ function App() {
           <KnownIssuesView audit={selectedAudit} onNeedImport={() => setView('import')} setToast={setToast} />
         )}
         {view === 'settings' && <CloudSettingsView activeAudit={selectedAudit} setToast={setToast} reader={hhr5000} />}
+        {view === 'registration' && <TagRegistration farmId={registrationFarmId} farmNames={audits.map((audit) => audit.farmName)}
+          onSelectFarm={setRegistrationFarmId} onHome={() => void navigate('home', true)} reader={hhr5000} bluetoothReadHandler={bluetoothReadHandler}
+          confirm={(title, message) => appDialog.confirm({ title, message, confirmLabel: 'Confirmar', cancelLabel: 'Voltar', tone: 'warning' })} />}
       </main>
 
       <nav className={`bottom-nav ${auditNavActive ? 'bottom-nav--audit' : 'bottom-nav--home'}`} aria-label="Navegação principal">
@@ -699,6 +714,7 @@ function HomeView({
   onSelectAudit,
   onResumeAudit,
   onDeleteAudit,
+  onRegister,
   onClearAudit,
   onImportCreated,
   onIssues,
@@ -710,6 +726,7 @@ function HomeView({
   onSelectAudit: (audit: Audit) => void;
   onResumeAudit: (audit: Audit) => void;
   onDeleteAudit: (audit: Audit) => void;
+  onRegister: (farmId?: string) => void;
   onClearAudit: () => void;
   onImportCreated: (auditId: string) => void;
   onIssues: () => void;
@@ -809,7 +826,7 @@ function HomeView({
   if (!activeAudit) {
     return (
       <>
-        <FarmDirectory audits={audits} onOpen={onSelectAudit} onResume={onResumeAudit} onCreate={() => setShowCreateFarmModal(true)} onDelete={onDeleteAudit} />
+        <FarmDirectory audits={audits} onOpen={onSelectAudit} onResume={onResumeAudit} onCreate={() => setShowCreateFarmModal(true)} onDelete={onDeleteAudit} onRegister={onRegister} />
         {createFarmModal}
       </>
     );

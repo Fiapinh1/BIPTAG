@@ -1,6 +1,6 @@
 # BIPTAG Web — V0.3 Field Workflow
 
-BIPTAG é uma PWA para auditoria de SmartTags Nedap em campo usando Web NFC, a planilha `Tags.xlsx` exportada do Nedap Now e confirmação visual do brinco.
+BIPTAG é uma PWA para cadastrar SmartTags em campo sem planilha e auditar vínculos usando a planilha `Tags.xlsx` exportada do Nedap Now. As leituras podem ser feitas por Web NFC, bastão Bluetooth compatível ou digitação, com confirmação visual do brinco.
 
 ## Stack
 
@@ -13,6 +13,21 @@ BIPTAG é uma PWA para auditoria de SmartTags Nedap em campo usando Web NFC, a p
 - GitHub + Vercel para deploy
 
 ## Regra central do modo campo
+
+### Cadastro inicial sem planilha
+
+Na página inicial, **Cadastrar novas tags** abre um modo independente da auditoria. Crie ou escolha uma fazenda, leia a SmartTag por NFC/Bluetooth ou digite seus 15 dígitos, informe o brinco e toque em **Salvar e adicionar próximo**. O cadastro só é confirmado depois desse toque; uma leitura seguinte não substitui a tag em preenchimento.
+
+- Os vínculos ficam nas tabelas locais `registrationFarms` e `registeredTags`. Eles não criam ocorrências nem alteram a base de uma auditoria.
+- Cada fazenda permite um vínculo por tag e um por animal. Zeros, números incompletos e duplicações são bloqueados na gravação, inclusive com envios simultâneos.
+- A aba **Cadastros** permite buscar vínculos, corrigir a tag ou o animal com confirmação e exportar um Excel com SmartTag, animal e data do cadastro. A correção conserva o vínculo anterior no histórico local.
+- O último rascunho de cada fazenda é restaurado ao reabrir a tela. Uma ativação NFC exige novo toque ao retomar; a conexão Bluetooth segue o comportamento existente do leitor.
+- Após carregar o app com internet, o modo funciona offline. Os novos cadastros ficam **somente neste aparelho** nesta versão; a sincronização de auditorias com Supabase não inclui essas tabelas. Use a exportação para compartilhar ou guardar uma cópia.
+- O Excel representa os vínculos registrados no BIPTAG. Ele não cadastra os animais automaticamente no Nedap e não é a planilha original `Tags.xlsx` de auditoria.
+
+A migração local de versão 6 para 7 acrescenta as tabelas de cadastro e preserva as auditorias existentes. NFC e Bluetooth continuam dependentes dos formatos e recursos que o telefone e o bastão conseguem ler.
+
+### Conferência com base importada
 
 O técnico **não diagnostica o problema no curral**. Ele confirma fatos físicos:
 
@@ -47,7 +62,7 @@ A V0.3 possui:
 
 ## Atualizando da V0.1
 
-A V0.3 usa o mesmo banco `biptag-db` e possui migrações Dexie compatíveis até a versão 3.
+A V0.3 usa o mesmo banco `biptag-db` e possui migrações Dexie compatíveis até a versão 7.
 
 Para atualizar um projeto existente:
 
