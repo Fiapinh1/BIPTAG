@@ -564,7 +564,7 @@ function App() {
       <main className="main-content">
         {view === 'home' && <AppUpdateNotice />}
         {view === 'home' && <ReaderSetupNotice reader={hhr5000} onSettings={() => void navigate('settings')} />}
-        {view !== 'home' && view !== 'audit' && view !== 'registration' && view !== 'settings' && <PageNavigation onHome={() => void navigate('home', true)}
+        {view !== 'home' && view !== 'audit' && view !== 'registration' && view !== 'settings' && view !== 'lookup' && <PageNavigation onHome={() => void navigate('home', true)}
           onBack={selectedAudit || backView !== 'home' ? () => void navigate(backView) : undefined} backHint={viewTitles[backView]} />}
         {view === 'home' && (
           <HomeView
