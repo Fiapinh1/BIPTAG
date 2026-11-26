@@ -1,0 +1,41 @@
+/* Initial farm selection only. The active registration and reader workspace is unchanged. */
+.app-shell .registration-setup { gap: 18px; padding: 8px 20px 24px; }
+.registration-setup__hero { position: relative; isolation: isolate; display: flex; align-items: center; min-width: 0; min-height: 190px; margin-inline: -20px; padding: 10px 20px 18px; overflow: hidden; }
+.registration-setup__hero-copy { position: relative; z-index: 1; width: 60%; min-width: 0; }
+.registration-setup__eyebrow { display: flex; align-items: center; justify-content: space-between; gap: 4px; min-height: 36px; margin-bottom: 2px; }
+.registration-setup__eyebrow .eyebrow { color: #355443; font-size: 9px; font-weight: 800; line-height: 1.4; letter-spacing: .035em; }
+.registration-setup__eyebrow .context-help-trigger { color: #51795B; }
+.registration-setup .registration-setup__hero h1 { max-width: none; margin: 0; color: #122022; font-size: clamp(27px, 6.9vw, 33px); line-height: 1.13; font-weight: 800; letter-spacing: -.035em; text-wrap: balance; }
+.registration-setup__hero h1 > span { display: block; white-space: nowrap; }
+.registration-setup__illustration { position: absolute; z-index: 0; right: -1px; bottom: 0; width: 260px; height: auto; max-width: none; pointer-events: none; mask-image: linear-gradient(90deg, transparent 20%, #000 48%); }
+.registration-setup > .registration-panel { gap: 13px; padding: 18px; border-color: #DCE5DE; border-radius: 20px; box-shadow: 0 4px 16px #12202206; }
+.registration-setup > .registration-panel > label { display: flex; align-items: center; gap: 9px; color: #243D30; font-size: 14px; }
+.registration-setup > .registration-panel > label svg { flex-shrink: 0; color: #278123; }
+.registration-setup > .registration-panel > .text-input { min-height: 52px; border-color: #CBD6CE; border-radius: 11px; color: #122022; font-size: 16px; }
+.registration-setup > .registration-panel > .text-input:focus { outline: none; border-color: #278123; box-shadow: 0 0 0 3px #14990012; }
+.app-shell .registration-setup > .registration-panel > .button--primary { min-height: 52px; margin: 0; border-color: #16731D; border-radius: 12px; color: #FFFFFF; background: linear-gradient(115deg, #138307, #126218); box-shadow: 0 3px 7px #12621813; font-size: 14px; font-weight: 750; }
+.app-shell .registration-setup > .registration-panel > .button--primary:hover:not(:disabled) { color: #FFFFFF; background: linear-gradient(115deg, #117306, #0E5415); }
+.app-shell .registration-setup > .registration-panel > .button--primary:disabled { opacity: 1; border-color: #D3DDD6; color: #65776B; background: #E1E9E3; box-shadow: none; }
+.registration-setup .registration-directory { margin-top: 9px; }
+.registration-setup .registration-section-heading { margin-bottom: 10px; }
+.registration-setup .registration-section-heading h2 { color: #19362A; font-size: 18px; letter-spacing: -.02em; }
+.registration-setup .registration-directory > ul { border-color: #DCE5DE; border-radius: 17px; box-shadow: 0 3px 10px #12202204; }
+.registration-setup .registration-farm-icon { color: #267229; background: #E8F5E5; }
+.registration-setup .registration-directory .registration-farm-open > svg { color: #477753; }
+.registration-setup .context-help-trigger:focus-visible,
+.app-shell .registration-setup :is(button, input):focus-visible { outline-color: #147A09; }
+@media (min-width: 600px) {
+  .registration-setup__hero { min-height: 204px; }
+  .registration-setup__hero-copy { width: 58%; }
+  .registration-setup__illustration { width: 290px; right: -3px; }
+  .registration-setup__eyebrow .eyebrow { font-size: 10px; }
+}
+@media (max-width: 359px) {
+  .app-shell .registration-setup { padding-inline: 16px; gap: 16px; }
+  .registration-setup__hero { min-height: 180px; margin-inline: -16px; padding-inline: 16px; }
+  .registration-setup__hero-copy { width: 60%; }
+  .registration-setup .registration-setup__hero h1 { font-size: 26px; }
+  .registration-setup__eyebrow .eyebrow { font-size: 8px; }
+  .registration-setup__illustration { width: 228px; right: -8px; }
+  .registration-setup > .registration-panel { padding: 15px; }
+}

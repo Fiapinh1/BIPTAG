@@ -9,7 +9,7 @@ import { isWebNfcSupported, startNfcReader } from '../services/nfc';
 import { describeReaderError } from '../services/reader-access';
 import { feedbackCorrect, feedbackWarning } from '../services/feedback';
 import { scrollPageToTop } from '../services/page-scroll';
-import { ArrowLeftIcon, CheckIcon, ChevronRightIcon, CowIcon, DownloadIcon, KeyboardIcon, PhoneIcon, PlusIcon, SearchIcon, StickReaderIcon, TagIcon, TrashIcon } from '../icons/Icons';
+import { ArrowLeftIcon, CheckIcon, ChevronRightIcon, CowIcon, DownloadIcon, FarmIcon, KeyboardIcon, PhoneIcon, PlusIcon, SearchIcon, StickReaderIcon, TagIcon, TrashIcon } from '../icons/Icons';
 import { HHR5000Connector } from './HHR5000Connector';
 import { NfcReadDiagnostics } from './NfcReadDiagnostics';
 import { RegistrationManualTag } from './RegistrationManualTag';
@@ -75,10 +75,15 @@ export function TagRegistration(props: Props) {
 
   if (farm) return <RegistrationWorkspace key={farm.id} {...props} farm={farm} />;
   return <section className="registration-setup">
-    <span className="registration-setup__icon"><TagIcon size={30} /></span>
-    <span className="eyebrow">CADASTRO INICIAL</span><div className="registration-setup__heading"><h1>Novas tags, direto no campo.</h1><ContextHelp title="Como funciona o cadastro"><p>Escolha a fazenda e vincule a tag ao brinco do animal. Não precisa importar uma planilha.</p><p>Os dados ficam neste aparelho, mesmo sem internet. Exporte a planilha para compartilhar ou usar no sistema da fazenda.</p></ContextHelp></div>
+    <div className="registration-setup__hero">
+      <img className="registration-setup__illustration" src="/images/registration-tag-illustration.webp" alt="" width={720} height={480} decoding="async" />
+      <div className="registration-setup__hero-copy">
+        <div className="registration-setup__eyebrow"><span className="eyebrow">CADASTRO INICIAL</span><ContextHelp title="Como funciona o cadastro"><p>Escolha a fazenda e vincule a tag ao brinco do animal. Não precisa importar uma planilha.</p><p>Os dados ficam neste aparelho, mesmo sem internet. Exporte a planilha para compartilhar ou usar no sistema da fazenda.</p></ContextHelp></div>
+        <h1><span>Novas tags,</span> direto no campo.</h1>
+      </div>
+    </div>
     <form className="registration-panel" onSubmit={(event) => { event.preventDefault(); void openFarm(); }}>
-      <label htmlFor="registration-farm">Em qual fazenda?</label>
+      <label htmlFor="registration-farm"><FarmIcon size={22} />Em qual fazenda?</label>
       <input id="registration-farm" className="text-input" placeholder="Nome da fazenda" value={name} maxLength={100} required disabled={creating || deleting} list="registration-farm-names" onChange={(event) => setName(event.target.value)} />
       <datalist id="registration-farm-names">{[...new Set(props.farmNames)].map((item) => <option value={item} key={item} />)}</datalist>
       {error && <p className="registration-error" role="alert">{error}</p>}
