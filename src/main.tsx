@@ -19,6 +19,7 @@ import './styles/context-help.css';
 import './styles/bottom-navigation.css';
 import './styles/audit-directory.css';
 import './styles/audit-summary-theme.css';
+import './styles/new-audit.css';
 
 initializeAppInstall();
 initializeAppUpdates();

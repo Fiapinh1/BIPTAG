@@ -6,6 +6,7 @@ import { FarmDirectory } from './components/FarmDirectory';
 import { WaveHeader } from './components/WaveHeader';
 import { TagRegistration } from './components/TagRegistration';
 import { AuditSummary } from './components/AuditSummary';
+import { NewAuditForm } from './components/NewAuditForm';
 import { TagReadOnlyList } from './components/TagReadOnlyList';
 import { HHR5000Connector } from './components/HHR5000Connector';
 import { AuditReadModePicker, AuditReaderStandby, type AuditReadMode } from './components/AuditReaderWorkspace';
@@ -810,12 +811,8 @@ function HomeView({
   const createFarmModal = showCreateFarmModal ? (
     <div className="app-modal app-modal--create-audit" role="dialog" aria-modal="true" aria-labelledby="create-farm-title">
       <div className="app-modal__panel app-modal__panel--wide create-audit-modal">
-        <div className="app-modal__header">
-          <div>
-            <span className="eyebrow">NOVA AUDITORIA</span>
-            <h2 id="create-farm-title">Criar auditoria</h2>
-          </div>
-          <button className="app-modal__close" onClick={() => setShowCreateFarmModal(false)} aria-label="Fechar">×</button>
+        <div className="app-modal__header create-audit-modal__navigation">
+          <button className="new-audit__back" onClick={() => setShowCreateFarmModal(false)}><ArrowLeftIcon size={17} />Voltar</button>
         </div>
         <ImportView onCreated={handleImportCreated} embedded />
       </div>
@@ -1047,6 +1044,7 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
   const [farmName, setFarmName] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [preparationOpen, setPreparationOpen] = useState(false);
   const [patternDraft, setPatternDraft] = useState<SmartTagPattern | null>(null);
   const [patternConfirmed, setPatternConfirmed] = useState(false);
   const [prepStep, setPrepStep] = useState<'summary' | 'pattern' | 'alerts'>('summary');
@@ -1061,10 +1059,10 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!preview) return;
+    if (!preview || !preparationOpen) return;
     prepTitleRef.current?.focus();
     prepBodyRef.current?.scrollTo({ top: 0 });
-  }, [prepStep, Boolean(preview)]);
+  }, [prepStep, Boolean(preview), preparationOpen]);
 
   function goToPrepStep(step: typeof prepStep) {
     setError(null);
@@ -1073,6 +1071,7 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
 
   async function handleFile(selected: File | null) {
     setFile(selected);
+    setPreparationOpen(false);
     setPreview(null);
     setPatternDraft(null);
     setPatternConfirmed(false);
@@ -1104,6 +1103,7 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
     event.preventDefault();
     event.stopPropagation();
     setDraggingFile(false);
+    if (busy) return;
     const dropped = event.dataTransfer.files?.[0] ?? null;
     if (!dropped) return;
     if (!/\.(xlsx|xls)$/i.test(dropped.name)) {
@@ -1255,37 +1255,23 @@ function ImportView({ onCreated, embedded = false }: { onCreated: (auditId: stri
   }
 
   return (
-    <section className={embedded ? 'embedded-import' : 'page'}>
-      <div className="section-heading">
-        <div>
-          <span className="eyebrow">NOVA AUDITORIA</span>
-          <h1>{embedded ? 'Planejar auditoria' : 'Criar nova auditoria'}</h1>
-          <p>Crie a fazenda, carregue o Tags.xlsx e prepare os avisos antes de iniciar a conferencia.</p>
-        </div>
-      </div>
+    <section className={`new-audit ${embedded ? 'embedded-import' : 'page'}`}>
+      <NewAuditForm
+        embedded={embedded}
+        farmName={farmName}
+        fileName={file?.name}
+        tagCount={preview?.stats.totalTags}
+        busy={busy}
+        dragging={draggingFile}
+        error={!preparationOpen ? error : null}
+        onFarmChange={setFarmName}
+        onFileChange={(selected) => void handleFile(selected)}
+        onFileDrag={handleFileDrag}
+        onFileDrop={handleFileDrop}
+        onPrepare={() => setPreparationOpen(true)}
+      />
 
-      <div className="form-card import-plan-card">
-        <label className="field-label" htmlFor="farm">Nome da fazenda</label>
-        <input id="farm" className="text-input" placeholder="Ex.: Fazenda Santa Juliana" value={farmName} onChange={(event) => setFarmName(event.target.value)} />
-
-        <label
-          className={`file-drop ${draggingFile ? 'is-dragging' : ''}`}
-          onDragEnter={handleFileDrag}
-          onDragOver={handleFileDrag}
-          onDragLeave={handleFileDrag}
-          onDrop={handleFileDrop}
-        >
-          <input key={file?.name ?? 'empty-file'} type="file" accept=".xlsx,.xls" onChange={(event) => handleFile(event.target.files?.[0] ?? null)} />
-          <span className="file-drop__icon"><ImportIcon size={30} /></span>
-          <strong>{file ? file.name : 'Selecionar Tags.xlsx'}</strong>
-          <small>{file ? 'Arquivo carregado. Confira o preparo.' : 'Arraste no PC ou toque no celular.'}</small>
-        </label>
-      </div>
-
-      {busy && <div className="inline-status">Analisando arquivo…</div>}
-      {error && !preview && <div className="alert alert--danger" role="alert"><IssuesIcon /> <span>{error}</span></div>}
-
-      {preview && (
+      {preview && preparationOpen && (
         <div
           className={`import-prep-overlay import-prep-overlay--${prepStep}`}
           role="dialog"

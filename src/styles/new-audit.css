@@ -1,0 +1,62 @@
+.app-modal.app-modal--create-audit { padding: 20px; backdrop-filter: blur(4px); }
+.app-shell .create-audit-modal { position: relative; width: min(560px, 100%); max-width: 100%; height: auto; max-height: calc(var(--app-viewport-height, 100dvh) - 40px); padding: 0; border: 1px solid #D9E3DE; border-radius: 24px; background: #F4F6F8; box-shadow: 0 20px 70px #12202230; }
+.create-audit-modal::before { position: absolute; top: 0; left: 0; right: 0; height: 5px; content: ''; background: linear-gradient(95deg, #122022, #149900 65%, #25CC00); }
+.app-shell .create-audit-modal .create-audit-modal__navigation { display: flex; padding: 19px 22px 6px; border: 0; }
+.new-audit__back { display: inline-flex; align-items: center; gap: 5px; min-height: 44px; padding: 7px 12px; border: 1px solid #D4EACD; border-radius: 24px; color: #205A21; background: #E8F5E5; font: inherit; font-size: 12px; font-weight: 750; cursor: pointer; }
+.app-shell .create-audit-modal .embedded-import.new-audit { display: grid; align-content: start; gap: 20px; width: 100%; min-height: 0; margin: 0; padding: 0 22px 24px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+.app-shell .page.new-audit { display: grid; align-content: start; gap: 20px; width: min(560px, 100%); margin-inline: auto; padding: 20px; }
+.new-audit__hero { position: relative; isolation: isolate; min-height: 110px; padding-top: 13px; }
+.new-audit__hero > .eyebrow { display: block; margin-bottom: 6px; color: #294039; font-size: 10px; font-weight: 800; letter-spacing: .045em; }
+.new-audit__hero h1 { max-width: calc(100% - 76px); margin: 0; color: #122022; font-size: clamp(27px, 7.5vw, 34px); font-weight: 800; line-height: 1.15; letter-spacing: -.045em; }
+.new-audit__hero p { position: relative; max-width: 340px; margin: 11px 0 0; color: #5B6B70; font-size: 12px; line-height: 1.55; }
+.new-audit__art { position: absolute; z-index: -1; top: 0; right: -5px; width: 112px; height: 94px; color: #43A92D; pointer-events: none; }
+.new-audit__art::before { position: absolute; inset: 0 -12px 5px 10px; content: ''; border-radius: 64% 30% 43% 50%; background: linear-gradient(145deg, #F4F6F8 20%, #E1F2DB 65%, #D0EBC6); transform: rotate(-10deg); }
+.new-audit__art::after { position: absolute; bottom: 4px; right: -8px; width: 86px; height: 20px; content: ''; border-radius: 50%; background: #D6EED0; }
+.new-audit__art-farm { position: absolute; right: 0; top: 29px; color: #82BE70; }
+.new-audit__art-file { position: absolute; z-index: 1; left: 2px; top: 2px; color: #299A19; background: #F8FCF6; border-radius: 9px; transform: rotate(-5deg); }
+.new-audit__form { display: grid; gap: 17px; min-width: 0; margin: 0; }
+.new-audit__farm { display: flex; align-items: start; gap: 12px; min-width: 0; padding: 15px; border: 1px solid #E4EAE7; border-radius: 16px; background: #FFFFFF; box-shadow: 0 4px 14px #12202206; }
+.new-audit__farm-icon { display: grid; flex: 0 0 40px; place-items: center; width: 40px; height: 40px; border-radius: 12px; color: #278123; background: #E8F5E5; }
+.new-audit__farm > div { display: grid; flex: 1; min-width: 0; gap: 9px; }
+.new-audit__farm .field-label { margin: 0; color: #243D36; font-size: 12px; font-weight: 750; }
+.app-shell .new-audit__farm .text-input { min-height: 46px; width: 100%; margin: 0; padding: 11px 12px; border: 1px solid #CAD5D3; border-radius: 9px; color: #122022; background: #FFFFFF; box-shadow: inset 0 1px 2px #12202203; font-size: 16px; }
+.new-audit__farm .text-input::placeholder { color: #78858A; opacity: 1; }
+.app-shell .new-audit__farm .text-input:focus { outline: 0; border-color: #278123; box-shadow: 0 0 0 3px #14990012; }
+.app-shell .new-audit__upload.file-drop { position: relative; display: grid; justify-items: center; align-content: center; gap: 7px; min-height: 145px; padding: 17px 15px; border: 1.5px dashed #AEC9B3; border-radius: 16px; background: linear-gradient(145deg, #F1F7F2, #F7FAF8); box-shadow: none; color: #183B2F; cursor: pointer; transition: border-color 200ms, background 200ms, box-shadow 200ms; }
+.new-audit__upload-icon { display: flex; color: #278123; }
+.new-audit__upload strong { max-width: 100%; color: #19392E; font-size: 14px; font-weight: 750; line-height: 1.4; overflow-wrap: anywhere; }
+.new-audit__upload small { max-width: 100%; margin: 0; color: #63766D; font-size: 11px; line-height: 1.5; }
+.app-shell .new-audit__upload.file-drop:is(:hover, :focus-within, .is-dragging) { border-color: #278123; background: #EDF6E9; box-shadow: 0 0 0 3px #14990010; transform: none; }
+.new-audit__upload:has(input:disabled) { opacity: .65; cursor: wait; }
+.new-audit__file-ready { display: inline-flex; align-items: center; gap: 5px; color: #27602B; font-size: 11px; font-weight: 650; }
+.new-audit__file-tip { display: flex; align-items: start; gap: 10px; padding: 14px; border: 1px solid #E1EBE4; border-radius: 14px; color: #376346; background: #EAF2ED; }
+.new-audit__file-tip > svg { flex: 0 0 auto; margin-top: 1px; }
+.new-audit__file-tip strong { color: #254735; font-size: 12px; font-weight: 750; }
+.new-audit__file-tip p { margin: 4px 0 0; color: #60736A; font-size: 11px; line-height: 1.5; }
+.new-audit__feedback { color: #526B5B; font-size: 12px; }
+.app-shell .new-audit .new-audit__submit { gap: 9px; min-height: 52px; margin: 0; padding: 13px 15px; border: 1px solid #16731D; border-radius: 13px; color: #FFFFFF; background: linear-gradient(115deg, #138307, #126218); box-shadow: 0 3px 7px #12621813; font-size: 14px; font-weight: 750; }
+.app-shell .new-audit .new-audit__submit:hover:not(:disabled) { color: #FFFFFF; background: linear-gradient(115deg, #117306, #0E5415); }
+.app-shell .new-audit .new-audit__submit:disabled { opacity: 1; border-color: #D3DDD6; color: #65776B; background: #E1E9E3; box-shadow: none; }
+.new-audit__form .alert { margin: 0; padding: 11px 13px; border-radius: 11px; font-size: 12px; }
+.app-shell :is(.new-audit, .create-audit-modal__navigation) button:focus-visible { outline: 2px solid #147A09; outline-offset: 3px; }
+@media (max-width: 600px) {
+  .app-modal.app-modal--create-audit { padding: 0; }
+  .app-shell .create-audit-modal { width: 100%; height: var(--app-viewport-height, 100dvh); max-height: var(--app-viewport-height, 100dvh); border: 0; border-radius: 0; }
+  .app-shell .create-audit-modal .create-audit-modal__navigation { padding: max(14px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) 6px max(18px, env(safe-area-inset-left)); }
+  .app-shell .create-audit-modal .embedded-import.new-audit { gap: 17px; padding: 0 max(18px, env(safe-area-inset-right)) max(22px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left)); }
+  .new-audit__hero { min-height: 112px; }
+  .new-audit__farm { padding: 13px; gap: 10px; }
+  .new-audit__form { gap: 16px; }
+}
+@media (max-width: 359px) {
+  .app-shell .create-audit-modal .embedded-import.new-audit { padding-inline: 16px; gap: 14px; }
+  .new-audit__hero { min-height: 106px; padding-top: 11px; }
+  .new-audit__hero h1 { max-width: calc(100% - 72px); font-size: 27px; }
+  .new-audit__hero p { font-size: 11px; }
+  .new-audit__art { right: -9px; transform: scale(.82); transform-origin: right top; }
+  .new-audit__farm { padding: 12px; gap: 9px; }
+  .new-audit__farm-icon { flex-basis: 35px; width: 35px; height: 35px; border-radius: 10px; }
+  .new-audit__form { gap: 14px; }
+  .app-shell .new-audit__upload.file-drop { min-height: 132px; }
+}
+@media (prefers-reduced-motion: reduce) { .app-shell .new-audit__upload.file-drop { transition: none; } }
