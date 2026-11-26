@@ -16,6 +16,7 @@ import { ReaderSetupNotice } from './components/ReaderSetupNotice';
 import { AppInstallPanel, AppUpdateNotice } from './components/AppInstallPanel';
 import { blockAppUpdates } from './services/app-updates';
 import { PageNavigation } from './components/PageNavigation';
+import { SettingsWorkspace } from './components/SettingsWorkspace';
 import { scrollPageToTop } from './services/page-scroll';
 import { getFieldReadingProgress } from './services/audit-progress';
 import { describeReaderError } from './services/reader-access';
@@ -27,6 +28,8 @@ import {
   CheckIcon,
   ChevronRightIcon,
   CloudIcon,
+  CloudDownloadIcon,
+  ClipboardIcon,
   CowIcon,
   HomeIcon,
   ImportIcon,
@@ -36,6 +39,9 @@ import {
   PlusIcon,
   ReportIcon,
   ScanIcon,
+  SearchIcon,
+  UserIcon,
+  LogOutIcon,
   ShareIcon,
   SettingsIcon,
   SwapIcon,
@@ -48,7 +54,7 @@ import { feedbackCorrect, feedbackWarning, primeFeedbackAudio } from './services
 import { useHHR5000, type HHR5000Reader } from './hooks/useHHR5000';
 import { isWebNfcSupported, startNfcReader } from './services/nfc';
 import { deriveReconciliation, hasPhysicalEvidence, isConfirmedEvidence, type ReconciledAnimalGap } from './services/reconciliation';
-import { isSupabaseConfigured, isUsingBundledSupabaseConfig, supabase } from './services/supabase';
+import { isSupabaseConfigured, supabase } from './services/supabase';
 import { deleteAuditEverywhere, pullAuditsFromSupabase, syncAllAuditsToSupabase, syncAuditToSupabase } from './services/cloud-sync';
 import {
   classifyReading,
@@ -568,7 +574,7 @@ function App() {
       <main className="main-content">
         {view === 'home' && <AppUpdateNotice />}
         {view === 'home' && <ReaderSetupNotice reader={hhr5000} onSettings={() => void navigate('settings')} />}
-        {view !== 'home' && view !== 'audit' && view !== 'registration' && <PageNavigation onHome={() => void navigate('home', true)}
+        {view !== 'home' && view !== 'audit' && view !== 'registration' && view !== 'settings' && <PageNavigation onHome={() => void navigate('home', true)}
           onBack={selectedAudit || backView !== 'home' ? () => void navigate(backView) : undefined} backHint={viewTitles[backView]} />}
         {view === 'home' && (
           <HomeView
@@ -612,7 +618,8 @@ function App() {
         {view === 'knownIssues' && (
           <KnownIssuesView audit={selectedAudit} onNeedImport={() => setView('import')} setToast={setToast} />
         )}
-        {view === 'settings' && <CloudSettingsView activeAudit={selectedAudit} setToast={setToast} reader={hhr5000} />}
+        {view === 'settings' && <CloudSettingsView activeAudit={selectedAudit} setToast={setToast} reader={hhr5000}
+          onHome={() => void navigate('home', true)} onBack={selectedAudit || backView !== 'home' ? () => void navigate(backView) : undefined} backHint={viewTitles[backView]} />}
         {view === 'registration' && <TagRegistration farmId={registrationFarmId} farmNames={audits.map((audit) => audit.farmName)}
           onSelectFarm={setRegistrationFarmId} onHome={() => void navigate('home', true)} reader={hhr5000} bluetoothReadHandler={bluetoothReadHandler}
           confirm={(title, message) => appDialog.confirm({ title, message, confirmLabel: 'Confirmar', cancelLabel: 'Voltar', tone: 'warning' })} />}
@@ -622,9 +629,9 @@ function App() {
         {auditNavActive ? (
           <>
             <NavButton active={view === 'home'} label="Resumo" icon={<HomeIcon />} onClick={() => void navigate('home')} />
-            <NavButton active={view === 'audit'} label="Auditar" icon={<NfcReaderGlyph />} onClick={() => void navigate('audit')} />
-            <NavButton active={view === 'lookup'} label="Consultar" icon={<CowIcon />} onClick={() => void navigate('lookup')} />
-            <NavButton active={view === 'issues' || view === 'knownIssues'} label="Revisão" icon={<IssuesIcon />} onClick={() => void navigate('issues')} />
+            <NavButton active={view === 'audit'} label="Auditar" icon={<ScanIcon />} onClick={() => void navigate('audit')} />
+            <NavButton active={view === 'lookup'} label="Consultar" icon={<SearchIcon />} onClick={() => void navigate('lookup')} />
+            <NavButton active={view === 'issues' || view === 'knownIssues'} label="Revisão" icon={<ClipboardIcon />} onClick={() => void navigate('issues')} />
           </>
         ) : (
           <>
@@ -3317,20 +3324,10 @@ function showEffectiveDetails(item: EffectiveTagAssignment) {
   });
 }
 
-function SettingsView() {
-  return (
-    <section className="page">
-      <div className="section-heading"><div><span className="eyebrow">CONFIGURAÇÃO</span><h1>BIPTAG Web V0.3</h1><p>Offline-first, mobile-first e preparado para Supabase, GitHub e Vercel.</p></div></div>
-      <div className="settings-card">
-        <div className="settings-row"><span className="settings-row__icon"><CloudIcon /></span><div><strong>Supabase</strong><small>{isSupabaseConfigured ? 'Variáveis configuradas' : 'Preparado para backup e sincronização na próxima etapa'}</small></div><span className={`status-dot ${isSupabaseConfigured ? 'is-ok' : ''}`} /></div>
-        <div className="settings-row"><span className="settings-row__icon"><ScanIcon /></span><div><strong>Web NFC</strong><small>{isWebNfcSupported() ? 'Disponível neste navegador' : 'Use Chrome Android em HTTPS para leitura real'}</small></div><span className={`status-dot ${isWebNfcSupported() ? 'is-ok' : ''}`} /></div>
-      </div>
-      <div className="technical-note"><strong>Persistência entre dias</strong><p>Auditorias, base importada e leituras ficam no IndexedDB do navegador. Fechar o BIPTAG ou reiniciar o celular não apaga a auditoria. Evite limpar os dados do site até sincronizarmos com o Supabase.</p></div>
-    </section>
-  );
-}
-
-function CloudSettingsView({ activeAudit, setToast, reader }: { activeAudit: Audit | null; setToast: (value: string) => void; reader: HHR5000Reader }) {
+function CloudSettingsView({ activeAudit, setToast, reader, onHome, onBack, backHint }: {
+  activeAudit: Audit | null; setToast: (value: string) => void; reader: HHR5000Reader;
+  onHome: () => void; onBack?: () => void; backHint: string;
+}) {
   const [session, setSession] = useState<Session | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -3386,7 +3383,7 @@ function CloudSettingsView({ activeAudit, setToast, reader }: { activeAudit: Aud
       });
       if (error) throw error;
       if (!data.session) {
-        setMessage('Conta criada, mas o Supabase ainda esta exigindo confirmacao por e-mail. Desative "Confirm email" no Auth ou crie o usuario confirmado pelo painel.');
+        setMessage('Conta criada. Confira sua caixa de entrada e confirme o e-mail antes de entrar.');
         return;
       }
       setMessage('Conta criada e conectada. Use o mesmo e-mail e senha no celular.');
@@ -3418,7 +3415,7 @@ function CloudSettingsView({ activeAudit, setToast, reader }: { activeAudit: Aud
     setMessage(null);
     try {
       const result = await syncAllAuditsToSupabase();
-      const summary = `Banco atualizado: ${result.audits} auditoria(s), ${result.assignments} tags originais, ${result.effectiveAssignments} estados efetivos, ${result.records} leituras, ${result.issues} pendencias e ${result.knownIssues} problemas conhecidos.`;
+      const summary = `Auditorias enviadas: ${result.audits} auditoria(s), com ${result.records} leituras. Agora você pode abri-las em outro aparelho usando esta conta.`;
       setMessage(summary);
       setToast(summary);
     } catch (err) {
@@ -3433,7 +3430,7 @@ function CloudSettingsView({ activeAudit, setToast, reader }: { activeAudit: Aud
     setMessage(null);
     try {
       const result = await pullAuditsFromSupabase();
-      const summary = `Carregado do banco: ${result.audits} auditoria(s), ${result.assignments} tags originais, ${result.records} leituras e ${result.knownIssues} problemas conhecidos.`;
+      const summary = `Auditorias recebidas: ${result.audits} auditoria(s), com ${result.records} leituras. Elas estão disponíveis no início.`;
       setMessage(summary);
       setToast(summary);
     } catch (err) {
@@ -3443,43 +3440,37 @@ function CloudSettingsView({ activeAudit, setToast, reader }: { activeAudit: Aud
     }
   }
 
-  return (
-    <section className="page">
-      <div className="section-heading"><div><span className="eyebrow">CONFIGURACAO</span><h1>BIPTAG Web V0.3</h1><p>Offline-first, mobile-first e conectado ao Supabase para salvar todas as auditorias.</p></div></div>
-      <div className="settings-card">
-        <div className="settings-row"><span className="settings-row__icon"><CloudIcon /></span><div><strong>Supabase</strong><small>{isSupabaseConfigured ? (isUsingBundledSupabaseConfig ? 'Conectado ao banco BIPTAG' : 'Variaveis configuradas') : 'Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY'}</small></div><span className={`status-dot ${isSupabaseConfigured ? 'is-ok' : ''}`} /></div>
-        <div className="settings-row"><span className="settings-row__icon"><CheckIcon /></span><div><strong>Conta</strong><small>{session?.user.email ?? (session ? 'Sessao ativa' : 'Entre com o mesmo e-mail em todos os dispositivos')}</small></div><span className={`status-dot ${session ? 'is-ok' : ''}`} /></div>
+  return <SettingsWorkspace readerConnected={reader.status === 'conectado'} accountConnected={Boolean(session)} accountEmail={session?.user.email}
+    onHome={onHome} onBack={onBack} backHint={backHint}
+    readers={<ReaderPermissionsPanel reader={reader} />}
+    app={<AppInstallPanel />}
+    account={<section className="account-settings" aria-label="Sua conta e suas auditorias">
+      <div className="experience-card account-settings__intro">
+        <span className="experience-icon"><UserIcon size={25} /></span>
+        <div><h2>{session ? 'Conta conectada' : 'Suas auditorias em outros aparelhos'}</h2><p>{session ? session.user.email : 'Use o mesmo e-mail e senha no celular e no computador para compartilhar as auditorias.'}</p></div>
       </div>
-
-      <ReaderPermissionsPanel reader={reader} />
-
-      <AppInstallPanel />
-
-      {isSupabaseConfigured && (
-        <div className="form-card sync-card">
-          {!session ? (
-            <>
-              <label className="field-label" htmlFor="sync-email">E-mail</label>
-              <input id="sync-email" className="text-input" type="email" inputMode="email" placeholder="david.campos@urus.org" value={email} onChange={(event) => setEmail(event.target.value)} />
-              <label className="field-label" htmlFor="sync-password">Senha / PIN</label>
-              <input id="sync-password" className="text-input" type="password" inputMode="text" placeholder="Minimo 6 caracteres" value={password} onChange={(event) => setPassword(event.target.value)} />
-              <button className="button button--primary button--full" disabled={busy || !email.trim() || password.length < 6} onClick={() => void signInWithPassword()}><CloudIcon /> Entrar e sincronizar</button>
-              <button className="button button--secondary button--full" disabled={busy || !email.trim() || password.length < 6} onClick={() => void createAccountWithPassword()}>Criar conta neste e-mail</button>
-            </>
-          ) : (
-            <>
-              <button className="button button--primary button--full" disabled={busy} onClick={() => void syncNow()}><CloudIcon /> Salvar todas auditorias no banco</button>
-              <button className="button button--secondary button--full" disabled={busy} onClick={() => void pullNow()}><CloudIcon /> Abrir auditorias do banco</button>
-              <button className="button button--ghost button--full" disabled={busy} onClick={() => void signOut()}>Sair da conta</button>
-            </>
-          )}
-          {message && <div className="inline-status">{message}</div>}
-        </div>
-      )}
-
-      <div className="technical-note"><strong>Sincronizacao entre dispositivos</strong><p>Use o mesmo e-mail e a mesma senha/PIN no computador e no celular. Depois toque em "Salvar todas auditorias no banco" no aparelho que criou a fazenda e em "Abrir auditorias do banco" no outro. Auditoria atual: {activeAudit?.farmName ?? 'nenhuma selecionada'}.</p></div>
-    </section>
-  );
+      {isSupabaseConfigured ? <div className="form-card sync-card">
+        {!session ? <>
+          <h3>Entrar na conta</h3>
+          <label className="field-label" htmlFor="sync-email">E-mail</label>
+          <input id="sync-email" className="text-input" type="email" inputMode="email" autoComplete="email" autoCapitalize="none" placeholder="seuemail@exemplo.com" value={email} onChange={(event) => setEmail(event.target.value)} />
+          <label className="field-label" htmlFor="sync-password">Senha</label>
+          <input id="sync-password" className="text-input" type="password" inputMode="text" autoComplete="current-password" placeholder="Mínimo de 6 caracteres" value={password} onChange={(event) => setPassword(event.target.value)} />
+          <button className="button button--primary button--full" disabled={busy || !email.trim() || password.length < 6} onClick={() => void signInWithPassword()}><UserIcon /> Entrar na conta</button>
+          <button className="button button--ghost button--full" disabled={busy || !email.trim() || password.length < 6} onClick={() => void createAccountWithPassword()}>Criar conta com este e-mail</button>
+          <small>Ainda não tem conta? Preencha o e-mail e escolha uma senha. Depois toque em criar conta.</small>
+        </> : <>
+          <div className="account-settings__step"><CloudIcon size={25} /><div><h3>Enviar deste aparelho</h3><p>Disponibilize todas as auditorias salvas aqui para os outros aparelhos da sua conta.</p></div></div>
+          <button className="button button--primary button--full" disabled={busy} onClick={() => void syncNow()}><CloudIcon /> Enviar auditorias</button>
+          <div className="account-settings__step"><CloudDownloadIcon size={25} /><div><h3>Receber neste aparelho</h3><p>Abra aqui as auditorias enviadas de outro celular ou computador.</p></div></div>
+          <button className="button button--secondary button--full" disabled={busy} onClick={() => void pullNow()}><CloudDownloadIcon /> Receber auditorias</button>
+          <button className="button button--ghost button--full" disabled={busy} onClick={() => void signOut()}><LogOutIcon size={19} /> Sair da conta</button>
+        </>}
+        {message && <div className="inline-status" role="status">{message}</div>}
+      </div> : <div className="experience-card"><h3>Conta indisponível neste acesso</h3><p>Você pode continuar trabalhando com os dados salvos neste aparelho.</p></div>}
+      <div className="experience-tip"><CloudIcon size={21} /><div><strong>O que é compartilhado?</strong><p>A conta compartilha auditorias. Os cadastros de novas tags ficam neste aparelho e podem ser exportados em planilha.</p>{activeAudit && <small>Auditoria selecionada: {activeAudit.farmName}.</small>}</div></div>
+    </section>}
+  />;
 }
 
 export default App;

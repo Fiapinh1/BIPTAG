@@ -10,7 +10,9 @@ const base = (size: number) => ({
   stroke: 'currentColor',
   strokeWidth: 1.8,
   strokeLinecap: 'round' as const,
-  strokeLinejoin: 'round' as const
+  strokeLinejoin: 'round' as const,
+  'aria-hidden': true as const,
+  focusable: false as const
 });
 
 export function BiptagMark({ size = 28, ...props }: IconProps) {
@@ -244,4 +246,36 @@ export function PlusIcon({ size = 22, ...props }: IconProps) {
       <path d="M5 12h14" />
     </svg>
   );
+}
+
+export function UserIcon({ size = 22, ...props }: IconProps) {
+  return <svg {...base(size)} {...props}><circle cx="12" cy="7.5" r="3.5" /><path d="M4.5 21v-2.5a7.5 7.5 0 0 1 15 0V21" /></svg>;
+}
+
+export function CloudDownloadIcon({ size = 22, ...props }: IconProps) {
+  return <svg {...base(size)} {...props}><path d="M6.5 17.5a4.5 4.5 0 0 1-.6-9A6 6 0 0 1 17.7 10a4 4 0 0 1 .3 8" /><path d="M12 12v9m-3-3 3 3 3-3" /></svg>;
+}
+
+export function RefreshIcon({ size = 22, ...props }: IconProps) {
+  return <svg {...base(size)} {...props}><path d="M20 7v5h-5M4 17v-5h5" /><path d="M6 6a8 8 0 0 1 13.5 5M18 18a8 8 0 0 1-13.5-5" /></svg>;
+}
+
+export function BookOpenIcon({ size = 22, ...props }: IconProps) {
+  return <svg {...base(size)} {...props}><path d="M12 5c-3-2-7-2-10-1v15c3-1 7-1 10 1 3-2 7-2 10-1V4c-3-1-7-1-10 1Zm0 0v15M5 8h3M5 12h3M16 8h3M16 12h3" /></svg>;
+}
+
+export function ClipboardIcon({ size = 22, ...props }: IconProps) {
+  return <svg {...base(size)} {...props}><path d="M8 5H5v16h14V5h-3" /><rect x="8" y="2" width="8" height="5" rx="2" /><path d="m8 12 1 1 2-2m2 1h3m-8 5h8" /></svg>;
+}
+
+export function SlidersIcon({ size = 22, ...props }: IconProps) {
+  return <svg {...base(size)} {...props}><path d="M3 6h3m4 0h11M3 12h10m4 0h4M3 18h3m4 0h11" /><circle cx="8" cy="6" r="2" /><circle cx="15" cy="12" r="2" /><circle cx="8" cy="18" r="2" /></svg>;
+}
+
+export function LogOutIcon({ size = 22, ...props }: IconProps) {
+  return <svg {...base(size)} {...props}><path d="M9 3H4v18h5m0-9h12m-4-4 4 4-4 4" /></svg>;
+}
+
+export function SpreadsheetIcon({ size = 22, ...props }: IconProps) {
+  return <svg {...base(size)} {...props}><path d="M5 2h10l4 4v16H5zM15 2v5h4" /><path d="M8 11h8v8H8zM8 15h8m-4-4v8" /></svg>;
 }

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import type { RegistrationFarm } from '../types/registration';
 import { DEFAULT_MANUAL_PATTERN, manualPatternError, parseManualRegistrationTag, saveRegistrationPattern } from '../services/registration-pattern';
-import { SettingsIcon } from '../icons/Icons';
+import { SlidersIcon } from '../icons/Icons';
 
 export function RegistrationManualTag({ farm, value, disabled, inputRef, onChange, onError }: {
   farm: RegistrationFarm;
@@ -46,7 +46,7 @@ export function RegistrationManualTag({ farm, value, disabled, inputRef, onChang
   }
 
   return <>
-    <div className="registration-manual-pattern"><span><strong>Formato da SmartTag</strong><small>{pattern.length} dígitos no total</small></span><button type="button" disabled={disabled} onClick={() => setOpen(true)} aria-haspopup="dialog"><SettingsIcon size={17} />Padrão manual</button></div>
+    <div className="registration-manual-pattern"><span><strong>Formato da SmartTag</strong><small>{pattern.length} dígitos no total</small></span><button type="button" disabled={disabled} onClick={() => setOpen(true)} aria-haspopup="dialog"><SlidersIcon size={17} />Padrão manual</button></div>
     <div className={`registration-manual-input ${pattern.prefix ? 'has-prefix' : ''}`}>
     {pattern.prefix && <span className="registration-prefix" aria-label={`Prefixo fixo ${pattern.prefix}`}><small>Início fixo</small><strong>{pattern.prefix}</strong></span>}
     <input ref={inputRef} id="new-registration-tag" className="text-input registration-tag-input" placeholder={pattern.prefix ? `${suffixLength} ${suffixLength === 1 ? 'dígito final' : 'dígitos finais'}` : 'Número completo da tag'}

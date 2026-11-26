@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRightIcon, FarmIcon, ImportIcon, MoreIcon, SearchIcon, TagIcon, TrashIcon } from '../icons/Icons';
+import { ChevronRightIcon, FarmIcon, SpreadsheetIcon, MoreIcon, SearchIcon, TagIcon, TrashIcon } from '../icons/Icons';
 import type { Audit } from '../types/domain';
 import { AppInstallPanel } from './AppInstallPanel';
 import { RegistrationDirectory } from './TagRegistration';
+import { QuickStartGuide } from './QuickStartGuide';
 
 const statuses = {
   in_progress: { label: 'Em andamento', filter: 'Em andamento' },
@@ -81,8 +82,10 @@ export function FarmDirectory({ audits, onOpen, onResume, onCreate, onDelete, on
 
       <div className="farm-start-actions" aria-label="Começar um trabalho">
         <button className="farm-start-action farm-start-action--registration" aria-labelledby="start-registration-title" aria-describedby="start-registration-description" onClick={() => onRegister()}><span className="farm-start-action__icon"><TagIcon size={25} /></span><span><strong id="start-registration-title">Cadastrar novas tags</strong><small id="start-registration-description">Primeiro vínculo com o animal. Sem planilha.</small></span><ChevronRightIcon size={20} /></button>
-        <button className="farm-start-action" aria-labelledby="start-audit-title" aria-describedby="start-audit-description" onClick={onCreate}><span className="farm-start-action__icon"><ImportIcon size={25} /></span><span><strong id="start-audit-title">Nova auditoria</strong><small id="start-audit-description">Importe a planilha e confira no campo.</small></span><ChevronRightIcon size={20} /></button>
+        <button className="farm-start-action" aria-labelledby="start-audit-title" aria-describedby="start-audit-description" onClick={onCreate}><span className="farm-start-action__icon"><SpreadsheetIcon size={25} /></span><span><strong id="start-audit-title">Nova auditoria</strong><small id="start-audit-description">Importe a planilha e confira no campo.</small></span><ChevronRightIcon size={20} /></button>
       </div>
+
+      <QuickStartGuide compact />
 
       <RegistrationDirectory onOpen={onRegister} />
 

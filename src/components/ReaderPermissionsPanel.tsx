@@ -106,9 +106,8 @@ export function ReaderPermissionsPanel({ reader }: { reader: HHR5000Reader }) {
   }
 
   return <section className="reader-permissions" aria-labelledby="reader-permissions-title">
-    <div><span className="eyebrow">NESTE CELULAR</span><h2 id="reader-permissions-title">Acesso aos leitores</h2>
-      <p>Cada celular precisa autorizar os leitores. O navegador mostra o pedido ao tocar nos botões abaixo, quando necessário.</p>
-      <small>{environment.browser} · {environment.installed ? 'Aberto pelo ícone instalado' : 'Aberto no navegador'}</small>
+    <div className="reader-permissions__intro"><h2 id="reader-permissions-title">Escolha como vai ler as tags</h2>
+      <p>Use o bastão por Bluetooth ou a antena NFC do próprio celular. Ao tocar no botão, autorize o acesso se o navegador pedir.</p>
     </div>
     {(!environment.bluetoothSupported || !environment.nfcSupported) && <div className="reader-permissions__notice">
       Este acesso não disponibilizou {!environment.bluetoothSupported && !environment.nfcSupported ? 'Bluetooth nem NFC' : !environment.nfcSupported ? 'NFC' : 'Bluetooth'} para o app. Isso é diferente de uma permissão negada.
@@ -116,32 +115,37 @@ export function ReaderPermissionsPanel({ reader }: { reader: HHR5000Reader }) {
     {environment.android && (environment.installed || !environment.bluetoothSupported || !environment.nfcSupported) && <a className="button button--ghost" href={chromeReaderUrl(window.location.origin)}>Abrir BIPTAG no Chrome para revisar permissões</a>}
     <div className="reader-permissions__grid">
       <section className="reader-permissions__device" aria-label="Permissão do bastão Bluetooth">
-        <h3><BluetoothIcon size={23} /> Bastão Bluetooth</h3>
+        <div className="reader-device-heading"><span className="experience-icon"><BluetoothIcon size={25} /></span><div><h3>Bastão Bluetooth</h3><p>Para ler usando o bastão HHR5000.</p></div></div>
         <p role="status">{reader.status === 'conectado' ? 'Bastão autorizado e conectado' : reader.message}</p>
         {reader.readError && <p className="reader-permissions__error" role="alert">{reader.readError}</p>}
-        <button className="button button--primary button--full" disabled={!environment.bluetoothSupported || reader.status === 'conectando'} onClick={() => void reader.chooseDevice()}>{reader.status === 'conectando' ? 'Conectando…' : 'Autorizar e selecionar bastão'}</button>
-        <button className="button button--ghost button--full" disabled={!environment.bluetoothSupported || reader.status === 'conectando'} onClick={() => void reader.chooseDevice(true)}>Bastão não aparece? Procurar todos</button>
+        <button className="button button--primary button--full" disabled={!environment.bluetoothSupported || reader.status === 'conectando'} onClick={() => void reader.chooseDevice()}><BluetoothIcon size={20} />{reader.status === 'conectando' ? 'Conectando…' : reader.status === 'conectado' ? 'Selecionar outro bastão' : 'Conectar bastão'}</button>
         {['conectado', 'conectando'].includes(reader.status) && <button className="button button--ghost" onClick={reader.disconnect}>{reader.status === 'conectando' ? 'Cancelar conexão' : 'Desconectar bastão'}</button>}
         <small>Deixe o bastão ligado e próximo. Desconecte-o do outro celular antes de procurar neste.</small>
         {reader.lastTagRead && <p className="reader-permissions__last">Última tag recebida: <strong>{reader.lastTagRead}</strong></p>}
+        <details className="reader-device-help"><summary>Não encontrou o bastão?</summary><p>Ligue o bastão e tente a busca completa.</p><button className="button button--ghost button--full" disabled={!environment.bluetoothSupported || reader.status === 'conectando'} onClick={() => void reader.chooseDevice(true)}>Procurar todos os dispositivos</button></details>
         <ReaderHelp mode="bluetooth" />
-        <BluetoothReadDiagnostics reader={reader} />
       </section>
       <section className="reader-permissions__device" aria-label="Permissão do NFC">
-        <h3><PhoneIcon size={23} /> NFC do celular</h3>
-        <p>{environment.nfcSupported ? permissionLabels[permission] : 'Este navegador não disponibilizou leitura NFC.'}</p>
+        <div className="reader-device-heading"><span className="experience-icon"><PhoneIcon size={25} /></span><div><h3>NFC do celular</h3><p>Para ler encostando a tag no celular.</p></div></div>
+        <p>{environment.nfcSupported ? `Permissão: ${permissionLabels[permission]}` : 'Este navegador não disponibilizou leitura NFC.'}</p>
         {environment.nfcSupported && <p role="status">{nfcMessage}</p>}
         {nfcError && <p className="reader-permissions__error" role="alert">{nfcError}</p>}
-        <button className="button button--primary button--full" disabled={!environment.nfcSupported || nfcState === 'starting'} onClick={() => void testNfc()}>{nfcState === 'starting' ? 'Aguardando autorização…' : nfcState === 'active' ? 'Reiniciar teste NFC' : 'Autorizar e testar NFC'}</button>
+        <button className="button button--primary button--full" disabled={!environment.nfcSupported || nfcState === 'starting'} onClick={() => void testNfc()}><PhoneIcon size={20} />{nfcState === 'starting' ? 'Aguardando autorização…' : nfcState === 'active' ? 'Reiniciar teste NFC' : 'Testar NFC do celular'}</button>
         {nfcState !== 'off' && <button className="button button--ghost" onClick={stopTest}>{nfcState === 'starting' ? 'Cancelar ativação do NFC' : 'Parar teste NFC'}</button>}
         {lastNfcTag && <p className="reader-permissions__last">Tag recebida: <strong>{lastNfcTag}</strong></p>}
+        <small>Este teste mostra o número recebido, sem registrar uma conferência.</small>
         <ReaderHelp mode="phone" />
-        <NfcReadDiagnostics />
       </section>
     </div>
-    <details className="reader-permissions__diagnostic"><summary>Ver diagnóstico deste acesso</summary><pre>{diagnostics}</pre>
+    <details className="reader-technical-details"><summary>Detalhes técnicos e diagnósticos</summary>
+      <p>Use estas informações quando precisar de ajuda com uma conexão ou leitura.</p>
+      <small>{environment.browser} · {environment.installed ? 'Aberto pelo ícone instalado' : 'Aberto no navegador'}</small>
+      <BluetoothReadDiagnostics reader={reader} />
+      <NfcReadDiagnostics />
+      <details className="reader-permissions__diagnostic"><summary>Ver diagnóstico deste acesso</summary><pre>{diagnostics}</pre>
       <button className="button button--ghost" onClick={() => void copyDiagnostics()}>Copiar diagnóstico</button>
       {copyMessage && <p role="status">{copyMessage}</p>}
+      </details>
     </details>
   </section>;
 }

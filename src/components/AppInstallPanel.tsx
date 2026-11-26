@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { CheckIcon, DownloadIcon } from '../icons/Icons';
+import { CheckIcon, DownloadIcon, PhoneIcon, RefreshIcon } from '../icons/Icons';
 import { getInstallState, requestAppInstall, subscribeInstallState } from '../services/app-install';
 import { applyAppUpdate, checkForAppUpdate, getAppUpdateState, subscribeAppUpdates } from '../services/app-updates';
 
@@ -50,15 +50,14 @@ export function AppInstallPanel({ compact = false }: { compact?: boolean }) {
 
   if (compact) return <div className="app-install-compact">{button}{install.message && <small role="status">{install.message}</small>}{guide}</div>;
   return <section className="app-install-panel" aria-labelledby="app-install-panel-title">
-    <div><span className="eyebrow">NO SEU CELULAR</span><h2 id="app-install-panel-title">Instalação e atualizações</h2><p>Abra o BIPTAG direto pela tela inicial, com as auditorias salvas neste aparelho.</p></div>
+    <div className="reader-device-heading"><span className="experience-icon"><PhoneIcon size={25} /></span><div><h2 id="app-install-panel-title">BIPTAG na tela inicial</h2><p>Abra o app pelo ícone do celular, sem precisar digitar o endereço.</p></div></div>
     {button}
     {install.message && <p role="status">{install.message}</p>}
-    <div className="app-install-panel__updates"><strong>Atualizações automáticas</strong><p>Com internet, o app busca e baixa novas versões sozinho. A atualização é aplicada fora da conferência, sem interromper o preenchimento de uma tela.</p>
-      <button className="button button--ghost" disabled={update.checking} onClick={() => void checkForAppUpdate()}>{update.checking ? 'Verificando…' : 'Verificar atualização agora'}</button>
+    <div className="app-install-panel__updates"><h3><RefreshIcon size={22} /> Atualizações automáticas</h3><p>Com internet, o app busca novas versões sozinho. A atualização é aplicada fora da conferência, sem interromper o preenchimento.</p>
+      <button className="button button--ghost" disabled={update.checking} onClick={() => void checkForAppUpdate()}><RefreshIcon size={19} />{update.checking ? 'Verificando…' : 'Verificar atualização agora'}</button>
       {(update.available || update.pending) && <button className="button button--primary" onClick={applyAppUpdate}>Aplicar atualização</button>}
       {update.message && <p role="status">{update.message}</p>}
-      <small>Versão carregada: {import.meta.env.VITE_BIPTAG_BUILD ? new Date(import.meta.env.VITE_BIPTAG_BUILD).toLocaleString('pt-BR') : 'desenvolvimento'}</small>
-      <a href="/atualizar.html">Abrir atualização do aplicativo</a>
+      <details className="app-version-details"><summary>Informações do aplicativo</summary><small>Versão carregada: {import.meta.env.VITE_BIPTAG_BUILD ? new Date(import.meta.env.VITE_BIPTAG_BUILD).toLocaleString('pt-BR') : 'desenvolvimento'}</small><p>Se uma atualização não aparecer, use a página de atualização.</p><a href="/atualizar.html">Abrir atualização do aplicativo</a></details>
     </div>
     {guide}
   </section>;

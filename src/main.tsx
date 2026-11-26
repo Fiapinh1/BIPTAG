@@ -13,6 +13,7 @@ import './styles/navigation.css';
 import './styles/app-install.css';
 import './styles/registration.css';
 import './styles/brand.css';
+import './styles/experience.css';
 
 initializeAppInstall();
 initializeAppUpdates();
