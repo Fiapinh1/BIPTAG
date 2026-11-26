@@ -20,7 +20,7 @@ export default defineConfig({
         short_name: 'BIPTAG',
         description: 'Cadastro e auditoria de SmartTags com bastão Bluetooth, NFC ou digitação manual.',
         theme_color: '#122022',
-        background_color: '#F5F7F6',
+        background_color: '#F4F6F8',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',

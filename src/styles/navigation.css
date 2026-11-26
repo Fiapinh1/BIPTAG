@@ -1,5 +1,5 @@
 .app-shell button, .app-shell summary, .app-shell a.button { touch-action: manipulation; }
-.app-shell :is(button, summary, a.button):focus-visible { outline: 3px solid #149900; outline-offset: 3px; }
+.app-shell :is(button, summary, a.button):focus-visible { outline: 3px solid #245B78; outline-offset: 3px; }
 .app-shell .button { min-height: 52px; padding: 13px 16px; font-size: 15px; line-height: 1.35; }
 .app-shell .button--ghost { border: 1px solid #12202226; color: #122022B3; background: #FFFFFF; }
 .app-shell .button--primary { font-weight: 750; }
@@ -15,8 +15,8 @@
 .page-navigation__button > span { min-width: 0; }
 .page-navigation__button strong { display: block; font-size: 15px; font-weight: 750; line-height: 1.25; }
 .page-navigation__button small { display: block; margin-top: 3px; color: #122022B3; font-size: 11px; line-height: 1.3; }
-.page-navigation__button--home { border-color: #12202226; color: #122022; background: #E8F5E5; }
-.page-navigation__button:hover { border-color: #149900; background: #E8F5E5; }
+.page-navigation__button--home { border-color: #12202226; color: #122022; background: #EDF2F6; }
+.page-navigation__button:hover { border-color: #245B78; background: #EDF2F6; }
 .audit-summary > .page-navigation { width: 100%; margin: 0; padding: 0; }
 .app-shell--audit .main-content > .page-navigation { width: min(680px, 100%); padding-inline: 16px; }
 .app-shell--settings .main-content > .page-navigation,
@@ -27,14 +27,14 @@
 .app-shell .bottom-nav .nav-button span { max-width: none; overflow: visible; text-overflow: clip; white-space: nowrap; font-size: 12px; font-weight: 750; line-height: 1.2; }
 .app-shell .bottom-nav .nav-button svg,
 .app-shell .bottom-nav .nav-button .nfc-reader-glyph { width: 25px; height: 25px; }
-.app-shell .bottom-nav .nav-button.is-active { color: #122022; background: #25CC00; border-color: #149900; }
-.app-shell .bottom-nav .nav-button:not(.is-active):hover { border-color: #12202226; background: #E8F5E5; }
+.app-shell .bottom-nav .nav-button.is-active { color: #122022; background: #245B78; border-color: #245B78; }
+.app-shell .bottom-nav .nav-button:not(.is-active):hover { border-color: #12202226; background: #EDF2F6; }
 .app-shell .audit-summary__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .app-shell .audit-summary__actions:has(> button:only-child) { grid-template-columns: 1fr; }
-.app-shell .audit-summary__actions > button { justify-content: center; min-height: 52px; padding: 10px; border: 1px solid #12202226; border-radius: 12px; color: #122022B3; background: #E8F5E5; font-size: 13px; line-height: 1.35; font-weight: 650; }
+.app-shell .audit-summary__actions > button { justify-content: center; min-height: 52px; padding: 10px; border: 1px solid #12202226; border-radius: 12px; color: #122022B3; background: #EDF2F6; font-size: 13px; line-height: 1.35; font-weight: 650; }
 .app-shell .audit-summary__actions > button svg { flex-shrink: 0; width: 19px; height: 19px; }
 .audit-workspace .audit-workspace__back { display: inline-flex; align-items: center; gap: 9px; min-height: 48px; max-width: 100%; margin: 0; padding: 10px 14px; border: 1px solid #12202226; border-radius: 12px; color: #122022B3; background: #FFFFFF; font-size: 14px; }
-.audit-workspace .conference-cancel { display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; min-height: 48px; padding: 11px; border: 1px solid #12202226; color: #122022B3; background: #E8F5E5; font-size: 14px; }
+.audit-workspace .conference-cancel { display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; min-height: 48px; padding: 11px; border: 1px solid #12202226; color: #122022B3; background: #EDF2F6; font-size: 14px; }
 .app-shell .audit-workspace .button { min-height: 52px; font-size: 15px; }
 .audit-workspace .audit-save-receipt > button,
 .audit-workspace .manual-recent__head > button { min-height: 48px; padding: 10px; font-size: 13px; }
