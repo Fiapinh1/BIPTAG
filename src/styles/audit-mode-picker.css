@@ -1,0 +1,51 @@
+/* This presentation applies only while choosing a method. Active reading stays compact. */
+.app-shell .audit-workspace:has(> .audit-mode-picker) { gap: 14px; }
+.audit-workspace:has(> .audit-mode-picker) .audit-workspace__header { position: relative; gap: 10px; margin-bottom: -14px; padding: 14px 14px 9px; border-radius: 20px 20px 0 0; background: #122022; }
+.app-shell .audit-workspace:has(> .audit-mode-picker) .audit-workspace__heading .eyebrow { color: #B5D8BD; font-size: 9px; letter-spacing: .055em; }
+.audit-workspace:has(> .audit-mode-picker) .audit-workspace__heading h1 { margin-top: 5px; color: #FFFFFF; font-size: clamp(24px, 6.5vw, 30px); letter-spacing: -.025em; }
+.app-shell .audit-workspace:has(> .audit-mode-picker) :is(.reader-indicator, .audit-workspace__options > summary) { border-color: #FFFFFF29; color: #D4E2DC; background: #FFFFFF08; }
+.app-shell .audit-workspace:has(> .audit-mode-picker) .reader-indicator--conectado { border-color: #72BC9166; color: #B5EDB0; background: #1D3A2E; }
+.app-shell .audit-workspace:has(> .audit-mode-picker) .reader-indicator--conectado > svg { color: #9BE38B; }
+.app-shell .audit-workspace:has(> .audit-mode-picker) .reader-indicator--conectando { color: #F5D595; }
+.app-shell .audit-workspace:has(> .audit-mode-picker) .reader-indicator--erro { color: #FFBFB4; border-color: #E9A59A66; }
+.audit-workspace:has(> .audit-mode-picker) .audit-workspace__progress-pair { gap: 10px; padding: 10px 14px 16px; border-radius: 0 0 20px 20px; background: #122022; box-shadow: 0 5px 14px #1220220C; }
+.audit-workspace:has(> .audit-mode-picker) .audit-workspace__progress { gap: 7px; color: #C1D0C9; font-size: 11px; }
+.audit-workspace:has(> .audit-mode-picker) .audit-workspace__progress strong { color: #FFFFFF; font-weight: 800; }
+.app-shell .audit-workspace:has(> .audit-mode-picker) .audit-workspace__progress-track { height: 5px; background: #FFFFFF1A; }
+.app-shell .audit-workspace:has(> .audit-mode-picker) .audit-workspace__progress-track > span { background: #25CC00; }
+.app-shell .audit-workspace:has(> .audit-mode-picker) .audit-workspace__progress--field .audit-workspace__progress-track > span { background: #77B98E; }
+.audit-workspace:has(> .audit-mode-picker) .audit-workspace__options > summary:focus-visible,
+.audit-workspace:has(> .audit-mode-picker) .reader-indicator:focus-visible { outline-color: #25CC00; }
+.audit-mode-picker { gap: 12px; min-width: 0; }
+.audit-mode-picker__intro { margin: 6px 0 5px; padding: 1px 0 2px 12px; border-left: 3px solid #149900; }
+.audit-mode-picker__intro h2 { margin: 0 0 7px; color: #122022; font-size: clamp(22px, 5.8vw, 26px); font-weight: 800; line-height: 1.2; letter-spacing: -.03em; text-wrap: balance; }
+.audit-mode-picker__intro p { margin: 0; color: #61726A; font-size: 12px; line-height: 1.5; }
+.audit-mode-picker .audit-mode-option { position: relative; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; min-width: 0; min-height: 96px; padding: 15px 14px; border: 1px solid #DDE6DF; border-radius: 19px; color: #122022; background: #FFFFFF; box-shadow: 0 3px 10px #12202205; font: inherit; text-align: left; transition: border-color 200ms, box-shadow 200ms, background 200ms; }
+.audit-mode-option .audit-mode-option__icon { flex-shrink: 0; width: 52px; height: 54px; border-radius: 16px; color: #FFFFFF; background: #20362F; }
+.audit-mode-option .audit-mode-option__icon > svg { width: 28px; height: 28px; }
+.audit-mode-picker .audit-mode-option--bluetooth { border-color: #BDD6B5; background: linear-gradient(110deg, #FFFFFF 20%, #F1F8ED); }
+.audit-mode-option--bluetooth .audit-mode-option__icon { color: #FFFFFF; background: linear-gradient(145deg, #299619, #147A09); box-shadow: 0 3px 8px #147A091A; }
+.audit-mode-option--bluetooth .audit-mode-option__icon > svg { width: 32px; height: 32px; }
+.audit-mode-option--phone .audit-mode-option__icon { color: #267229; background: #E8F5E5; }
+.audit-mode-option__copy { min-width: 0; }
+.audit-mode-picker .audit-mode-option strong { color: #172E25; font-size: 15px; font-weight: 750; line-height: 1.35; }
+.audit-mode-picker .audit-mode-option small { margin-top: 5px; color: #60726A; font-size: 11px; line-height: 1.5; }
+.audit-mode-picker .audit-mode-option > svg { box-sizing: content-box; width: 15px; height: 15px; padding: 5px; border-radius: 50%; color: #477753; background: #F0F6ED; }
+.audit-mode-picker .audit-mode-option:hover { border-color: #85B676; background: #F3F8EF; box-shadow: 0 4px 12px #1220220A; }
+.app-shell .audit-mode-picker .audit-mode-option:focus-visible { outline: 2px solid #147A09; outline-offset: 3px; }
+@media (max-width: 359px) {
+  .app-shell .audit-workspace:has(> .audit-mode-picker) { padding-top: max(12px, env(safe-area-inset-top)); }
+  .audit-workspace:has(> .audit-mode-picker) .audit-workspace__header { padding: 12px 11px 8px; }
+  .audit-workspace:has(> .audit-mode-picker) .audit-workspace__tools { gap: 5px; }
+  .audit-workspace:has(> .audit-mode-picker) .audit-workspace__progress-pair { padding: 8px 11px 13px; }
+  .audit-workspace:has(> .audit-mode-picker) .audit-workspace__progress { font-size: 10px; }
+  .audit-mode-picker { gap: 10px; }
+  .audit-mode-picker__intro { margin-block: 2px 4px; padding-left: 10px; }
+  .audit-mode-picker__intro h2 { font-size: 22px; }
+  .audit-mode-picker .audit-mode-option { gap: 10px; min-height: 88px; padding: 13px 11px; }
+  .audit-mode-option .audit-mode-option__icon { width: 43px; height: 48px; border-radius: 14px; }
+  .audit-mode-picker .audit-mode-option strong { font-size: 14px; }
+  .audit-mode-picker .audit-mode-option small { font-size: 10.5px; }
+  .audit-mode-picker .audit-mode-option > svg { width: 13px; height: 13px; padding: 4px; }
+}
+@media (prefers-reduced-motion: reduce) { .audit-mode-picker .audit-mode-option { transition: none; } }

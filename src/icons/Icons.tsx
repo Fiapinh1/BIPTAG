@@ -94,7 +94,11 @@ export function PhoneIcon({ size = 22, ...props }: IconProps) {
 }
 
 export function StickReaderIcon({ size = 22, ...props }: IconProps) {
-  return <svg {...base(size)} {...props}><path d="m7 5 3-3 5 5-3 3zM11 9l7 10-2 2L9 11M3 5c-1 2-1 4 0 6M5.5 6c-.5 1-.5 2 0 3" /></svg>;
+  return <svg {...base(size)} {...props}>
+    <rect x="6" y="2" width="12" height="10" rx="3.5" />
+    <path d="M9.5 12v7.5a2.5 2.5 0 0 0 5 0V12M9 6a4.5 4.5 0 0 1 6 0M10.5 8.3a2.3 2.3 0 0 1 3 0" />
+    <circle cx="12" cy="16.5" r=".8" fill="currentColor" stroke="none" />
+  </svg>;
 }
 
 export function IssuesIcon({ size = 22, ...props }: IconProps) {
