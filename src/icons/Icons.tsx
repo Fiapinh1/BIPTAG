@@ -279,3 +279,7 @@ export function LogOutIcon({ size = 22, ...props }: IconProps) {
 export function SpreadsheetIcon({ size = 22, ...props }: IconProps) {
   return <svg {...base(size)} {...props}><path d="M5 2h10l4 4v16H5zM15 2v5h4" /><path d="M8 11h8v8H8zM8 15h8m-4-4v8" /></svg>;
 }
+
+export function HelpCircleIcon({ size = 22, ...props }: IconProps) {
+  return <svg {...base(size)} {...props}><circle cx="12" cy="12" r="9" /><path d="M9.5 8.5a2.5 2.5 0 0 1 5 .5c0 1.8-2.5 2-2.5 3.5" /><circle cx="12" cy="16" r=".65" fill="currentColor" stroke="none" /></svg>;
+}

@@ -3,29 +3,33 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import type { HHR5000Reader } from '../hooks/useHHR5000';
 import type { RegisteredTag, RegistrationFarm } from '../types/registration';
-import { createRegistrationFarm, registrationTagError, saveRegisteredTag } from '../services/tag-registration';
+import { createRegistrationFarm, deleteRegisteredTag, deleteRegistrationFarm, registrationTagError, saveRegisteredTag } from '../services/tag-registration';
 import { exportRegistrationWorkbook } from '../services/registration-export';
 import { isWebNfcSupported, startNfcReader } from '../services/nfc';
 import { describeReaderError } from '../services/reader-access';
 import { feedbackCorrect, feedbackWarning } from '../services/feedback';
 import { scrollPageToTop } from '../services/page-scroll';
-import { ArrowLeftIcon, CheckIcon, ChevronRightIcon, CowIcon, DownloadIcon, KeyboardIcon, PhoneIcon, PlusIcon, SearchIcon, StickReaderIcon, TagIcon } from '../icons/Icons';
+import { ArrowLeftIcon, CheckIcon, ChevronRightIcon, CowIcon, DownloadIcon, KeyboardIcon, PhoneIcon, PlusIcon, SearchIcon, StickReaderIcon, TagIcon, TrashIcon } from '../icons/Icons';
 import { HHR5000Connector } from './HHR5000Connector';
 import { NfcReadDiagnostics } from './NfcReadDiagnostics';
 import { RegistrationManualTag } from './RegistrationManualTag';
+import { ContextHelp } from './ContextHelp';
 
-export function RegistrationDirectory({ onOpen }: { onOpen: (id: string) => void }) {
+export function RegistrationDirectory({ onOpen, onDelete, busy }: {
+  onOpen: (id: string) => void;
+  onDelete: (farm: RegistrationFarm, count: number) => void;
+  busy: boolean;
+}) {
   const farms = useLiveQuery(() => db.registrationFarms.orderBy('updatedAt').reverse().toArray(), [], []);
   const tags = useLiveQuery(() => db.registeredTags.toArray(), [], []);
   const countByFarm = new Map<string, number>();
   tags.forEach((tag) => countByFarm.set(tag.farmId, (countByFarm.get(tag.farmId) ?? 0) + 1));
   if (!farms.length) return null;
   return <section className="registration-directory" aria-labelledby="registration-directory-title">
-    <div className="registration-section-heading"><h2 id="registration-directory-title">Cadastros de tags</h2><span>Sem planilha</span></div>
-    <ul>{farms.map((farm) => <li key={farm.id}><button onClick={() => onOpen(farm.id)}>
+    <div className="registration-section-heading"><h2 id="registration-directory-title">Cadastros de tags</h2><ContextHelp title="Cadastros salvos"><p>Abra a fazenda para continuar. Use a lixeira para excluir o cadastro da fazenda e seus vínculos.</p></ContextHelp></div>
+    <ul>{farms.map((farm) => <li key={farm.id}><button className="registration-farm-open" disabled={busy} onClick={() => onOpen(farm.id)}>
       <span className="registration-farm-icon"><TagIcon /></span><span><strong>{farm.name}</strong><small>{countByFarm.get(farm.id) ?? 0} {(countByFarm.get(farm.id) ?? 0) === 1 ? 'animal cadastrado' : 'animais cadastrados'}</small></span><ChevronRightIcon />
-    </button></li>)}</ul>
-    <small className="registration-local-note">Cadastros salvos neste aparelho. Exporte a planilha para compartilhar.</small>
+    </button><button className="registration-farm-delete" disabled={busy} onClick={() => onDelete(farm, countByFarm.get(farm.id) ?? 0)} aria-label={`Excluir cadastro de ${farm.name}`} title="Excluir cadastro"><TrashIcon size={19} /></button></li>)}</ul>
   </section>;
 }
 
@@ -37,37 +41,51 @@ type Props = {
   reader: HHR5000Reader;
   bluetoothReadHandler: RefObject<((tag: string, raw: string) => void) | null>;
   confirm: (title: string, message: string) => Promise<boolean>;
+  confirmDelete: (title: string, message: string) => Promise<boolean>;
 };
 
 export function TagRegistration(props: Props) {
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const deleteBusy = useRef(false);
   const farms = useLiveQuery(() => db.registrationFarms.orderBy('updatedAt').reverse().toArray(), [], []);
   const farm = useLiveQuery(async () => props.farmId ? await db.registrationFarms.get(props.farmId) : undefined, [props.farmId]);
 
   async function openFarm() {
-    if (creating) return;
+    if (creating || deleteBusy.current) return;
     setCreating(true); setError('');
     try { props.onSelectFarm((await createRegistrationFarm(name)).id); }
     catch (err) { setError(err instanceof Error ? err.message : 'Não foi possível criar a fazenda. Tente novamente.'); }
     finally { setCreating(false); }
   }
 
+  async function removeFarm(item: RegistrationFarm, count: number) {
+    if (deleteBusy.current || creating) return;
+    deleteBusy.current = true; setDeleting(true); setDeleteError('');
+    try {
+      if (!await props.confirmDelete('Excluir cadastro da fazenda?', `Fazenda: ${item.name}. Serão excluídos este cadastro e ${count} vínculo(s) de tags deste aparelho. Essa ação não pode ser desfeita.`)) return;
+      await deleteRegistrationFarm({ id: item.id, expectedUpdatedAt: item.updatedAt, expectedTagCount: count });
+      try { localStorage.removeItem(draftKey(item.id)); } catch { /* The deleted farm cannot restore this draft. */ }
+    } catch (err) { setDeleteError(err instanceof Error ? err.message : 'Não foi possível excluir o cadastro.'); }
+    finally { deleteBusy.current = false; setDeleting(false); }
+  }
+
   if (farm) return <RegistrationWorkspace key={farm.id} {...props} farm={farm} />;
   return <section className="registration-setup">
     <span className="registration-setup__icon"><TagIcon size={30} /></span>
-    <span className="eyebrow">CADASTRO INICIAL</span><h1>Novas tags, direto no campo.</h1>
-    <p>Escolha a fazenda e vincule cada tag ao animal. Comece sem importar uma planilha.</p>
+    <span className="eyebrow">CADASTRO INICIAL</span><div className="registration-setup__heading"><h1>Novas tags, direto no campo.</h1><ContextHelp title="Como funciona o cadastro"><p>Escolha a fazenda e vincule a tag ao brinco do animal. Não precisa importar uma planilha.</p><p>Os dados ficam neste aparelho, mesmo sem internet. Exporte a planilha para compartilhar ou usar no sistema da fazenda.</p></ContextHelp></div>
     <form className="registration-panel" onSubmit={(event) => { event.preventDefault(); void openFarm(); }}>
       <label htmlFor="registration-farm">Em qual fazenda?</label>
-      <input id="registration-farm" className="text-input" placeholder="Nome da fazenda" value={name} maxLength={100} required list="registration-farm-names" onChange={(event) => setName(event.target.value)} />
+      <input id="registration-farm" className="text-input" placeholder="Nome da fazenda" value={name} maxLength={100} required disabled={creating || deleting} list="registration-farm-names" onChange={(event) => setName(event.target.value)} />
       <datalist id="registration-farm-names">{[...new Set(props.farmNames)].map((item) => <option value={item} key={item} />)}</datalist>
       {error && <p className="registration-error" role="alert">{error}</p>}
-      <button className="button button--primary button--full" disabled={creating || !name.trim()}>{creating ? 'Preparando…' : 'Começar cadastro'}<ChevronRightIcon size={18} /></button>
+      <button className="button button--primary button--full" disabled={creating || deleting || !name.trim()}>{creating ? 'Preparando…' : 'Começar cadastro'}<ChevronRightIcon size={18} /></button>
     </form>
-    {farms.length > 0 && <RegistrationDirectory onOpen={props.onSelectFarm} />}
-    <p className="registration-local-note">O cadastro fica salvo neste aparelho, mesmo sem internet. Depois, exporte os vínculos para usar no sistema da fazenda.</p>
+    {deleteError && <p className="registration-error" role="alert">{deleteError}</p>}
+    {farms.length > 0 && <RegistrationDirectory onOpen={props.onSelectFarm} onDelete={(item, count) => void removeFarm(item, count)} busy={creating || deleting} />}
   </section>;
 }
 
@@ -83,7 +101,7 @@ function restoreDraft(id: string): Draft {
   return { ...emptyDraft };
 }
 
-function RegistrationWorkspace({ farm, reader, bluetoothReadHandler, onHome, confirm }: Props & { farm: RegistrationFarm }) {
+function RegistrationWorkspace({ farm, reader, bluetoothReadHandler, onHome, confirm, confirmDelete }: Props & { farm: RegistrationFarm }) {
   const records = useLiveQuery(() => db.registeredTags.where('farmId').equals(farm.id).sortBy('updatedAt').then((items) => items.reverse()), [farm.id], []);
   const [tab, setTab] = useState<'register' | 'list'>('register');
   const [mode, setMode] = useState<Mode>('manual');
@@ -191,6 +209,18 @@ function RegistrationWorkspace({ farm, reader, bluetoothReadHandler, onHome, con
     finally { savingRef.current = false; setSaving(false); }
   }
 
+  async function removeRecord(record: RegisteredTag) {
+    if (savingRef.current) return;
+    savingRef.current = true; setSaving(true); setError(''); setNotice('');
+    try {
+      if (!await confirmDelete('Excluir vínculo cadastrado?', `Animal ${record.animal} · Tag ${record.tagNumber}. O vínculo será excluído deste cadastro. Essa ação não pode ser desfeita.`)) return;
+      await deleteRegisteredTag({ farmId: farm.id, id: record.id, expectedUpdatedAt: record.updatedAt });
+      if (saved?.id === record.id) setSaved(null);
+      setNotice(`Vínculo do animal ${record.animal} excluído.`);
+    } catch (err) { setError(err instanceof Error ? err.message : 'Não foi possível excluir o vínculo.'); }
+    finally { savingRef.current = false; setSaving(false); }
+  }
+
   const filtered = records.filter((item) => item.tagNumber.includes(query.trim()) || item.animal.includes(query.trim()));
   const ready = mode === 'phone' ? nfc === 'on' : mode === 'bluetooth' && reader.status === 'conectado';
   const manualEntry = mode === 'manual' && (!draft.tagNumber || draft.source === 'manual');
@@ -210,7 +240,7 @@ function RegistrationWorkspace({ farm, reader, bluetoothReadHandler, onHome, con
     </div>
     <div className="registration-body">
       {tab === 'register' ? <>
-        <div className="registration-intro"><h2>Vincular tag ao animal</h2><p>Leia a tag e informe o brinco que está vendo.</p></div>
+        <div className="registration-intro"><div className="registration-intro__heading"><h2>Vincular tag ao animal</h2><ContextHelp title="Vincular uma tag"><p>Leia ou digite a SmartTag, confira o brinco no animal e toque em Salvar e adicionar próximo.</p><p>Cada vínculo confirmado fica salvo neste aparelho. Você pode continuar mesmo sem internet.</p></ContextHelp></div></div>
         <div className="registration-modes" role="group" aria-label="Forma de leitura">
           {([{ id: 'manual', title: 'Digitar', icon: <KeyboardIcon size={21} /> }, { id: 'phone', title: 'NFC celular', icon: <PhoneIcon size={21} /> }, { id: 'bluetooth', title: 'Bastão', icon: <StickReaderIcon size={21} /> }] as const).map((item) => <button key={item.id} aria-pressed={mode === item.id} disabled={saving} onClick={() => { setMode(item.id); setError(''); setNotice(''); }}>{item.icon}{item.title}</button>)}
         </div>
@@ -235,13 +265,15 @@ function RegistrationWorkspace({ farm, reader, bluetoothReadHandler, onHome, con
           {(draft.tagNumber || draft.animal) && <button type="button" className="registration-text-button" disabled={saving} onClick={() => void clearDraft()}>Limpar leitura atual</button>}
         </form>
         {mode === 'phone' && <details className="registration-help"><summary>Ajuda com NFC</summary><p>Leia tags compatíveis com conteúdo NDEF. O app não grava nem altera a tag.</p>{nfc === 'on' && <button className="button button--ghost" onClick={deactivateNfc}>Parar NFC</button>}<NfcReadDiagnostics /></details>}
-        <p className="registration-local-note"><CheckIcon size={14} />Cada vínculo confirmado é salvo neste aparelho.</p>
       </> : <>
-        <div className="registration-list-heading"><div><h2>Animais cadastrados</h2><p>{records.length} {records.length === 1 ? 'vínculo' : 'vínculos'} nesta fazenda</p></div><button className="registration-icon-button" aria-label="Exportar cadastros em Excel" disabled={!records.length} onClick={() => { try { exportRegistrationWorkbook(farm, records); } catch { setError('Não foi possível exportar. Tente novamente.'); } }}><DownloadIcon size={20} /><span>Exportar</span></button></div>
+        <div className="registration-list-heading"><div><h2>Animais cadastrados</h2><p>{records.length} {records.length === 1 ? 'vínculo' : 'vínculos'} nesta fazenda</p></div><div className="registration-list-tools"><ContextHelp title="Cadastros e exportação"><p>Use Corrigir para alterar um vínculo ou a lixeira para excluí-lo.</p><p>Exporte SmartTag, animal e data em Excel. Para usar no Nedap, importe a planilha pelo sistema da fazenda.</p></ContextHelp><button className="registration-icon-button" aria-label="Exportar cadastros em Excel" disabled={!records.length || saving} onClick={() => { try { exportRegistrationWorkbook(farm, records); } catch { setError('Não foi possível exportar. Tente novamente.'); } }}><DownloadIcon size={20} /><span>Exportar</span></button></div></div>
         <label className="registration-search"><SearchIcon size={19} /><input aria-label="Buscar tag ou animal cadastrado" type="search" placeholder="Buscar tag ou animal" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
         {error && <p className="registration-error" role="alert">{error}</p>}{notice && <p className="registration-success" role="status">{notice}</p>}
-        {filtered.length ? <ul className="registration-records">{filtered.map((record) => <li key={record.id}><span className="registration-record-animal"><CowIcon size={20} /><span><small>ANIMAL</small><strong>{record.animal}</strong></span></span><button onClick={() => { setError(''); setEditing(record); setCorrectionAnimal(record.animal); setCorrectionTag(record.tagNumber); }}>Corrigir</button><div className="registration-record-tag"><TagIcon size={16} /><span>{record.tagNumber}</span></div><small className="registration-record-date">{new Date(record.createdAt).toLocaleString('pt-BR')}{record.corrections.length > 0 ? ' · Corrigido' : ''}</small></li>)}</ul> : <div className="registration-empty"><TagIcon size={30} /><h3>{query ? 'Nenhum vínculo encontrado' : 'Seu primeiro vínculo começa aqui'}</h3><p>{query ? 'Tente outro número de tag ou animal.' : 'Leia uma tag e informe o brinco para montar o cadastro da fazenda.'}</p>{!query && <button className="button button--primary" onClick={() => setTab('register')}>Cadastrar primeira tag</button>}</div>}
-        <p className="registration-local-note">A exportação contém SmartTag, animal e data do cadastro. Para cadastrar no Nedap, utilize o processo de importação do sistema da fazenda.</p>
+        {filtered.length ? <ul className="registration-records">{filtered.map((record) => <li key={record.id}>
+          <span className="registration-record-animal"><CowIcon size={20} /><span><small>ANIMAL</small><strong>{record.animal}</strong></span></span>
+          <div className="registration-record-actions"><button disabled={saving} onClick={() => { setError(''); setEditing(record); setCorrectionAnimal(record.animal); setCorrectionTag(record.tagNumber); }}>Corrigir</button><button disabled={saving} onClick={() => void removeRecord(record)} aria-label={`Excluir vínculo do animal ${record.animal}`} title="Excluir vínculo"><TrashIcon size={18} /></button></div>
+          <div className="registration-record-tag"><TagIcon size={16} /><span>{record.tagNumber}</span></div><small className="registration-record-date">{new Date(record.createdAt).toLocaleString('pt-BR')}{record.corrections.length > 0 ? ' · Corrigido' : ''}</small>
+        </li>)}</ul> : <div className="registration-empty"><TagIcon size={30} /><h3>{query ? 'Nenhum vínculo encontrado' : 'Seu primeiro vínculo começa aqui'}</h3><p>{query ? 'Tente outro número de tag ou animal.' : 'Leia uma tag e informe o brinco para montar o cadastro da fazenda.'}</p>{!query && <button className="button button--primary" onClick={() => setTab('register')}>Cadastrar primeira tag</button>}</div>}
       </>}
     </div>
     {editing && <div className="app-modal" role="dialog" aria-modal="true" aria-labelledby="registration-correction-title"><form className="app-modal__panel registration-correction" onSubmit={(event) => { event.preventDefault(); void saveCorrection(); }}>

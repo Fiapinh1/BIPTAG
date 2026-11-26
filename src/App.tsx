@@ -611,7 +611,8 @@ function App() {
           onHome={() => void navigate('home', true)} onBack={selectedAudit || backView !== 'home' ? () => void navigate(backView) : undefined} backHint={viewTitles[backView]} />}
         {view === 'registration' && <TagRegistration farmId={registrationFarmId} farmNames={audits.map((audit) => audit.farmName)}
           onSelectFarm={setRegistrationFarmId} onHome={() => void navigate('home', true)} reader={hhr5000} bluetoothReadHandler={bluetoothReadHandler}
-          confirm={(title, message) => appDialog.confirm({ title, message, confirmLabel: 'Confirmar', cancelLabel: 'Voltar', tone: 'warning' })} />}
+          confirm={(title, message) => appDialog.confirm({ title, message, confirmLabel: 'Confirmar', cancelLabel: 'Voltar', tone: 'warning' })}
+          confirmDelete={(title, message) => appDialog.confirm({ title, message, confirmLabel: 'Excluir', cancelLabel: 'Cancelar', tone: 'danger' })} />}
       </main>
 
       <nav className={`bottom-nav ${auditNavActive ? 'bottom-nav--audit' : 'bottom-nav--home'}`} aria-label="Navegação principal">
@@ -624,7 +625,7 @@ function App() {
           </>
         ) : (
           <>
-            <NavButton active={view === 'home'} label="Início" icon={<HomeIcon />} onClick={() => void navigate('home', true)} />
+            <NavButton active={view !== 'settings'} label="Início" icon={<HomeIcon />} onClick={() => void navigate('home', true)} />
             <NavButton active={view === 'settings'} label="Configurações" icon={<SettingsIcon />} onClick={() => void navigate('settings')} />
           </>
         )}

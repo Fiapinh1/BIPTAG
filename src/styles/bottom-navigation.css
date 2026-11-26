@@ -1,0 +1,36 @@
+/* Preserve the reserved viewport row so the pinned footer never covers page content. */
+.app-shell:has(> .bottom-nav) > .bottom-nav {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  width: min(760px, 100%);
+  padding: 8px max(8px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  border: 0;
+  border-radius: 20px 20px 0 0;
+  background: #122022;
+  box-shadow: 0 -4px 18px #1220220A;
+}
+.app-shell:has(> .bottom-nav) > .bottom-nav--audit { grid-template-columns: repeat(4, minmax(0, 1fr)); width: min(680px, 100%); }
+.app-shell:has(> .bottom-nav) .bottom-nav .nav-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 60px;
+  padding: 12px 4px 5px;
+  border: 0;
+  border-radius: 10px;
+  color: #B9C8C4;
+  background: transparent;
+  box-shadow: none;
+  transition: color 200ms ease;
+}
+.app-shell .bottom-nav .nav-button::before { position: absolute; top: 0; left: 50%; width: 32px; height: 3px; border-radius: 99px; background: #25CC00; opacity: 0; transform: translateX(-50%); transition: opacity 200ms ease, box-shadow 200ms ease; content: ''; }
+.app-shell:has(> .bottom-nav) .bottom-nav .nav-button.is-active { border: 0; color: #25CC00; background: transparent; box-shadow: none; }
+.app-shell .bottom-nav .nav-button.is-active::before { opacity: 1; box-shadow: 0 0 7px #25CC0033; }
+.app-shell:has(> .bottom-nav) .bottom-nav .nav-button:not(.is-active):hover { color: #B9C8C4; border: 0; background: transparent; }
+.app-shell .bottom-nav .nav-button:focus-visible { outline: 2px solid #25CC00; outline-offset: -2px; }
+.app-shell .bottom-nav .nav-button span { color: inherit; font-size: 11px; font-weight: 700; }
+.app-shell .bottom-nav .nav-button svg { width: 23px; height: 23px; color: inherit; }
+@media (prefers-reduced-motion: reduce) { .app-shell .bottom-nav .nav-button, .app-shell .bottom-nav .nav-button::before { transition: none; } }

@@ -15,6 +15,8 @@ import './styles/registration.css';
 import './styles/brand.css';
 import './styles/experience.css';
 import './styles/wave-header.css';
+import './styles/context-help.css';
+import './styles/bottom-navigation.css';
 
 initializeAppInstall();
 initializeAppUpdates();

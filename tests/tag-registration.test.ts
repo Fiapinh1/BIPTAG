@@ -1,8 +1,8 @@
 import 'fake-indexeddb/auto';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as XLSX from 'xlsx';
 import { db } from '../src/db/db';
-import { createRegistrationFarm, saveRegisteredTag } from '../src/services/tag-registration';
+import { createRegistrationFarm, deleteRegisteredTag, deleteRegistrationFarm, saveRegisteredTag } from '../src/services/tag-registration';
 import { createRegistrationWorkbook } from '../src/services/registration-export';
 
 beforeEach(async () => {
@@ -11,6 +11,7 @@ beforeEach(async () => {
 });
 
 const input = { tagNumber: '984000009159339', animal: '751', source: 'nfc' as const };
+afterEach(() => vi.restoreAllMocks());
 
 describe('cadastro inicial sem planilha', () => {
   it('creates a separate farm and persists the first link without an audit or imported base', async () => {
@@ -120,5 +121,81 @@ describe('cadastro inicial sem planilha', () => {
     ]);
     expect(sheet.A5.t).toBe('s');
     expect(sheet.B5.t).toBe('s');
+  });
+});
+
+describe('exclusão de cadastros de novas tags', () => {
+  it('deletes only the selected link and allows its tag and animal to be registered again', async () => {
+    const farm = await createRegistrationFarm('Campo');
+    const first = await saveRegisteredTag({ farmId: farm.id, ...input });
+    const second = await saveRegisteredTag({ farmId: farm.id, ...input, animal: '752', tagNumber: '984000009159340' });
+    const before = (await db.registrationFarms.get(farm.id))!;
+    await deleteRegisteredTag({ farmId: farm.id, id: first.id, expectedUpdatedAt: first.updatedAt });
+    expect(await db.registeredTags.get(first.id)).toBeUndefined();
+    expect(await db.registeredTags.get(second.id)).toEqual(second);
+    expect((await db.registrationFarms.get(farm.id))!.updatedAt > before.updatedAt).toBe(true);
+    const next = await saveRegisteredTag({ farmId: farm.id, ...input });
+    expect(next.id).not.toBe(first.id);
+    expect(await db.registeredTags.count()).toBe(2);
+  });
+
+  it('rejects deleting a link that was corrected while confirmation was open', async () => {
+    const farm = await createRegistrationFarm('Campo');
+    const record = await saveRegisteredTag({ farmId: farm.id, ...input });
+    const corrected = await saveRegisteredTag({ farmId: farm.id, ...input, animal: '752', correction: { id: record.id, expectedUpdatedAt: record.updatedAt } });
+    await expect(deleteRegisteredTag({ farmId: farm.id, id: record.id, expectedUpdatedAt: record.updatedAt })).rejects.toThrow('vínculo mudou');
+    expect(await db.registeredTags.get(record.id)).toEqual(corrected);
+  });
+
+  it('cannot delete a link through a different farm or a missing identifier', async () => {
+    const first = await createRegistrationFarm('Campo A');
+    const second = await createRegistrationFarm('Campo B');
+    const record = await saveRegisteredTag({ farmId: first.id, ...input });
+    await expect(deleteRegisteredTag({ farmId: second.id, id: record.id, expectedUpdatedAt: record.updatedAt })).rejects.toThrow();
+    await expect(deleteRegisteredTag({ farmId: first.id, id: 'missing', expectedUpdatedAt: record.updatedAt })).rejects.toThrow();
+    expect(await db.registeredTags.get(record.id)).toEqual(record);
+  });
+
+  it('deletes the farm and its links together while preserving another farm and an audit with the same id', async () => {
+    const first = await createRegistrationFarm('Campo A');
+    const second = await createRegistrationFarm('Campo B');
+    await saveRegisteredTag({ farmId: first.id, ...input });
+    const kept = await saveRegisteredTag({ farmId: second.id, ...input });
+    const audit = { id: first.id, farmName: 'Auditoria independente', sourceFileName: 'Tags.xlsx', createdAt: first.createdAt, updatedAt: first.updatedAt, lastActivityAt: first.updatedAt, startedAt: first.createdAt, status: 'in_progress' as const, totalTags: 0, linkedTags: 0, issueCount: 0 };
+    await db.audits.put(audit);
+    try {
+      await deleteRegistrationFarm({ id: first.id, expectedUpdatedAt: (await db.registrationFarms.get(first.id))!.updatedAt, expectedTagCount: 1 });
+      expect(await db.registrationFarms.get(first.id)).toBeUndefined();
+      expect(await db.registeredTags.where('farmId').equals(first.id).count()).toBe(0);
+      expect(await db.registeredTags.get(kept.id)).toEqual(kept);
+      expect(await db.registrationFarms.get(second.id)).toBeDefined();
+      expect(await db.audits.get(audit.id)).toEqual(audit);
+    } finally { await db.audits.delete(audit.id); }
+  });
+
+  it('can delete an empty farm', async () => {
+    const farm = await createRegistrationFarm('Vazia');
+    await deleteRegistrationFarm({ id: farm.id, expectedUpdatedAt: farm.updatedAt, expectedTagCount: 0 });
+    expect(await db.registrationFarms.get(farm.id)).toBeUndefined();
+  });
+
+  it('refuses a stale farm or a changed link count without deleting anything', async () => {
+    const farm = await createRegistrationFarm('Campo');
+    const record = await saveRegisteredTag({ farmId: farm.id, ...input });
+    const current = (await db.registrationFarms.get(farm.id))!;
+    await expect(deleteRegistrationFarm({ id: farm.id, expectedUpdatedAt: 'stale', expectedTagCount: 1 })).rejects.toThrow('cadastro mudou');
+    await expect(deleteRegistrationFarm({ id: farm.id, expectedUpdatedAt: current.updatedAt, expectedTagCount: 0 })).rejects.toThrow('cadastro mudou');
+    expect(await db.registeredTags.get(record.id)).toEqual(record);
+    expect(await db.registrationFarms.get(farm.id)).toEqual(current);
+  });
+
+  it('rolls back deleted links if removing the farm fails', async () => {
+    const farm = await createRegistrationFarm('Campo');
+    const record = await saveRegisteredTag({ farmId: farm.id, ...input });
+    const current = (await db.registrationFarms.get(farm.id))!;
+    vi.spyOn(db.registrationFarms, 'delete').mockRejectedValueOnce(new Error('Falha de armazenamento'));
+    await expect(deleteRegistrationFarm({ id: farm.id, expectedUpdatedAt: current.updatedAt, expectedTagCount: 1 })).rejects.toThrow('Falha de armazenamento');
+    expect(await db.registrationFarms.get(farm.id)).toEqual(current);
+    expect(await db.registeredTags.get(record.id)).toEqual(record);
   });
 });

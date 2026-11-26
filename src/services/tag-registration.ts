@@ -69,3 +69,29 @@ export async function saveRegisteredTag(input: {
     return record;
   });
 }
+
+export async function deleteRegisteredTag(input: { farmId: string; id: string; expectedUpdatedAt: string }) {
+  return db.transaction('rw', db.registrationFarms, db.registeredTags, async () => {
+    const record = await db.registeredTags.get(input.id);
+    if (!record || record.farmId !== input.farmId || record.updatedAt !== input.expectedUpdatedAt) {
+      throw new Error('Este vínculo mudou. Atualize a lista antes de excluir.');
+    }
+    const farm = await db.registrationFarms.get(input.farmId);
+    if (!farm) throw new Error('Este cadastro de fazenda não está mais disponível.');
+    await db.registeredTags.delete(record.id);
+    const updatedAt = new Date(Math.max(Date.now(), Date.parse(farm.updatedAt) + 1)).toISOString();
+    await db.registrationFarms.update(farm.id, { updatedAt });
+  });
+}
+
+export async function deleteRegistrationFarm(input: { id: string; expectedUpdatedAt: string; expectedTagCount: number }) {
+  return db.transaction('rw', db.registrationFarms, db.registeredTags, async () => {
+    const farm = await db.registrationFarms.get(input.id);
+    const records = db.registeredTags.where('farmId').equals(input.id);
+    if (!farm || farm.updatedAt !== input.expectedUpdatedAt || await records.count() !== input.expectedTagCount) {
+      throw new Error('Este cadastro mudou. Atualize a lista antes de excluir.');
+    }
+    await records.delete();
+    await db.registrationFarms.delete(farm.id);
+  });
+}

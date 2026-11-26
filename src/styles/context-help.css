@@ -1,0 +1,21 @@
+.context-help-trigger { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; min-height: 44px; padding: 8px; border: 1px solid transparent; border-radius: 12px; color: #62717D; background: transparent; cursor: pointer; }
+.context-help-trigger:hover { border-color: var(--line); color: var(--graphite); background: var(--surface); }
+.context-help-dialog { width: min(440px, calc(100% - 24px)); max-height: calc(var(--app-viewport-height, 100dvh) - 32px); margin: auto; padding: 20px; overflow-y: auto; border: 1px solid var(--line); border-radius: 20px; color: var(--graphite); background: var(--surface); box-shadow: 0 24px 70px #12202233; }
+.context-help-dialog::backdrop { background: #12202299; backdrop-filter: blur(4px); }
+.context-help-dialog__heading { display: flex; align-items: center; gap: 10px; }
+.context-help-dialog__heading h2 { flex: 1; margin: 0; color: var(--graphite); font-size: 19px; line-height: 1.35; }
+.context-help-dialog__icon { display: flex; flex-shrink: 0; color: #62717D; }
+.context-help-dialog__heading .app-modal__close { flex-shrink: 0; min-width: 44px; min-height: 44px; }
+.context-help-dialog__content { margin: 18px 0; color: var(--muted); font-size: 14px; line-height: 1.7; }
+.context-help-dialog__content p { margin: 0; }
+.context-help-dialog__content p + p { margin-top: 12px; }
+.registration-setup__heading, .registration-intro__heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.registration-directory li { display: flex; align-items: center; }
+.registration-directory li .registration-farm-open { flex: 1; min-width: 0; }
+.registration-directory li .registration-farm-delete { display: inline-flex; flex: 0 0 44px; align-items: center; justify-content: center; width: 44px; min-height: 44px; margin-right: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 11px; color: #A54A42; background: transparent; }
+.registration-directory li .registration-farm-delete > svg { color: inherit; }
+.registration-directory button:disabled, .registration-record-actions button:disabled { opacity: .5; cursor: not-allowed; }
+.registration-record-actions { display: flex; align-items: center; gap: 6px; }
+.registration-list-tools { display: flex; align-items: center; gap: 3px; }
+.registration-record-actions button { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 9px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); background: var(--surface); font-size: 12px; cursor: pointer; }
+.registration-record-actions button:last-child { color: #A54A42; }
