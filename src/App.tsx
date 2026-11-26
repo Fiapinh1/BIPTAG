@@ -11,6 +11,8 @@ import { TagReadOnlyList } from './components/TagReadOnlyList';
 import { HHR5000Connector } from './components/HHR5000Connector';
 import { AuditReadModePicker, AuditReaderStandby, type AuditReadMode } from './components/AuditReaderWorkspace';
 import { AuditConferenceHistory } from './components/BluetoothAuditStandby';
+import { AuditReviewHeader } from './components/AuditReviewHeader';
+import { ContextHelp } from './components/ContextHelp';
 import { AuditScanSummary } from './components/AuditScanSummary';
 import { AuditResultCard } from './components/AuditResultCard';
 import { ImportValidationIssues } from './components/ImportValidationIssues';
@@ -564,7 +566,7 @@ function App() {
       <main className="main-content">
         {view === 'home' && <AppUpdateNotice />}
         {view === 'home' && <ReaderSetupNotice reader={hhr5000} onSettings={() => void navigate('settings')} />}
-        {view !== 'home' && view !== 'audit' && view !== 'registration' && view !== 'settings' && view !== 'lookup' && <PageNavigation onHome={() => void navigate('home', true)}
+        {view !== 'home' && view !== 'audit' && view !== 'registration' && view !== 'settings' && view !== 'lookup' && view !== 'issues' && <PageNavigation onHome={() => void navigate('home', true)}
           onBack={selectedAudit || backView !== 'home' ? () => void navigate(backView) : undefined} backHint={viewTitles[backView]} />}
         {view === 'home' && (
           <HomeView
@@ -2995,14 +2997,8 @@ function IssuesView({
   }
 
   return (
-    <section className="page">
-      <div className="section-heading section-heading--with-action">
-        <div><span className="eyebrow">REVISÃO</span><h1>Revisão da auditoria</h1><p>O campo registra fatos. Aqui o BIPTAG organiza o que precisa ser corrigido depois.</p></div>
-        <div className="review-header-actions">
-          <button className="button button--ghost" onClick={shareReviewWhatsApp}><ShareIcon size={20} /> WhatsApp</button>
-          <button className="button button--secondary" onClick={exportReport}><ReportIcon size={20} /> Exportar Excel</button>
-        </div>
-      </div>
+    <section className="page review-page">
+      <AuditReviewHeader onShare={shareReviewWhatsApp} onExport={() => void exportReport()} />
 
       {reviewSummaryStats.length > 0 && (
         <div className="stats-grid stats-grid--two review-summary-grid">
@@ -3014,13 +3010,12 @@ function IssuesView({
 
       {pendingTags.length > 0 && (
         <div className="review-action-card">
-          <div>
-            <span className="eyebrow">TAGS NAO LOCALIZADAS</span>
-            <h2>{pendingTags.length} SmartTags ainda sem resultado</h2>
-            <p>Antes de finalizar, revise o lote ou marque as SmartTags restantes como nao localizadas.</p>
+          <div className="review-action-card__heading">
+            <div><span className="eyebrow">PENDENTES</span><h2>{pendingTags.length} tags sem resultado</h2></div>
+            <ContextHelp title="Tags sem resultado"><p>Estas tags ainda não têm resultado na auditoria.</p><p>Antes de marcá-las como não localizadas, confira se o lote foi revisado. Essa ação marca todas as tags pendentes desta fazenda.</p></ContextHelp>
           </div>
           <TagReadOnlyList label="Tags ainda sem resultado" rows={pendingTags.map((item) => ({ id: item.id, tagNumber: item.tagNumber, animal: item.originalAnimal }))} />
-          <button className="button button--secondary button--full" onClick={() => void markMissingTags()}>Marcar pendentes como nao localizadas</button>
+          <button className="button button--secondary button--full" aria-label={`Marcar ${pendingTags.length} tags pendentes como não localizadas`} onClick={() => void markMissingTags()}>Marcar como não localizadas</button>
         </div>
       )}
 
@@ -3028,7 +3023,6 @@ function IssuesView({
         <div className="home-empty-state review-empty-state">
           <span className="home-empty-state__icon"><CheckIcon size={36} /></span>
           <h2>Nenhum problema identificado</h2>
-          <p>Quando aparecer troca, conflito, tag nova, tag removida ou pendencia, o BIPTAG mostra somente o grupo necessario aqui.</p>
         </div>
       )}
 
