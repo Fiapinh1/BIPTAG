@@ -1,0 +1,85 @@
+/* The farm summary shares the header identity without changing reader workspaces. */
+.app-shell .page.audit-summary {
+  --summary-green: #147A09;
+  --summary-soft: #E8F5E5;
+  gap: 16px;
+  padding: 0 14px 24px;
+}
+.audit-summary__hero { position: relative; isolation: isolate; display: grid; align-content: start; gap: 18px; min-height: 192px; margin-inline: -14px; padding: 6px 20px 22px; overflow: hidden; }
+.audit-summary__hero-image { position: absolute; z-index: -2; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 43%; pointer-events: none; }
+.audit-summary__hero::after { position: absolute; z-index: -1; inset: 0; content: ''; background: linear-gradient(0deg, var(--brand-bg) 0%, transparent 28%), linear-gradient(90deg, var(--brand-bg) 0%, var(--brand-bg) 30%, #F4F6F8E8 43%, #F4F6F860 64%, transparent 85%); pointer-events: none; }
+.app-shell .audit-summary__back { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 8px 12px; border: 1px solid #D4EACD; border-radius: 24px; color: #205A21; background: #E8F5E5F5; font-size: 12px; font-weight: 750; }
+.audit-summary__heading { width: 66%; min-width: 0; }
+.audit-summary__heading .eyebrow { display: block; font-size: 10px; font-weight: 800; letter-spacing: .025em; }
+.audit-summary__heading h1 { margin: 5px 0 10px; font-size: clamp(30px, 7.5vw, 42px); line-height: 1.12; letter-spacing: -.035em; text-wrap: balance; }
+.app-shell .audit-summary__status { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 0; border-radius: 20px; color: #85500B; background: #FFE9BE; font-size: 11px; font-weight: 750; }
+.audit-summary__status-dot { width: 7px; height: 7px; border-radius: 50%; background: #E88E0A; }
+.app-shell .audit-summary__status.is-finished { color: #21642C; background: var(--summary-soft); }
+.app-shell .audit-summary__status.is-paused { color: #52616A; background: #E8EDF0; }
+.app-shell .audit-summary__progress { gap: 16px; min-width: 0; padding: 18px 16px; border-color: #DCE3E5; border-radius: 22px; background: linear-gradient(145deg, #FFF, #FBFCFB); box-shadow: 0 2px 3px #12202206, 0 8px 24px #12202205; }
+.audit-summary__progress > .audit-summary__result:first-child { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 9px; }
+.audit-summary__result > svg { color: var(--summary-green); }
+.audit-summary__progress > .audit-summary__result:first-child strong { font-size: 23px; line-height: 1.25; }
+.audit-summary__progress > .audit-summary__result:first-child strong span { font-size: 12px; font-weight: 500; color: #53616A; }
+.audit-summary__progress > .audit-summary__result:first-child > .audit-summary__percent { padding: 4px 9px; border-radius: 20px; color: #21642C; background: #DEF3D5; font-size: 17px; font-weight: 800; white-space: nowrap; }
+.app-shell .audit-summary__track { height: 8px; background: #E4E9ED; }
+.app-shell .audit-summary__track > span { background: linear-gradient(90deg, #149900, #1BA20A); }
+.audit-summary__metrics { gap: 0; padding-block: 2px; }
+.audit-summary__metrics > div { gap: 5px; padding-inline: 3px; }
+.audit-summary__metrics > div + div { border-color: #DFE5E7; }
+.audit-summary__metrics strong { display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 25px; line-height: 1.2; }
+.audit-summary__metrics svg { flex-shrink: 0; color: #657278; }
+.audit-summary__metrics > div:first-child svg { color: var(--summary-green); }
+.audit-summary__metrics > div:nth-child(2) svg { color: #C6810B; }
+.audit-summary__metrics span { color: #52616A; font-size: 12px; }
+.app-shell .audit-summary .audit-summary__continue { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; padding: 12px; border: 1px solid #16731D; border-radius: 13px; color: #FFF; background: linear-gradient(115deg, #138307, #126218); box-shadow: 0 3px 7px #12621813; font-size: 14px; font-weight: 750; line-height: 1.3; }
+.audit-summary__continue svg { flex-shrink: 0; }
+.app-shell .audit-summary .audit-summary__continue:hover { background: linear-gradient(115deg, #117306, #0E5415); color: #FFF; }
+.app-shell .audit-summary__actions { gap: 9px; }
+.app-shell .audit-summary__actions > button { gap: 6px; min-height: 46px; padding: 9px 7px; border-color: #C7D3D5; border-radius: 11px; color: #24433B; background: #FFFFFF; font-size: 12px; }
+.app-shell .audit-summary__actions > button:last-child svg { color: var(--summary-green); }
+.audit-summary__alerts { gap: 9px; min-height: 50px; padding: 11px 13px; border-color: #DCE3E5; border-radius: 16px; box-shadow: 0 2px 3px #12202206; }
+.audit-summary__alerts > svg:first-child { color: #BA4B40; }
+.audit-summary__alerts > strong { min-width: 25px; padding: 3px 7px; border-radius: 20px; color: #A83F36; background: #FCEBE8; text-align: center; }
+.audit-summary__alerts > strong:only-of-type { font-size: 12px; }
+.audit-summary__base { gap: 12px; padding-top: 2px; }
+.audit-summary__list-heading { align-items: baseline; gap: 8px; }
+.audit-summary__list-heading h2 { font-size: 20px; letter-spacing: -.025em; }
+.audit-summary__list-heading > span { color: #62717D; font-size: 10px; text-align: right; }
+.audit-summary .tag-read-only-list { gap: 10px; }
+.audit-summary .tag-read-only-list__meta { align-items: center; color: #53616A; font-size: 12px; }
+.audit-summary .tag-read-only-list__meta > span:first-child { display: flex; align-items: center; gap: 7px; }
+.audit-summary .tag-read-only-list__meta svg { flex-shrink: 0; color: var(--summary-green); }
+.audit-summary .tag-read-only-list__search { padding-inline: 12px; border-color: #CBD5D9; border-radius: 13px; color: #34474D; }
+.audit-summary .tag-read-only-list__search input { min-height: 46px; font-size: 13px; }
+.audit-summary .tag-read-only-list__search:focus-within { border-color: var(--summary-green); box-shadow: 0 0 0 3px #14990012; }
+.audit-summary .tag-read-only-list__scroll { max-height: 340px; border-color: #D4DDDF; border-radius: 16px; box-shadow: 0 2px 3px #12202206; scrollbar-color: #BDCBC3 #F4F6F8; }
+.audit-summary .tag-read-only-list__scroll th { padding: 12px; color: #243B31; background: #E8F5E5; font-size: 11px; }
+.audit-summary .tag-read-only-list__scroll th:first-child { width: 62%; }
+.audit-summary .tag-read-only-list__scroll td { height: 45px; padding: 10px 12px; border-color: #E4E9E7; font-size: 13px; }
+.audit-summary .tag-read-only-list__number { font-family: inherit; font-size: clamp(11px, 3.3vw, 14px); letter-spacing: -.015em; white-space: nowrap; }
+.audit-summary .tag-read-only-list__unlinked { color: #728078; font-size: 12px; font-style: italic; }
+.app-shell .audit-summary :is(button, [tabindex]):focus-visible { outline: 2px solid var(--summary-green); outline-offset: 3px; }
+@media (max-width: 359px) {
+  .app-shell .page.audit-summary { padding-inline: 10px; }
+  .audit-summary__hero { margin-inline: -10px; padding-inline: 16px; min-height: 184px; gap: 14px; }
+  .app-shell .audit-summary__progress { padding: 15px 12px; }
+  .audit-summary__progress > .audit-summary__result:first-child { gap: 6px; }
+  .audit-summary__result > svg { width: 19px; }
+  .audit-summary__progress > .audit-summary__result:first-child strong span { font-size: 11px; }
+  .app-shell .audit-summary .audit-summary__continue { font-size: 13px; gap: 7px; }
+  .app-shell .audit-summary__actions > button { font-size: 11px; }
+  .audit-summary__metrics strong { font-size: 23px; gap: 5px; }
+  .audit-summary__metrics svg { width: 18px; }
+  .audit-summary .tag-read-only-list__scroll td, .audit-summary .tag-read-only-list__scroll th { padding-inline: 9px; }
+}
+@media (min-width: 760px) {
+  .app-shell .page.audit-summary { gap: 20px; padding-inline: 24px; }
+  .audit-summary__hero { min-height: 230px; margin-inline: -24px; padding: 10px 30px 24px; gap: 26px; border-radius: 0 0 24px 24px; }
+  .audit-summary__hero-image { object-position: center 40%; }
+  .audit-summary__heading { width: 60%; }
+  .app-shell .audit-summary__progress { padding: 24px; }
+  .audit-summary__progress > .audit-summary__result:first-child strong span { font-size: 15px; }
+  .audit-summary__metrics { padding-block: 6px; }
+  .audit-summary__list-heading > span { font-size: 12px; }
+}

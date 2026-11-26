@@ -1,0 +1,6 @@
+BIPTAG farm summary decorative asset
+File: public/images/farm-summary-hero.webp
+Generated with the built-in imagegen tool, then exported as a 960 x 640 WebP (quality 85%) for the app. This is decorative artwork, not a photograph of the selected farm. It contains no farm data. Included in the PWA offline cache.
+
+Final prompt:
+Use case: photorealistic-natural. Asset type: decorative landscape photograph for the top of a mobile cattle SmartTag management app. A healthy black and white Holstein dairy cow in a softly blurred green pasture, natural daylight, refined realistic photography. Wide 3:2 landscape composition; cow's head and shoulders occupy the RIGHT half, looking slightly toward camera and left; head completely visible with ears, body continues off right edge. Small simple green electronic collar tag without any writing. LEFT half is softly out of focus pale misty gray-white sky and pasture, plenty of quiet negative space for dark UI text. Restrained natural greens, light neutral background, soft diffused light. No letters, no numbers, no logos, no icons, no interface, no phone frame, no watermark. This is a standalone photographic background asset, not a screenshot or UI mockup.

@@ -18,6 +18,7 @@ import './styles/wave-header.css';
 import './styles/context-help.css';
 import './styles/bottom-navigation.css';
 import './styles/audit-directory.css';
+import './styles/audit-summary-theme.css';
 
 initializeAppInstall();
 initializeAppUpdates();
