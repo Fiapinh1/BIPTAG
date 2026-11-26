@@ -1,5 +1,7 @@
 import { db, newId } from '../db/db';
 import type { RegisteredTag, RegistrationFarm } from '../types/registration';
+import type { SmartTagPattern } from '../types/domain';
+import { DEFAULT_MANUAL_PATTERN } from './registration-pattern';
 
 export function registrationFarmKey(name: string) {
   return name.trim().replace(/\s+/g, ' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
@@ -19,9 +21,10 @@ export async function createRegistrationFarm(name: string): Promise<Registration
   });
 }
 
-export function registrationTagError(tagNumber: string) {
-  if (!/^\d{15}$/.test(tagNumber)) return 'Informe os 15 dígitos da SmartTag, sem letras ou símbolos.';
+export function registrationTagError(tagNumber: string, pattern: SmartTagPattern = DEFAULT_MANUAL_PATTERN) {
+  if (!/^\d+$/.test(tagNumber) || tagNumber.length !== pattern.length) return `Informe os ${pattern.length} dígitos da SmartTag, sem letras ou símbolos.`;
   if (/^0+$/.test(tagNumber)) return 'Uma tag só com zeros não é válida. Leia novamente ou confira a etiqueta.';
+  if (pattern.prefix && !tagNumber.startsWith(pattern.prefix)) return `A SmartTag deve começar com ${pattern.prefix}. Confira o prefixo ou o número informado.`;
   return null;
 }
 
@@ -34,16 +37,20 @@ export async function saveRegisteredTag(input: {
 }) {
   const tagNumber = input.tagNumber.trim();
   const animal = input.animal.trim();
-  const invalid = registrationTagError(tagNumber);
-  if (invalid) throw new Error(invalid);
   if (!/^\d{1,30}$/.test(animal)) throw new Error('Informe o número do brinco com até 30 dígitos.');
   return db.transaction('rw', db.registrationFarms, db.registeredTags, async () => {
-    if (!await db.registrationFarms.get(input.farmId)) throw new Error('Selecione a fazenda antes de cadastrar.');
+    const farm = await db.registrationFarms.get(input.farmId);
+    if (!farm) throw new Error('Selecione a fazenda antes de cadastrar.');
     const previous = input.correction ? await db.registeredTags.get(input.correction.id) : undefined;
     if (input.correction) {
       if (!previous || previous.farmId !== input.farmId || previous.updatedAt !== input.correction.expectedUpdatedAt) {
         throw new Error('Este cadastro mudou. Abra a lista novamente antes de corrigir.');
       }
+    }
+    // A new manual pattern must not prevent fixing the animal on an older link.
+    if (!previous || previous.tagNumber !== tagNumber) {
+      const invalid = registrationTagError(tagNumber, input.source === 'manual' ? farm.manualTagPattern : undefined);
+      if (invalid) throw new Error(invalid);
     }
     const existing = await db.registeredTags.where('[farmId+tagNumber]').equals([input.farmId, tagNumber]).first();
     if (existing && existing.id !== previous?.id) {

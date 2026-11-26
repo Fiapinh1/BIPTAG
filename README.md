@@ -22,10 +22,15 @@ Na página inicial, **Cadastrar novas tags** abre um modo independente da audito
 - Cada fazenda permite um vínculo por tag e um por animal. Zeros, números incompletos e duplicações são bloqueados na gravação, inclusive com envios simultâneos.
 - A aba **Cadastros** permite buscar vínculos, corrigir a tag ou o animal com confirmação e exportar um Excel com SmartTag, animal e data do cadastro. A correção conserva o vínculo anterior no histórico local.
 - O último rascunho de cada fazenda é restaurado ao reabrir a tela. Uma ativação NFC exige novo toque ao retomar; a conexão Bluetooth segue o comportamento existente do leitor.
+- Em **Digitar → Padrão manual**, configure um prefixo numérico e o total de 1 a 30 dígitos, contando esse prefixo. O formato fica salvo por fazenda; o campo recebe apenas os dígitos finais e mostra a SmartTag completa antes de salvar. Também aceita colar o número completo com o prefixo correto e recusa excessos sem cortar o identificador. O padrão manual não muda a leitura NFC/Bluetooth nem os vínculos já salvos.
 - Após carregar o app com internet, o modo funciona offline. Os novos cadastros ficam **somente neste aparelho** nesta versão; a sincronização de auditorias com Supabase não inclui essas tabelas. Use a exportação para compartilhar ou guardar uma cópia.
 - O Excel representa os vínculos registrados no BIPTAG. Ele não cadastra os animais automaticamente no Nedap e não é a planilha original `Tags.xlsx` de auditoria.
 
 A migração local de versão 6 para 7 acrescenta as tabelas de cadastro e preserva as auditorias existentes. NFC e Bluetooth continuam dependentes dos formatos e recursos que o telefone e o bastão conseguem ler.
+
+### Identidade visual
+
+O tema usa `#122022`, `#149900`, `#25CC00`, `#E8F5E5`, `#F5F7F6` e `#FFFFFF`. Os tokens centrais estão em `src/styles/brand.css`; vermelho e âmbar continuam identificando erros e avisos. As logos aprovadas ficam em `public/novas logos`, incluindo os ícones PWA 192/512, Apple Touch 180 e favicon. Os arquivos da identidade anterior foram removidos. Somente os tamanhos utilizados entram no cache offline.
 
 ### Conferência com base importada
 

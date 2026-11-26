@@ -1,0 +1,4 @@
+BIPTAG — símbolo aprovado, sem texto, fundo branco.
+PNG quadrado: 192 e 512 para PWA; 180 para Apple Touch Icon; 512 para Google Play; 1024 para App Store.
+Android nativo: 48, 72, 96, 144 e 192 são tamanhos de ícones legados. Ícones adaptativos exigem configuração própria.
+Favicon: favicon.ico ou PNG 16/32.

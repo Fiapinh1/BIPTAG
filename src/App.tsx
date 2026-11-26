@@ -228,7 +228,7 @@ type OutcomeState =
     };
 
 function BiptagLogo({ className = '' }: { className?: string }) {
-  return <img className={className} src="/icons/biptag-logo-192.png" alt="BIPTAG" />;
+  return <img className={className} src="/novas%20logos/logo-192x192.png" alt="BIPTAG" />;
 }
 
 function NfcReaderGlyph({ className = '' }: { className?: string }) {

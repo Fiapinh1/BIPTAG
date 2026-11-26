@@ -12,6 +12,7 @@ import { scrollPageToTop } from '../services/page-scroll';
 import { ArrowLeftIcon, CheckIcon, ChevronRightIcon, CowIcon, DownloadIcon, KeyboardIcon, PhoneIcon, PlusIcon, SearchIcon, StickReaderIcon, TagIcon } from '../icons/Icons';
 import { HHR5000Connector } from './HHR5000Connector';
 import { NfcReadDiagnostics } from './NfcReadDiagnostics';
+import { RegistrationManualTag } from './RegistrationManualTag';
 
 export function RegistrationDirectory({ onOpen }: { onOpen: (id: string) => void }) {
   const farms = useLiveQuery(() => db.registrationFarms.orderBy('updatedAt').reverse().toArray(), [], []);
@@ -192,6 +193,9 @@ function RegistrationWorkspace({ farm, reader, bluetoothReadHandler, onHome, con
 
   const filtered = records.filter((item) => item.tagNumber.includes(query.trim()) || item.animal.includes(query.trim()));
   const ready = mode === 'phone' ? nfc === 'on' : mode === 'bluetooth' && reader.status === 'conectado';
+  const manualEntry = mode === 'manual' && (!draft.tagNumber || draft.source === 'manual');
+  const draftPattern = draft.source === 'manual' ? farm.manualTagPattern : undefined;
+  const correctionInvalid = editing && correctionTag !== editing.tagNumber ? registrationTagError(correctionTag, editing.source === 'manual' ? farm.manualTagPattern : undefined) : null;
   return <section className="registration-workspace">
     <div className="registration-chrome">
     <header className="registration-header">
@@ -213,7 +217,7 @@ function RegistrationWorkspace({ farm, reader, bluetoothReadHandler, onHome, con
         {saved && <div className="registration-success" role="status"><CheckIcon size={22} /><span><strong>Animal {saved.animal} cadastrado</strong><small>Tag {saved.tagNumber} · Salvo neste aparelho</small></span></div>}
         <form className="registration-panel registration-form" onSubmit={(event) => { event.preventDefault(); void save(); }}>
           <div className="registration-field-heading"><span>1</span><label htmlFor="new-registration-tag">SmartTag</label>{mode !== 'manual' && <small className={ready ? 'is-ready' : ''}>{ready ? 'Leitor ativo' : 'Leitor desativado'}</small>}</div>
-          {mode === 'manual' ? <><input ref={tagInput} id="new-registration-tag" className="text-input registration-tag-input" placeholder="Número completo da tag" inputMode="numeric" pattern="[0-9]{15}" maxLength={15} autoComplete="off" required value={draft.tagNumber} disabled={saving} onChange={(event) => { changeDraft({ ...draft, tagNumber: event.target.value.replace(/[^0-9]/g, ''), source: 'manual' }); setError(''); }} /><small className="registration-field-hint">Digite os 15 dígitos da etiqueta.</small></> : <>
+          {manualEntry ? <RegistrationManualTag farm={farm} value={draft.tagNumber} inputRef={tagInput} disabled={saving} onError={setError} onChange={(tagNumber) => { changeDraft({ ...draft, tagNumber, source: 'manual' }); setError(''); }} /> : <>
             <div id="new-registration-tag" className={`registration-read-value ${draft.tagNumber ? 'has-tag' : ''}`} role="status">{draft.tagNumber ? <><TagIcon size={20} /><strong>{draft.tagNumber}</strong></> : <><span className="registration-read-symbol">{mode === 'phone' ? <PhoneIcon size={28} /> : <StickReaderIcon size={28} />}</span><strong>{ready ? 'Aproxime a tag' : mode === 'phone' ? 'Ative o NFC para ler' : 'Conecte o bastão para ler'}</strong></>}</div>
             {!draft.tagNumber && mode === 'phone' && <button type="button" className="button button--ghost button--full" disabled={!isWebNfcSupported() || nfc === 'starting'} onClick={() => void activateNfc()}>{nfc === 'starting' ? 'Aguardando permissão…' : nfc === 'on' ? 'Reiniciar NFC' : 'Ativar NFC do celular'}</button>}
             {!draft.tagNumber && mode === 'bluetooth' && !ready && <button type="button" className="button button--ghost button--full" disabled={!reader.isSupported || reader.status === 'conectando'} onClick={() => void reader.connect()}>{reader.status === 'conectando' ? 'Conectando…' : 'Conectar bastão'}</button>}
@@ -227,7 +231,7 @@ function RegistrationWorkspace({ farm, reader, bluetoothReadHandler, onHome, con
           {error && <p className="registration-error" role="alert">{error}</p>}
           {notice && <p className="registration-notice" role="status">{notice}</p>}
           {mode === 'bluetooth' && reader.readError && <p className="registration-error" role="alert">{reader.readError}</p>}
-          <button className="button button--primary button--full registration-save" disabled={saving || Boolean(registrationTagError(draft.tagNumber)) || !draft.animal.trim()}><CheckIcon size={20} />{saving ? 'Salvando…' : 'Salvar e adicionar próximo'}</button>
+          <button className="button button--primary button--full registration-save" disabled={saving || Boolean(registrationTagError(draft.tagNumber, draftPattern)) || !draft.animal.trim()}><CheckIcon size={20} />{saving ? 'Salvando…' : 'Salvar e adicionar próximo'}</button>
           {(draft.tagNumber || draft.animal) && <button type="button" className="registration-text-button" disabled={saving} onClick={() => void clearDraft()}>Limpar leitura atual</button>}
         </form>
         {mode === 'phone' && <details className="registration-help"><summary>Ajuda com NFC</summary><p>Leia tags compatíveis com conteúdo NDEF. O app não grava nem altera a tag.</p>{nfc === 'on' && <button className="button button--ghost" onClick={deactivateNfc}>Parar NFC</button>}<NfcReadDiagnostics /></details>}
@@ -242,10 +246,10 @@ function RegistrationWorkspace({ farm, reader, bluetoothReadHandler, onHome, con
     </div>
     {editing && <div className="app-modal" role="dialog" aria-modal="true" aria-labelledby="registration-correction-title"><form className="app-modal__panel registration-correction" onSubmit={(event) => { event.preventDefault(); void saveCorrection(); }}>
       <div className="app-modal__header"><h2 id="registration-correction-title">Corrigir vínculo</h2><button type="button" className="app-modal__close" disabled={saving} aria-label="Fechar correção" onClick={() => { setEditing(null); setError(''); }}>×</button></div>
-      <label htmlFor="registration-correction-tag">Número correto da SmartTag</label><input id="registration-correction-tag" className="text-input" inputMode="numeric" pattern="[0-9]{15}" maxLength={15} value={correctionTag} required disabled={saving} onChange={(event) => setCorrectionTag(event.target.value.replace(/[^0-9]/g, ''))} />
+      <label htmlFor="registration-correction-tag">Número correto da SmartTag</label><input id="registration-correction-tag" className="text-input" inputMode="numeric" pattern="[0-9]+" maxLength={30} value={correctionTag} required disabled={saving} onChange={(event) => setCorrectionTag(event.target.value.replace(/[^0-9]/g, ''))} />
       <label htmlFor="registration-correction-animal">Número correto do brinco</label><input autoFocus id="registration-correction-animal" className="text-input" inputMode="numeric" pattern="[0-9]+" maxLength={30} value={correctionAnimal} required disabled={saving} onChange={(event) => setCorrectionAnimal(event.target.value.replace(/[^0-9]/g, ''))} />
       {error && <p className="registration-error" role="alert">{error}</p>}
-      <button className="button button--primary button--full" disabled={saving || Boolean(registrationTagError(correctionTag)) || !correctionAnimal.trim() || (correctionAnimal.trim() === editing.animal && correctionTag === editing.tagNumber)}>{saving ? 'Salvando…' : 'Salvar correção'}</button>
+      <button className="button button--primary button--full" disabled={saving || Boolean(correctionInvalid) || !correctionAnimal.trim() || (correctionAnimal.trim() === editing.animal && correctionTag === editing.tagNumber)}>{saving ? 'Salvando…' : 'Salvar correção'}</button>
     </form></div>}
   </section>;
 }

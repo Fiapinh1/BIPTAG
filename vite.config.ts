@@ -13,14 +13,14 @@ export default defineConfig({
     } },
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg'],
+      includeAssets: ['novas logos/favicon.ico', 'novas logos/logo-32x32.png', 'novas logos/logo-180x180.png', 'novas logos/logo-192x192.png', 'novas logos/logo-512x512.png'],
       manifest: {
         name: 'BIPTAG',
         id: '/',
         short_name: 'BIPTAG',
-        description: 'Auditoria de SmartTags com bastão Bluetooth, NFC ou digitação manual.',
-        theme_color: '#231E1A',
-        background_color: '#F4EFE7',
+        description: 'Cadastro e auditoria de SmartTags com bastão Bluetooth, NFC ou digitação manual.',
+        theme_color: '#122022',
+        background_color: '#F5F7F6',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',
@@ -28,26 +28,20 @@ export default defineConfig({
         lang: 'pt-BR',
         icons: [
           {
-            src: '/icons/biptag-logo-192.png',
+            src: '/novas%20logos/logo-192x192.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: '/icons/biptag-logo-512.png',
+            src: '/novas%20logos/logo-512x512.png',
             sizes: '512x512',
             type: 'image/png'
-          },
-          {
-            src: '/icons/biptag-logo-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable'
           }
         ]
       },
       workbox: {
         cleanupOutdatedCaches: true,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        globPatterns: ['**/*.{js,css,html,svg}'],
         globIgnores: ['**/atualizar.html', '**/update-app.js', '**/update-recovery-worker.js'],
         importScripts: ['/update-recovery-worker.js'],
         navigateFallback: '/index.html',

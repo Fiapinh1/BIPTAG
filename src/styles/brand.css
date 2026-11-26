@@ -1,0 +1,113 @@
+:root {
+  --brand-ink: #122022;
+  --brand-green: #149900;
+  --brand-lime: #25CC00;
+  --brand-soft: #E8F5E5;
+  --brand-bg: #F5F7F6;
+  --brand-white: #FFFFFF;
+  --color-bg: var(--brand-bg);
+  --color-surface: var(--brand-white);
+  --color-surface-secondary: var(--brand-soft);
+  --color-graphite: var(--brand-ink);
+  --color-graphite-secondary: var(--brand-ink);
+  --color-copper: var(--brand-green);
+  --color-copper-dark: var(--brand-ink);
+  --color-sand: var(--brand-soft);
+  --color-text: var(--brand-ink);
+  --color-text-secondary: #122022B3;
+  --color-border: #12202226;
+  --color-success: var(--brand-green);
+  --color-warning: #A66C13;
+  --color-danger: #B54C45;
+  --shadow-card: 0 4px 18px #1220220A;
+  --bg: var(--brand-bg);
+  --surface: var(--brand-white);
+  --surface-2: var(--brand-soft);
+  --graphite: var(--brand-ink);
+  --graphite-2: var(--brand-ink);
+  --muted: var(--color-text-secondary);
+  --line: var(--color-border);
+  --copper: var(--brand-green);
+  --copper-dark: var(--brand-ink);
+  --sand: var(--brand-soft);
+  --success: var(--brand-green);
+  --warning: var(--color-warning);
+  --danger: var(--color-danger);
+  --shadow: var(--shadow-card);
+}
+body { background: var(--brand-bg); }
+.app-shell .eyebrow { color: var(--brand-ink); }
+.app-shell .button--primary,
+.app-shell .registration-panel .button--primary,
+.app-shell .registration-correction .button--primary,
+.registration-pattern-dialog .button--primary,
+.app-shell .bottom-nav .nav-button.is-active {
+  border-color: var(--brand-green);
+  color: var(--brand-ink);
+  background: var(--brand-lime);
+  box-shadow: none;
+}
+.app-shell .button--primary:hover,
+.app-shell .registration-panel .button--primary:hover,
+.app-shell .registration-correction .button--primary:hover,
+.registration-pattern-dialog .button--primary:hover { color: var(--brand-ink); background: var(--brand-soft); }
+.app-shell :is(button, summary, a.button):focus-visible { outline-color: var(--brand-green); }
+.app-shell .topbar { border-bottom-color: var(--brand-green); background: var(--brand-ink); }
+.app-shell .topbar .brand strong { color: var(--brand-white); }
+.app-shell .topbar .brand small { color: var(--brand-soft); }
+.app-shell .topbar .connection-pill--settings { border-color: #FFFFFF33; color: var(--brand-white); background: #FFFFFF0D; }
+.app-shell .topbar .connection-pill--settings svg { color: var(--brand-lime); }
+.app-shell .brand__mark { padding: 3px; background: var(--brand-white); }
+.app-shell .farm-resume { color: var(--brand-white); background: var(--brand-ink); }
+.app-shell .farm-resume__copy :is(h2,p) { color: var(--brand-white); }
+.app-shell .farm-resume__copy > span { color: var(--brand-lime); }
+.app-shell .farm-resume__button.button { border-color: var(--brand-green); color: var(--brand-ink); background: var(--brand-lime); }
+.registration-manual-pattern { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; padding: 9px 11px; border: 1px solid var(--line); border-radius: 12px; background: var(--brand-bg); }
+.registration-manual-pattern > span { min-width: 0; }
+.registration-manual-pattern strong { display: block; color: var(--brand-ink); font-size: 12px; overflow-wrap: anywhere; }
+.registration-manual-pattern small { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+.registration-manual-pattern button { display: flex; align-items: center; justify-content: center; flex-shrink: 0; gap: 6px; min-height: 44px; padding: 9px; border: 1px solid var(--line); border-radius: 10px; color: var(--brand-ink); background: var(--brand-white); font-size: 11px; font-weight: 750; cursor: pointer; }
+.registration-manual-input { display: flex; align-items: stretch; min-width: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--brand-white); overflow: hidden; }
+.registration-manual-input:focus-within { border-color: var(--brand-green); box-shadow: 0 0 0 3px #1499001A; }
+.registration-manual-input .registration-tag-input { flex: 1 1 0%; min-width: 0; border: 0; border-radius: 0; padding-inline: 12px; box-shadow: none; }
+.registration-manual-input .registration-tag-input:focus { outline: 0; box-shadow: none; }
+.registration-manual-input.has-prefix .registration-tag-input { font-size: 18px; }
+.registration-prefix { display: grid; align-content: center; gap: 4px; max-width: 48%; padding: 8px 10px; border-right: 1px solid var(--line); background: var(--brand-soft); color: var(--brand-ink); }
+.registration-prefix small { font-size: 9px; }
+.registration-prefix strong { font-size: 15px; letter-spacing: .02em; overflow-wrap: anywhere; }
+.registration-composed-tag { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 8px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 12px; background: var(--brand-bg); }
+.registration-composed-tag.is-complete { border-style: solid; border-color: #14990066; background: var(--brand-soft); }
+.registration-composed-tag > span, .registration-composed-tag small { color: var(--muted); font-size: 11px; }
+.registration-composed-tag strong { grid-column: 1 / -1; grid-row: 2; color: var(--brand-ink); font-size: 18px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.app-shell .registration-modes button { border-color: var(--line); color: var(--muted); background: var(--brand-white); }
+.app-shell .registration-modes button[aria-pressed="true"] { border-color: var(--brand-green); color: var(--brand-ink); background: var(--brand-soft); box-shadow: inset 0 0 0 1px #14990033; }
+.app-shell .farm-directory__filters button[aria-pressed="true"] { border-color: var(--brand-green); color: var(--brand-ink); background: var(--brand-soft); }
+.app-shell .farm-start-action--registration { border-color: #14990040; background: var(--brand-soft); }
+.app-shell .reader-indicator--conectado { border-color: #14990066; color: var(--brand-ink); background: var(--brand-soft); }
+.app-shell .reader-indicator--conectado > svg { color: var(--brand-green); }
+.app-shell .reader-indicator--conectado .reader-indicator__dot { background: var(--brand-green); }
+.app-shell .reader-indicator--conectando .reader-indicator__dot { background: var(--warning); }
+.app-shell .audit-summary__track > span { background: var(--brand-green); }
+.app-shell .audit-workspace__progress-track > span { background: var(--brand-green); }
+.app-shell .audit-workspace__progress--field .audit-workspace__progress-track > span { background: var(--brand-lime); }
+.registration-error,
+.registration-pattern-dialog .registration-error,
+.app-shell .reader-bluetooth-error,
+.app-shell .manual-length-alert,
+.app-shell .alert--danger { border-color: #DFBEB4; color: #993F32; background: #FCF0EB; }
+.registration-pattern-dialog { width: min(480px, calc(100% - 24px)); max-height: calc(var(--app-viewport-height, 100dvh) - 24px); padding: 20px; border: 1px solid var(--line); border-radius: 20px; color: var(--brand-ink); background: var(--brand-white); box-shadow: 0 24px 70px #12202233; }
+.registration-pattern-dialog::backdrop { background: #12202299; backdrop-filter: blur(5px); }
+.registration-pattern-dialog form { display: grid; gap: 12px; }
+.registration-pattern-dialog .app-modal__header { align-items: flex-start; }
+.registration-pattern-dialog .app-modal__header h2 { color: var(--brand-ink); font-size: 23px; line-height: 1.25; }
+.registration-pattern-dialog p { margin: 0 0 5px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.registration-pattern-dialog label { margin-top: 3px; font-size: 14px; font-weight: 750; }
+.registration-pattern-dialog .text-input { width: 100%; min-height: 52px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; color: var(--brand-ink); background: var(--brand-bg); font-size: 16px; }
+.registration-pattern-dialog small { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.registration-pattern-dialog .button { min-height: 52px; margin-top: 6px; font-size: 14px; font-weight: 750; }
+.registration-pattern-dialog .app-modal__close { flex-shrink: 0; min-width: 44px; min-height: 44px; border-color: var(--line); background: var(--brand-bg); color: var(--brand-ink); }
+@media (max-width: 360px) {
+  .registration-manual-pattern { padding: 8px; gap: 6px; }
+  .registration-manual-pattern button { padding-inline: 7px; font-size: 10px; }
+  .registration-pattern-dialog { padding: 16px; }
+}

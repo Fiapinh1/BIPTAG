@@ -80,7 +80,7 @@ function DesignPreview() {
     <div className="design-preview">
       <header className="dp-topbar">
         <button type="button" className="dp-brand" onClick={() => setScreen('home')}>
-          <span className="dp-brand__mark"><img src="/icons/biptag-logo-192.png" alt="BIPTAG" /></span>
+          <span className="dp-brand__mark"><img src="/novas%20logos/logo-192x192.png" alt="BIPTAG" /></span>
           <span>
             <strong>BIPTAG</strong>
             <small>Field Console</small>
