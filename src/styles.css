@@ -4921,8 +4921,8 @@ body {
   border: 0;
   border-radius: 0;
   background: currentColor;
-  -webkit-mask: url("/design-preview/nfc-reader.svg") center / contain no-repeat;
-  mask: url("/design-preview/nfc-reader.svg") center / contain no-repeat;
+  -webkit-mask: url("/icons/nfc-reader.svg") center / contain no-repeat;
+  mask: url("/icons/nfc-reader.svg") center / contain no-repeat;
 }
 
 .nfc-panel--field .nfc-panel__visual::after {
@@ -5218,8 +5218,8 @@ body {
   display: inline-block;
   flex: 0 0 auto;
   background: currentColor;
-  -webkit-mask: url("/design-preview/nfc-reader.svg") center / contain no-repeat;
-  mask: url("/design-preview/nfc-reader.svg") center / contain no-repeat;
+  -webkit-mask: url("/icons/nfc-reader.svg") center / contain no-repeat;
+  mask: url("/icons/nfc-reader.svg") center / contain no-repeat;
 }
 
 .field-action__icon .nfc-reader-glyph {

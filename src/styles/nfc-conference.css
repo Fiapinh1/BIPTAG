@@ -1,0 +1,58 @@
+/* Reader presentation only: controls call the existing activation and stop actions. */
+.app-shell .audit-finished-page .empty-state__icon { color: #278123; background: #E8F5E5; }
+.app-shell .audit-finished-page .empty-state p { color: #60726A; }
+.app-shell .audit-finished-page .button--primary { border: 1px solid #16731D; color: #FFFFFF; background: linear-gradient(115deg, #138307, #126218); }
+.app-shell .audit-finished-page .button--primary:hover { background: linear-gradient(115deg, #117306, #0E5415); }
+.app-shell .audit-read-mode-switch { color: #477753; border-color: #CEDBCF; background: #FFFFFF; }
+.audit-read-mode-switch:disabled { opacity: .45; cursor: default; }
+.audit-read-mode-switch:focus-visible { outline-color: #278123; }
+.app-shell .audit-workspace--phone:has(> .audit-reader-standby--phone) { gap: 10px; padding-top: max(12px, env(safe-area-inset-top)); padding-bottom: 12px; }
+.audit-workspace--phone:has(> .audit-reader-standby--phone) .audit-workspace__heading h1 { font-size: clamp(23px, 5.8vw, 28px); }
+.audit-workspace--phone:has(> .audit-reader-standby--phone) .audit-workspace__heading .eyebrow { font-size: 9px; }
+.audit-workspace--phone:has(> .audit-reader-standby--phone) .audit-workspace__progress-pair { gap: 8px; }
+.audit-workspace--phone:has(> .audit-reader-standby--phone) .audit-workspace__progress { gap: 6px; font-size: 11px; }
+.audit-workspace--phone .audit-workspace__progress-track { background: #E4ECE4; }
+.audit-workspace--phone .audit-workspace__progress-track > span { background: #278123; }
+.audit-workspace--phone .audit-workspace__progress--field .audit-workspace__progress-track > span { background: #85AD7C; }
+.audit-reader-standby.audit-reader-standby--phone { position: relative; justify-items: center; align-content: start; gap: 10px; min-height: 0; padding: 18px 16px; border-color: #DCE5DE; border-radius: 18px; background: #FFFFFF; text-align: center; }
+.nfc-standby__icon { display: grid; place-items: center; width: 80px; height: 80px; border-radius: 21px; color: #78847D; background: #F0F3F2; }
+.audit-reader-standby--phone.is-ready .nfc-standby__icon { color: #278123; background: #E8F5E5; }
+.nfc-reader-icon { display: inline-block; flex-shrink: 0; }
+.audit-reader-standby--phone.is-ready .nfc-reader-icon__signal path { animation: nfc-reading-signal 2.6s ease-in-out infinite; }
+.audit-reader-standby--phone.is-ready .nfc-reader-icon__signal path:first-child { animation-delay: .2s; }
+@keyframes nfc-reading-signal { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+.nfc-standby__status { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 6px 10px; border-radius: 999px; color: #65776B; background: #F0F3F2; font-size: 11px; font-weight: 650; line-height: 1.4; }
+.audit-reader-standby--phone.is-ready .nfc-standby__status { color: #267229; background: #E8F5E5; }
+.audit-reader-standby--phone.is-starting .nfc-standby__status > svg { animation: hhr5000-loading 1.6s linear infinite; transform-origin: center; }
+.audit-reader-standby--phone > h2 { margin: 2px 0 0; color: #19362A; font-size: clamp(20px, 5.4vw, 24px); line-height: 1.2; letter-spacing: -.025em; }
+.audit-reader-standby--phone > p.nfc-standby__caption { max-width: none; margin: 0; color: #60726A; font-size: 12px; line-height: 1.45; }
+.nfc-standby__alert { display: flex; align-items: start; justify-self: stretch; gap: 8px; padding: 9px 10px; border: 1px solid #E5D4B3; border-radius: 11px; color: #8B5C0E; background: #FFF8EB; text-align: left; }
+.nfc-standby__alert > svg { flex-shrink: 0; margin-top: 1px; }
+.nfc-standby__alert strong { display: block; font-size: 12px; line-height: 1.4; }
+.nfc-standby__alert span { display: block; margin-top: 2px; font-size: 12px; line-height: 1.45; }
+.app-shell .audit-reader-standby--phone > .button { justify-self: stretch; width: 100%; max-width: 100%; min-height: 44px; margin: 0; padding: 9px 12px; border-radius: 11px; font-size: 12px; }
+.app-shell .audit-reader-standby--phone > .button--primary { border: 1px solid #16731D; color: #FFFFFF; background: linear-gradient(115deg, #138307, #126218); }
+.app-shell .audit-reader-standby--phone > .button:disabled { opacity: 1; border-color: #D3DDD6; color: #65776B; background: #E1E9E3; }
+.app-shell .audit-reader-standby--phone > .button--ghost { border-color: #CEDBCF; color: #3B6245; background: #FFFFFF; }
+.nfc-standby__help { position: absolute; top: 10px; right: 10px; }
+.nfc-reader-help .context-help-trigger { color: #477753; border-color: #DCE5DE; background: #FFFFFF; }
+.nfc-reader-help .context-help-trigger:hover { background: #F1F7ED; }
+.nfc-reader-help .context-help-dialog { border-color: #DCE5DE; text-align: left; }
+.nfc-reader-help .context-help-dialog__icon { color: #278123; }
+.nfc-reader-help .context-help-dialog__content { color: #60726A; font-size: 13px; line-height: 1.6; }
+.nfc-reader-help .context-help-dialog__content > ol { margin: 0; padding-left: 18px; }
+.nfc-reader-help .context-help-dialog__content li + li { margin-top: 8px; }
+.nfc-reader-help p.nfc-reader-help__technical { max-width: none; margin-top: 12px; padding: 10px; border-radius: 10px; color: #526B5B; background: #F4F7F3; font-size: 12px; line-height: 1.5; }
+.nfc-reader-help__controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }
+.nfc-reader-help__controls:empty { display: none; }
+.app-shell .nfc-reader-help .button { min-height: 44px; margin-top: 0; padding: 10px; border-color: #CEDBCF; color: #3B6245; background: #FFFFFF; font-size: 12px; }
+.nfc-reader-help .reader-permissions__diagnostic { margin-top: 14px; border-color: #DCE5DE; }
+.nfc-reader-help .reader-permissions__diagnostic > summary { color: #477753; }
+.nfc-reader-help :is(button, summary):focus-visible { outline-color: #278123; }
+@media (max-height: 660px) {
+  .app-shell .audit-workspace--phone:has(> .audit-reader-standby--phone) { gap: 8px; padding-block: max(8px, env(safe-area-inset-top)) 8px; }
+  .audit-reader-standby.audit-reader-standby--phone { gap: 8px; padding: 12px; }
+  .nfc-standby__icon { width: 68px; height: 68px; border-radius: 18px; }
+  .nfc-standby__icon > svg { width: 64px; height: 64px; }
+}
+@media (prefers-reduced-motion: reduce) { .audit-reader-standby--phone.is-ready .nfc-reader-icon__signal path, .audit-reader-standby--phone.is-starting .nfc-standby__status > svg { animation: none; } }

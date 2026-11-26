@@ -27,6 +27,7 @@ import './styles/audit-directory-theme.css';
 import './styles/lookup.css';
 import './styles/review.css';
 import './styles/bluetooth-conference.css';
+import './styles/nfc-conference.css';
 import './styles/touch-viewport.css';
 
 initializeAppInstall();

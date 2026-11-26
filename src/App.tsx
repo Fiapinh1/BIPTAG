@@ -1762,7 +1762,7 @@ function AuditView({
 
   if (audit.status === 'finished') {
     return (
-      <section className="page page--centered">
+      <section className="page page--centered audit-finished-page">
         <EmptyState icon={<CheckIcon size={42} />} title="Auditoria finalizada" text="Esta auditoria está bloqueada para novas leituras. Os resultados continuam disponíveis em Revisão e no relatório." action={<button className="button button--primary" onClick={onNeedImport}>Criar nova auditoria</button>} />
       </section>
     );
@@ -2350,7 +2350,8 @@ function AuditView({
       <div className="audit-workspace__header">
         <div className="audit-workspace__heading"><span className="eyebrow">{readMode === 'choose' ? 'CONFERÊNCIA' : readMode === 'manual' ? 'CONFERÊNCIA MANUAL' : readMode === 'bluetooth' ? 'CONFERÊNCIA COM BASTÃO' : 'CONFERÊNCIA PELO TELEFONE'}</span><h1>{activeAudit.farmName}</h1></div>
         <div className="audit-workspace__tools">
-          <HHR5000Connector reader={hhr5000} open={showReaderSettings} onOpenChange={setShowReaderSettings} />
+          <button type="button" className="reader-indicator audit-read-mode-switch" aria-label="Trocar forma de leitura" title="Trocar forma de leitura" disabled={Boolean(scan || outcome)} onClick={() => selectReadMode('choose')}><SwapIcon size={22} /><span className="reader-indicator__label" aria-hidden="true">Leitura</span></button>
+          {readMode === 'bluetooth' && <HHR5000Connector reader={hhr5000} open={showReaderSettings} onOpenChange={setShowReaderSettings} />}
           <details className="audit-workspace__options">
             <summary aria-label="Opções da conferência"><MoreIcon size={20} /><span>Opções</span></summary>
             <div>
@@ -2483,7 +2484,7 @@ function AuditView({
       )}
 
       {!scan && !outcome && (readMode === 'bluetooth' || readMode === 'phone') && latestConfirmedRecords.length > 0 && (
-        <AuditConferenceHistory collapsible={readMode === 'bluetooth'}>
+        <AuditConferenceHistory collapsible>
         <section className="latest-conferences latest-conferences--bottom" aria-labelledby="latest-conferences-title-bottom">
           <div className="section-heading section-heading--compact">
             <div><span className="eyebrow">REGISTROS CONFIRMADOS</span><h2 id="latest-conferences-title-bottom">Ultimas conferencias</h2></div>
