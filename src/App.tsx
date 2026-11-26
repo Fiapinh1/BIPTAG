@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, newId } from './db/db';
 import { EmptyState } from './components/EmptyState';
 import { FarmDirectory } from './components/FarmDirectory';
+import { WaveHeader } from './components/WaveHeader';
 import { TagRegistration } from './components/TagRegistration';
 import { AuditSummary } from './components/AuditSummary';
 import { TagReadOnlyList } from './components/TagReadOnlyList';
@@ -233,10 +234,6 @@ type OutcomeState =
       animal: string | null;
     };
 
-function BiptagLogo({ className = '' }: { className?: string }) {
-  return <img className={className} src="/novas%20logos/logo-192x192.png" alt="BIPTAG" />;
-}
-
 function NfcReaderGlyph({ className = '' }: { className?: string }) {
   return <span className={`nfc-reader-glyph ${className}`} aria-hidden="true" />;
 }
@@ -270,6 +267,7 @@ function App() {
   const [cloudSession, setCloudSession] = useState<Session | null>(null);
   const [pulledCloudUserId, setPulledCloudUserId] = useState<string | null>(null);
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(() => readStoredAuditId());
+  const [directoryResetKey, setDirectoryResetKey] = useState(0);
   const [registrationFarmId, setRegistrationFarmId] = useState<string | null>(() => {
     try { return localStorage.getItem('biptag-registration-farm'); } catch { return null; }
   });
@@ -549,27 +547,17 @@ function App() {
       if (!leave) return;
     }
     if (next === 'settings' && view !== 'settings') setSettingsReturnView(view);
-    if (allFarms) setSelectedAuditId(null);
+    if (allFarms) {
+      setSelectedAuditId(null);
+      setDirectoryResetKey((key) => key + 1);
+    }
     setView(next);
     scrollPageToTop();
   }
 
   return (
     <div className={`app-shell app-shell--${view}`}>
-      <header className="topbar">
-        <button className="brand" onClick={() => void navigate('home', true)} aria-label="Início — todas as fazendas">
-          <span className="brand__mark"><BiptagLogo /></span>
-          <span>
-            <strong>BIPTAG</strong>
-            <small>Gestão de SmartTags</small>
-          </span>
-        </button>
-
-        <button className={`connection-pill connection-pill--settings ${online ? 'is-online' : 'is-offline'}`} onClick={() => void navigate('settings')} title="Configurações" aria-label="Abrir configurações">
-          <SettingsIcon size={20} />
-          <span>Configurações</span>
-        </button>
-      </header>
+      <WaveHeader online={online} onHome={() => void navigate('home', true)} onSettings={() => void navigate('settings')} />
 
       <main className="main-content">
         {view === 'home' && <AppUpdateNotice />}
@@ -578,6 +566,7 @@ function App() {
           onBack={selectedAudit || backView !== 'home' ? () => void navigate(backView) : undefined} backHint={viewTitles[backView]} />}
         {view === 'home' && (
           <HomeView
+            directoryResetKey={directoryResetKey}
             audits={audits}
             activeAudit={selectedAudit}
             onSelectAudit={(audit) => void chooseAudit(audit)}
@@ -716,6 +705,7 @@ function AppDialogModal({ dialog, onClose }: { dialog: AppDialogRequest | null; 
 }
 
 function HomeView({
+  directoryResetKey,
   audits,
   activeAudit,
   onSelectAudit,
@@ -728,6 +718,7 @@ function HomeView({
   onKnownIssues,
   setToast
 }: {
+  directoryResetKey: number;
   audits: Audit[];
   activeAudit: Audit | null;
   onSelectAudit: (audit: Audit) => void;
@@ -833,7 +824,7 @@ function HomeView({
   if (!activeAudit) {
     return (
       <>
-        <FarmDirectory audits={audits} onOpen={onSelectAudit} onResume={onResumeAudit} onCreate={() => setShowCreateFarmModal(true)} onDelete={onDeleteAudit} onRegister={onRegister} />
+        <FarmDirectory key={directoryResetKey} audits={audits} onOpen={onSelectAudit} onResume={onResumeAudit} onCreate={() => setShowCreateFarmModal(true)} onDelete={onDeleteAudit} onRegister={onRegister} />
         {createFarmModal}
       </>
     );

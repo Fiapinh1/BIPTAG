@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRightIcon, FarmIcon, SpreadsheetIcon, MoreIcon, SearchIcon, TagIcon, TrashIcon } from '../icons/Icons';
+import { ChevronRightIcon, FarmIcon, SpreadsheetIcon, MoreIcon, PlusIcon, SearchIcon, TagIcon, TrashIcon } from '../icons/Icons';
 import type { Audit } from '../types/domain';
 import { AppInstallPanel } from './AppInstallPanel';
-import { RegistrationDirectory } from './TagRegistration';
-import { QuickStartGuide } from './QuickStartGuide';
+import { PageNavigation } from './PageNavigation';
+import { scrollPageToTop } from '../services/page-scroll';
 
 const statuses = {
   in_progress: { label: 'Em andamento', filter: 'Em andamento' },
@@ -37,6 +37,7 @@ export function FarmDirectory({ audits, onOpen, onResume, onCreate, onDelete, on
   onDelete: (audit: Audit) => void;
   onRegister: (farmId?: string) => void;
 }) {
+  const [showAudits, setShowAudits] = useState(false);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<'all' | StatusFilter>('all');
   const directoryRef = useRef<HTMLElement>(null);
@@ -54,6 +55,11 @@ export function FarmDirectory({ audits, onOpen, onResume, onCreate, onDelete, on
     && (!normalizedQuery || searchable(audit.farmName).includes(normalizedQuery))
   );
   const recent = sorted.find((audit) => ['in_progress', 'paused'].includes(statusOf(audit)));
+
+  useEffect(() => {
+    scrollPageToTop();
+    if (showAudits) directoryRef.current?.querySelector<HTMLHeadingElement>('h1')?.focus({ preventScroll: true });
+  }, [showAudits]);
 
   useEffect(() => {
     function closeMenus(event: Event) {
@@ -75,28 +81,25 @@ export function FarmDirectory({ audits, onOpen, onResume, onCreate, onDelete, on
 
   return (
     <section className="page farm-directory" ref={directoryRef}>
+      {showAudits && <PageNavigation onHome={() => setShowAudits(false)} />}
       <div className="farm-directory__heading">
-        <div><span className="eyebrow">SUAS SMARTTAGS NO CAMPO</span><h1>Fazendas</h1><p>Cadastre novas tags ou confira os vínculos.</p></div>
+        <div><span className="eyebrow">SUAS SMARTTAGS NO CAMPO</span><h1 tabIndex={-1}>{showAudits ? 'Auditorias' : 'Fazendas'}</h1><p>{showAudits ? 'Abra uma auditoria salva ou importe uma nova planilha.' : 'Cadastre novas tags ou confira os vínculos.'}</p></div>
         <div className="farm-directory__actions"><AppInstallPanel compact /></div>
       </div>
 
-      <div className="farm-start-actions" aria-label="Começar um trabalho">
-        <button className="farm-start-action farm-start-action--registration" aria-labelledby="start-registration-title" aria-describedby="start-registration-description" onClick={() => onRegister()}><span className="farm-start-action__icon"><TagIcon size={25} /></span><span><strong id="start-registration-title">Cadastrar novas tags</strong><small id="start-registration-description">Primeiro vínculo com o animal. Sem planilha.</small></span><ChevronRightIcon size={20} /></button>
-        <button className="farm-start-action" aria-labelledby="start-audit-title" aria-describedby="start-audit-description" onClick={onCreate}><span className="farm-start-action__icon"><SpreadsheetIcon size={25} /></span><span><strong id="start-audit-title">Nova auditoria</strong><small id="start-audit-description">Importe a planilha e confira no campo.</small></span><ChevronRightIcon size={20} /></button>
-      </div>
+      {!showAudits ? <div className="farm-start-actions" aria-label="Começar um trabalho">
+        <button className="farm-start-action farm-start-action--registration" aria-labelledby="start-registration-title" aria-describedby="start-registration-description" onClick={() => onRegister()}><span className="farm-start-action__icon"><TagIcon size={25} /></span><span><strong id="start-registration-title">Cadastrar novas tags</strong><small id="start-registration-description">Cadastros salvos e novos vínculos. Sem planilha.</small></span><ChevronRightIcon size={20} /></button>
+        <button className="farm-start-action" aria-labelledby="start-audit-title" aria-describedby="start-audit-description" onClick={() => setShowAudits(true)}><span className="farm-start-action__icon"><SpreadsheetIcon size={25} /></span><span><strong id="start-audit-title">Auditorias</strong><small id="start-audit-description">Auditorias salvas e conferência com planilha.</small></span><ChevronRightIcon size={20} /></button>
+      </div> : <button className="button button--primary farm-directory__new-audit" onClick={onCreate}><PlusIcon size={20} />Nova auditoria</button>}
 
-      <QuickStartGuide compact />
-
-      <RegistrationDirectory onOpen={onRegister} />
-
-      {audits.length > 1 && recent && (
+      {showAudits && audits.length > 1 && recent && (
         <div className="farm-resume">
           <div className="farm-resume__copy"><span>CONTINUAR DE ONDE PAROU</span><h2>{recent.farmName}</h2><p>{statuses[statusOf(recent)].label} <span aria-hidden="true">·</span> Última atividade em {auditDate(recent)}</p></div>
           <button className="button farm-resume__button" onClick={() => onResume(recent)}>Continuar <ChevronRightIcon size={18} /></button>
         </div>
       )}
 
-      {audits.length > 0 ? (
+      {showAudits && (audits.length > 0 ? (
         <section className="farm-directory__saved" aria-labelledby="saved-farms-title">
           <div className="farm-directory__list-heading"><h2 id="saved-farms-title">Auditorias salvas <span>{audits.length}</span></h2><span>Mais recentes primeiro</span></div>
           {audits.length > 3 && <div className="farm-directory__search"><SearchIcon size={20} /><input type="search" aria-label="Buscar fazenda" placeholder="Buscar pelo nome da fazenda" value={query} onChange={(event) => setQuery(event.target.value)} /></div>}
@@ -119,7 +122,7 @@ export function FarmDirectory({ audits, onOpen, onResume, onCreate, onDelete, on
             </li>)}
           </ul> : <div className="farm-directory__no-results"><SearchIcon size={28} /><h3>Nenhuma auditoria encontrada</h3><p>Tente outro nome ou escolha outro status.</p><button className="button button--ghost" onClick={() => { setQuery(''); setFilter('all'); }}>Limpar filtros</button></div>}
         </section>
-      ) : null}
+      ) : <div className="farm-directory__no-results"><SpreadsheetIcon size={30} /><h3>Nenhuma auditoria salva</h3><p>Toque em Nova auditoria para importar a planilha da fazenda.</p></div>)}
     </section>
   );
 }

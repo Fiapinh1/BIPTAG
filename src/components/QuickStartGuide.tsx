@@ -4,7 +4,7 @@ export function QuickStartGuide({ compact = false }: { compact?: boolean }) {
   const guide = <div className="quick-start-guide">
     <div className="quick-start-guide__paths">
       <article><span className="experience-icon"><TagIcon size={24} /></span><div><h3>Vou colocar tags novas nos animais</h3><p>Escolha <strong>Cadastrar novas tags</strong>. Informe a fazenda, leia ou digite a tag e coloque o número do brinco. Toque em <strong>Salvar e adicionar próximo</strong>.</p><small>Você começa sem uma planilha.</small></div></article>
-      <article><span className="experience-icon"><SpreadsheetIcon size={24} /></span><div><h3>Vou conferir os vínculos da planilha</h3><p>Escolha <strong>Nova auditoria</strong> e importe o arquivo do Nedap. Depois, abra <strong>Auditar</strong> e confira o brinco que está no animal.</p><small>A planilha serve de referência para a conferência.</small></div></article>
+      <article><span className="experience-icon"><SpreadsheetIcon size={24} /></span><div><h3>Vou conferir os vínculos da planilha</h3><p>Abra <strong>Auditorias</strong> e escolha uma auditoria salva ou toque em <strong>Nova auditoria</strong> para importar o arquivo do Nedap. Depois, abra <strong>Auditar</strong> e confira o brinco que está no animal.</p><small>A planilha serve de referência para a conferência.</small></div></article>
     </div>
     <div className="quick-start-guide__legend"><h3>Onde encontro cada coisa?</h3>
       <p><ScanIcon size={21} /><span><strong>Auditar</strong>Ler tags e confirmar o animal no campo.</span></p>

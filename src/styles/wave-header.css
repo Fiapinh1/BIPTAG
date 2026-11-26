@@ -1,0 +1,55 @@
+/* Header-only identity. Page palettes and reader workspaces keep their existing styles. */
+.app-shell > .wave-header.topbar {
+  --header-graphite: #122022;
+  --header-green: #149900;
+  --header-vibrant: #25CC00;
+  --header-soft: #E8F5E5;
+  --header-white: #FFFFFF;
+  --header-page: var(--brand-bg, #F5F7F6);
+  display: block;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  color: var(--header-white);
+  background: linear-gradient(110deg, var(--header-graphite) 0%, var(--header-graphite) 64%, #123324 100%);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.wave-header__row { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: min(1040px, 100%); margin: 0 auto; padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left)); }
+.app-shell .wave-header .brand { flex: 0 1 auto; min-width: 0; min-height: 44px; gap: 8px; }
+.app-shell .wave-header .brand__mark { flex: 0 0 36px; width: 36px; height: 36px; padding: 2px; border-radius: 10px; background: var(--header-white); }
+.wave-header .brand__mark img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.wave-header__identity { min-width: 0; }
+.app-shell .wave-header .wave-header__name { display: block; color: var(--header-white); font-size: 16px; font-weight: 800; line-height: 1.2; letter-spacing: .015em; }
+.app-shell .wave-header .wave-header__tag { color: var(--header-vibrant); }
+.app-shell .wave-header .brand small { display: block; margin-top: 4px; color: var(--header-soft); font-size: 9px; font-weight: 500; line-height: 1.4; white-space: nowrap; }
+.wave-header__actions { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; }
+.wave-header__help { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 74px; min-height: 46px; padding: 5px 3px; border: 1px solid transparent; border-radius: 12px; color: #E8F5E5; background: transparent; font: inherit; cursor: pointer; }
+.wave-header__help span { font-size: 9px; font-weight: 650; line-height: 1.3; white-space: nowrap; }
+.app-shell .wave-header .connection-pill--settings { display: inline-flex; flex: 0 0 44px; align-items: center; justify-content: center; width: 44px; min-width: 44px; height: 46px; min-height: 46px; margin: 0; padding: 0; border: 1px solid #FFFFFF33; border-radius: 12px; color: var(--header-white); background: #FFFFFF08; box-shadow: none; }
+.app-shell .wave-header .connection-pill--settings svg { color: var(--header-white); }
+.app-shell .wave-header :is(.wave-header__help, .connection-pill--settings):hover { border-color: #FFFFFF55; background: #FFFFFF12; }
+.app-shell .wave-header :is(button):focus-visible { outline: 2px solid var(--header-vibrant); outline-offset: 3px; }
+.wave-header__waves { display: block; width: 100%; height: 26px; overflow: hidden; background: var(--header-page); pointer-events: none; }
+.wave-header-guide { width: min(620px, calc(100% - 24px)); max-height: calc(var(--app-viewport-height, 100dvh) - 32px); margin: auto; padding: 20px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: 20px; color: var(--graphite); background: var(--surface); box-shadow: 0 24px 70px #12202233; }
+.wave-header-guide::backdrop { background: #12202299; backdrop-filter: blur(4px); }
+.wave-header-guide__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 20px; }
+.wave-header-guide__heading h2 { margin: 6px 0 0; font-size: 22px; line-height: 1.35; }
+.wave-header-guide__heading .app-modal__close { flex-shrink: 0; min-width: 44px; min-height: 44px; }
+.wave-header-guide > .button { margin-top: 18px; }
+.app-shell--audit:has(.audit-workspace) > .wave-header.topbar,
+.app-shell--registration:has(.registration-workspace) > .wave-header.topbar { display: none; }
+@media (min-width: 380px) {
+  .wave-header__row { gap: 12px; padding-right: max(18px, env(safe-area-inset-right)); padding-left: max(18px, env(safe-area-inset-left)); }
+  .app-shell .wave-header .brand__mark { flex-basis: 42px; width: 42px; height: 42px; border-radius: 12px; }
+  .app-shell .wave-header .wave-header__name { font-size: 18px; }
+  .app-shell .wave-header .brand small { font-size: 10px; }
+  .wave-header__actions { gap: 8px; }
+  .wave-header__help { width: 80px; }
+  .wave-header__help span { font-size: 10px; }
+}
+@media (min-width: 760px) {
+  .wave-header__help { flex-direction: row; gap: 8px; width: auto; padding-inline: 12px; }
+  .wave-header__help span { font-size: 12px; }
+  .wave-header__waves { height: 28px; }
+}

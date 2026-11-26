@@ -14,6 +14,7 @@ import './styles/app-install.css';
 import './styles/registration.css';
 import './styles/brand.css';
 import './styles/experience.css';
+import './styles/wave-header.css';
 
 initializeAppInstall();
 initializeAppUpdates();
