@@ -21,6 +21,7 @@ import './styles/audit-directory.css';
 import './styles/audit-summary-theme.css';
 import './styles/new-audit.css';
 import './styles/audit-mode-picker.css';
+import './styles/home-hero.css';
 
 initializeAppInstall();
 initializeAppUpdates();

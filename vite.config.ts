@@ -13,7 +13,7 @@ export default defineConfig({
     } },
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['images/farm-summary-hero.webp', 'novas logos/favicon.ico', 'novas logos/logo-32x32.png', 'novas logos/logo-180x180.png', 'novas logos/logo-192x192.png', 'novas logos/logo-512x512.png'],
+      includeAssets: ['images/farm-summary-hero.webp', 'images/home-farm-illustration.webp', 'novas logos/favicon.ico', 'novas logos/logo-32x32.png', 'novas logos/logo-180x180.png', 'novas logos/logo-192x192.png', 'novas logos/logo-512x512.png'],
       manifest: {
         name: 'BIPTAG',
         id: '/',

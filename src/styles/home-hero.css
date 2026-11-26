@@ -1,0 +1,27 @@
+.app-shell .page.farm-directory { padding-top: 8px; }
+.farm-directory__heading.farm-directory__heading--illustrated { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.farm-home-hero { position: relative; isolation: isolate; display: flex; align-items: center; min-width: 0; min-height: 156px; margin-inline: -20px; padding: 20px; overflow: hidden; }
+.farm-home-hero__copy { position: relative; z-index: 1; width: 60%; min-width: 0; }
+.farm-home-hero__copy .eyebrow { display: block; font-size: 9px; line-height: 1.5; letter-spacing: .035em; }
+.farm-home-hero__copy h1 { margin: 6px 0 9px; font-size: clamp(32px, 6vw, 40px); line-height: 1.1; letter-spacing: -.04em; }
+.farm-home-hero__copy p { max-width: 22ch; color: #55685F; font-size: 12px; line-height: 1.55; }
+.farm-home-hero__illustration { position: absolute; z-index: 0; right: -4px; bottom: -12px; width: 290px; height: auto; max-width: none; pointer-events: none; mask-image: linear-gradient(90deg, transparent 30%, #000 64%); }
+.farm-directory__heading--illustrated > .farm-directory__actions { width: 100%; justify-content: flex-end; }
+.farm-directory__heading--illustrated > .farm-directory__actions:not(:has(> .app-install-compact)) { display: none; }
+@media (min-width: 600px) {
+  .farm-home-hero { min-height: 200px; padding-block: 28px; }
+  .farm-home-hero__copy { width: 57%; }
+  .farm-home-hero__copy .eyebrow { font-size: 10px; }
+  .farm-home-hero__copy p { max-width: 36ch; font-size: 14px; }
+  .farm-home-hero__illustration { right: 10px; bottom: -25px; width: min(48%, 430px); }
+}
+@media (max-width: 600px) {
+  .farm-directory__heading--illustrated > .farm-directory__actions { justify-content: flex-start; }
+}
+@media (max-width: 360px) {
+  .farm-home-hero { min-height: 148px; margin-inline: -16px; padding-inline: 16px; }
+  .farm-home-hero__copy { width: 63%; }
+  .farm-home-hero__copy .eyebrow { font-size: 8px; }
+  .farm-home-hero__copy p { max-width: 20ch; font-size: 11px; }
+  .farm-home-hero__illustration { right: -12px; bottom: -8px; width: 260px; }
+}

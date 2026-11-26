@@ -25,8 +25,11 @@ export function FarmDirectory({ audits, onOpen, onResume, onCreate, onDelete, on
   if (showAudits) return <AuditDirectory audits={audits} onBack={() => setShowAudits(false)} onOpen={onOpen} onResume={onResume} onCreate={onCreate} onDelete={onDelete} />;
 
   return <section className="page farm-directory">
-    <div className="farm-directory__heading">
-      <div><span className="eyebrow">SUAS SMARTTAGS NO CAMPO</span><h1>Fazendas</h1><p>Cadastre novas tags ou confira os vínculos.</p></div>
+    <div className="farm-directory__heading farm-directory__heading--illustrated">
+      <div className="farm-home-hero">
+        <img className="farm-home-hero__illustration" src="/images/home-farm-illustration.webp" alt="" width={720} height={480} decoding="async" />
+        <div className="farm-home-hero__copy"><span className="eyebrow">SUAS SMARTTAGS NO CAMPO</span><h1>Fazendas</h1><p>Cadastre novas tags ou confira os vínculos.</p></div>
+      </div>
       <div className="farm-directory__actions"><AppInstallPanel compact /></div>
     </div>
     <div className="farm-start-actions" aria-label="Começar um trabalho">
