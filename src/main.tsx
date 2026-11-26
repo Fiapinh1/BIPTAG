@@ -23,6 +23,7 @@ import './styles/new-audit.css';
 import './styles/audit-mode-picker.css';
 import './styles/home-hero.css';
 import './styles/registration-setup.css';
+import './styles/audit-directory-theme.css';
 
 initializeAppInstall();
 initializeAppUpdates();

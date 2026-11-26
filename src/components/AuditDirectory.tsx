@@ -44,7 +44,13 @@ export function AuditDirectory({ audits, onBack, onOpen, onResume, onCreate, onD
   }, []);
 
   return <section className="audit-directory" ref={directory}>
-    <header className="audit-directory__heading"><button className="audit-directory__back" onClick={onBack} aria-label="Voltar ao início"><ArrowLeftIcon size={19} /><span>Início</span></button><h1 ref={heading} tabIndex={-1}>Auditorias</h1></header>
+    <header className="audit-directory__heading">
+      <button className="audit-directory__back" onClick={onBack} aria-label="Voltar ao início"><ArrowLeftIcon size={19} /><span>Início</span></button>
+      <div className="audit-directory__hero">
+        <img className="audit-directory__illustration" src="/images/audit-directory-illustration.webp" alt="" width={720} height={480} decoding="async" />
+        <div className="audit-directory__hero-copy"><span className="eyebrow">CONFERÊNCIA DE TAGS</span><h1 ref={heading} tabIndex={-1}>Auditorias</h1><p>Confira os vínculos da fazenda.</p></div>
+      </div>
+    </header>
 
     <div className={`audit-directory__actions ${recent ? '' : 'audit-directory__actions--single'}`}>
       <button className="audit-directory__action audit-directory__action--new" onClick={onCreate} aria-label="Nova auditoria" aria-describedby="new-audit-description"><span className="audit-directory__action-icon"><SpreadsheetIcon size={26} /><PlusIcon size={12} /></span><span><strong>Nova auditoria</strong><small id="new-audit-description">Importar planilha</small></span><ChevronRightIcon size={16} /></button>
